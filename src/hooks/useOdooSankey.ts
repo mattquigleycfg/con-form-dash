@@ -50,8 +50,27 @@ export const useOdooSankey = () => {
       const stageToOutcome = new Map<string, Map<string, number>>();
       const outcomeToRetention = new Map<string, Map<string, number>>();
 
+      // First pass: calculate total revenue per sales rep
+      const repRevenue = new Map<string, number>();
       opportunities?.forEach((opp: any) => {
         const salesRep = opp.user_id ? opp.user_id[1] : "Unassigned";
+        const revenue = opp.expected_revenue || 0;
+        repRevenue.set(salesRep, (repRevenue.get(salesRep) || 0) + revenue);
+      });
+
+      // Get top 4 performing sales reps
+      const topReps = Array.from(repRevenue.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([rep]) => rep);
+
+      // Second pass: build flow only for top 4 reps
+      opportunities?.forEach((opp: any) => {
+        const salesRep = opp.user_id ? opp.user_id[1] : "Unassigned";
+        
+        // Skip if not in top 4
+        if (!topReps.includes(salesRep)) return;
+
         const stage = opp.stage_id[1];
         const revenue = opp.expected_revenue || 0;
         
