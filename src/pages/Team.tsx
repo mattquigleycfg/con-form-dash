@@ -1,8 +1,10 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { PerformanceTable } from "@/components/PerformanceTable";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useOdooTeam } from "@/hooks/useOdooTeam";
 
 export default function Team() {
+  const { salesReps, isLoading } = useOdooTeam();
   return (
     <DashboardLayout>
       <div className="mb-8">
@@ -13,7 +15,7 @@ export default function Team() {
       </div>
 
       <div className="space-y-6">
-        <PerformanceTable />
+        <PerformanceTable salesReps={salesReps} isLoading={isLoading} />
 
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
@@ -23,20 +25,20 @@ export default function Team() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {[
-                  { name: "Sarah Johnson", metric: "$145K", label: "Revenue" },
-                  { name: "Michael Chen", metric: "24", label: "Deals Closed" },
-                  { name: "Emily Rodriguez", metric: "94%", label: "Win Rate" }
-                ].map((performer) => (
+                {salesReps.slice(0, 3).map((rep, idx) => (
                   <div
-                    key={performer.name}
+                    key={rep.id}
                     className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
                   >
                     <div>
-                      <p className="font-medium text-sm">{performer.name}</p>
-                      <p className="text-xs text-muted-foreground">{performer.label}</p>
+                      <p className="font-medium text-sm">{rep.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {idx === 0 ? "Revenue" : idx === 1 ? "Deals Closed" : "Performance"}
+                      </p>
                     </div>
-                    <p className="text-lg font-bold text-primary">{performer.metric}</p>
+                    <p className="text-lg font-bold text-primary">
+                      {idx === 0 ? `$${Math.round(rep.revenue / 1000)}K` : idx === 1 ? rep.deals : `${Math.round((rep.revenue / rep.target) * 100)}%`}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -50,22 +52,20 @@ export default function Team() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {[
-                  { action: "Closed major deal", person: "Sarah J.", time: "2 hours ago" },
-                  { action: "New customer onboarded", person: "Michael C.", time: "5 hours ago" },
-                  { action: "Exceeded monthly target", person: "Emily R.", time: "1 day ago" }
-                ].map((activity, i) => (
+                {salesReps.slice(0, 3).map((rep, i) => (
                   <div
-                    key={i}
+                    key={rep.id}
                     className="flex items-start gap-3 rounded-lg border border-border bg-card p-3"
                   >
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                      {activity.person.split(' ')[0][0]}{activity.person.split(' ')[1][0]}
+                      {rep.avatar}
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium">{activity.action}</p>
+                      <p className="text-sm font-medium">
+                        {rep.deals} deals closed • ${Math.round(rep.revenue / 1000)}K revenue
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        {activity.person} • {activity.time}
+                        {rep.name}
                       </p>
                     </div>
                   </div>

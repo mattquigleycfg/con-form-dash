@@ -1,17 +1,43 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { SalesRep } from "@/hooks/useOdooTeam";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const salesReps = [
-  { id: 1, name: "Sarah Johnson", avatar: "SJ", deals: 28, revenue: 184000, target: 150000, trend: "up" },
-  { id: 2, name: "Michael Chen", avatar: "MC", deals: 24, revenue: 156000, target: 140000, trend: "up" },
-  { id: 3, name: "Emily Davis", avatar: "ED", deals: 22, revenue: 148000, target: 150000, trend: "down" },
-  { id: 4, name: "David Wilson", avatar: "DW", deals: 19, revenue: 132000, target: 130000, trend: "up" },
-  { id: 5, name: "Lisa Anderson", avatar: "LA", deals: 17, revenue: 128000, target: 140000, trend: "down" },
-];
+interface PerformanceTableProps {
+  salesReps: SalesRep[];
+  isLoading?: boolean;
+}
 
-export function PerformanceTable() {
+export function PerformanceTable({ salesReps, isLoading }: PerformanceTableProps) {
+  if (isLoading) {
+    return (
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle>Team Performance</CardTitle>
+          <p className="text-sm text-muted-foreground">Top performers this month</p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-20 w-full" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (salesReps.length === 0) {
+    return (
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle>Team Performance</CardTitle>
+          <p className="text-sm text-muted-foreground">No sales data available</p>
+        </CardHeader>
+      </Card>
+    );
+  }
   return (
     <Card className="shadow-card">
       <CardHeader>

@@ -1,0 +1,106 @@
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+export interface SalesRep {
+  id: number;
+  name: string;
+  avatar: string;
+  deals: number;
+  revenue: number;
+  target: number;
+  trend: "up" | "down";
+}
+
+export const useOdooTeam = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
+  const { toast } = useToast();
+
+  const fetchTeamData = async () => {
+    setIsLoading(true);
+    
+    try {
+      // Fetch sales orders with user information
+      const { data: salesOrders, error: salesError } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'sale.order',
+          method: 'search_read',
+          args: [
+            [['state', 'in', ['sale', 'done']]], // Only confirmed and done orders
+            ['amount_total', 'user_id', 'date_order']
+          ]
+        }
+      });
+
+      if (salesError) throw salesError;
+
+      // Aggregate data by salesperson
+      const salesByUser: Record<number, { name: string; deals: number; revenue: number }> = {};
+      
+      salesOrders?.forEach((order: any) => {
+        if (order.user_id) {
+          const userId = order.user_id[0];
+          const userName = order.user_id[1];
+          
+          if (!salesByUser[userId]) {
+            salesByUser[userId] = {
+              name: userName,
+              deals: 0,
+              revenue: 0
+            };
+          }
+          
+          salesByUser[userId].deals += 1;
+          salesByUser[userId].revenue += order.amount_total;
+        }
+      });
+
+      // Convert to array and sort by revenue
+      const repsArray: SalesRep[] = Object.entries(salesByUser)
+        .map(([id, data]) => {
+          const initials = data.name
+            .split(' ')
+            .map(n => n[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 2);
+          
+          // Set a default target (can be customized later)
+          const target = 150000;
+          const trend: "up" | "down" = data.revenue >= target ? "up" : "down";
+          
+          return {
+            id: parseInt(id),
+            name: data.name,
+            avatar: initials,
+            deals: data.deals,
+            revenue: Math.round(data.revenue),
+            target,
+            trend
+          };
+        })
+        .sort((a, b) => b.revenue - a.revenue);
+
+      setSalesReps(repsArray);
+      
+      return repsArray;
+    } catch (error) {
+      console.error('Odoo team sync error:', error);
+      toast({
+        title: "Team sync failed",
+        description: error instanceof Error ? error.message : "Failed to sync team data",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTeamData();
+  }, []);
+
+  return { salesReps, isLoading, refetch: fetchTeamData };
+};

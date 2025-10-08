@@ -8,10 +8,12 @@ import { AICopilot } from "@/components/AICopilot";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOdooSync } from "@/hooks/useOdooSync";
+import { useOdooTeam } from "@/hooks/useOdooTeam";
 import { useEffect } from "react";
 
 const Index = () => {
   const { syncOdooData, isLoading, metrics } = useOdooSync();
+  const { salesReps, isLoading: isTeamLoading } = useOdooTeam();
 
   // Auto-sync on mount
   useEffect(() => {
@@ -99,7 +101,7 @@ const Index = () => {
       {/* Performance & Targets */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <PerformanceTable />
+          <PerformanceTable salesReps={salesReps} isLoading={isTeamLoading} />
         </div>
         <div>
           <TargetProgress />
