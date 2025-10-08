@@ -14,16 +14,24 @@ serve(async (req) => {
   try {
     const { model, method, args } = await req.json();
     
-    const ODOO_URL = Deno.env.get('ODOO_URL');
+    let ODOO_URL = Deno.env.get('ODOO_URL');
     const ODOO_USERNAME = Deno.env.get('ODOO_USERNAME');
     const ODOO_PASSWORD = Deno.env.get('ODOO_PASSWORD');
     const ODOO_API_KEY = Deno.env.get('ODOO_API_KEY');
 
-    if (!ODOO_URL || !ODOO_USERNAME || !ODOO_PASSWORD || !ODOO_API_KEY) {
+    if (!ODOO_URL || !ODOO_USERNAME || !ODOO_PASSWORD) {
       throw new Error('Odoo credentials not configured');
     }
 
-    console.log('Calling Odoo API:', { model, method, argsCount: args?.length });
+    // Remove trailing slash from URL if present
+    ODOO_URL = ODOO_URL.replace(/\/$/, '');
+
+    console.log('Calling Odoo API:', { 
+      url: ODOO_URL,
+      model, 
+      method, 
+      argsCount: args?.length 
+    });
 
     // Authenticate with Odoo
     const authResponse = await fetch(`${ODOO_URL}/web/session/authenticate`, {
@@ -34,10 +42,9 @@ serve(async (req) => {
       body: JSON.stringify({
         jsonrpc: '2.0',
         params: {
-          db: 'con-formgroup',
+          db: 'con-formgroup-main-10348162',
           login: ODOO_USERNAME,
           password: ODOO_PASSWORD,
-          api_key: ODOO_API_KEY,
         },
       }),
     });
