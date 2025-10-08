@@ -21,8 +21,13 @@ export const useFilteredMetrics = () => {
       };
     }
 
-    // Calculate total expected revenue from all opportunities
-    const totalRevenue = opportunities.reduce(
+    // Filter to only active/open opportunities (exclude won >= 90% and lost <= 10%)
+    const activeOpportunities = opportunities.filter(
+      (opp) => opp.probability > 10 && opp.probability < 90
+    );
+
+    // Calculate total expected revenue from active opportunities only
+    const totalRevenue = activeOpportunities.reduce(
       (sum, opp) => sum + (opp.expected_revenue || 0),
       0
     );

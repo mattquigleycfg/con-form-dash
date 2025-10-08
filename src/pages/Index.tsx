@@ -95,7 +95,7 @@ const Index = () => {
           icon={DollarSign}
           footer={
             <p className="text-xs text-muted-foreground">
-              Total from filtered opportunities
+              From open opportunities (10-90% probability)
             </p>
           }
         />
