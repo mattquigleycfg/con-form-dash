@@ -35,9 +35,9 @@ const Index = () => {
     lg: [
       { i: "revenue-chart", x: 0, y: 0, w: 6, h: 4 },
       { i: "pipeline-chart", x: 6, y: 0, w: 6, h: 4 },
-      { i: "sankey-chart", x: 0, y: 4, w: 12, h: 5 },
-      { i: "performance-table", x: 0, y: 9, w: 8, h: 5 },
-      { i: "target-progress", x: 8, y: 9, w: 4, h: 5 },
+      { i: "sankey-chart", x: 0, y: 4, w: 12, h: 6 },
+      { i: "performance-table", x: 0, y: 10, w: 8, h: 5 },
+      { i: "target-progress", x: 8, y: 10, w: 4, h: 5 },
     ],
   };
 

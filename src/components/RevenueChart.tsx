@@ -8,13 +8,13 @@ export function RevenueChart() {
 
   if (isLoading) {
     return (
-      <Card className="shadow-card">
+      <Card className="shadow-card h-full flex flex-col">
         <CardHeader>
           <CardTitle>Revenue vs Target</CardTitle>
           <p className="text-sm text-muted-foreground">Year-to-date performance tracking</p>
         </CardHeader>
-        <CardContent>
-          <Skeleton className="h-[350px] w-full" />
+        <CardContent className="flex-1 min-h-[220px]">
+          <Skeleton className="h-full w-full" />
         </CardContent>
       </Card>
     );
@@ -31,57 +31,57 @@ export function RevenueChart() {
     );
   }
   return (
-    <Card className="shadow-card">
-      <CardHeader>
-        <CardTitle>Revenue vs Target</CardTitle>
-        <p className="text-sm text-muted-foreground">Year-to-date performance tracking</p>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={350}>
-          <LineChart data={revenueData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis
-              dataKey="month"
-              stroke="hsl(var(--muted-foreground))"
-              fontSize={12}
-              tickLine={false}
-            />
-            <YAxis
-              stroke="hsl(var(--muted-foreground))"
-              fontSize={12}
-              tickLine={false}
-              tickFormatter={(value) => `$${value / 1000}k`}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "8px",
-              }}
-              formatter={(value: number) => [`$${value.toLocaleString()}`, ""]}
-            />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="actual"
-              stroke="hsl(var(--primary))"
-              strokeWidth={3}
-              dot={{ fill: "hsl(var(--primary))", strokeWidth: 2, r: 4 }}
-              activeDot={{ r: 6 }}
-              name="Actual Revenue"
-            />
-            <Line
-              type="monotone"
-              dataKey="target"
-              stroke="hsl(var(--muted-foreground))"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-              dot={false}
-              name="Target"
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+  <Card className="shadow-card h-full flex flex-col">
+    <CardHeader>
+      <CardTitle>Revenue vs Target</CardTitle>
+      <p className="text-sm text-muted-foreground">Year-to-date performance tracking</p>
+    </CardHeader>
+    <CardContent className="flex-1 min-h-0">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={revenueData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+          <XAxis
+            dataKey="month"
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={12}
+            tickLine={false}
+          />
+          <YAxis
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={12}
+            tickLine={false}
+            tickFormatter={(value) => `$${value / 1000}k`}
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: "hsl(var(--card))",
+              border: "1px solid hsl(var(--border))",
+              borderRadius: "8px",
+            }}
+            formatter={(value: number) => [`$${value.toLocaleString()}`, ""]}
+          />
+          <Legend />
+          <Line
+            type="monotone"
+            dataKey="actual"
+            stroke="hsl(var(--primary))"
+            strokeWidth={3}
+            dot={{ fill: "hsl(var(--primary))", strokeWidth: 2, r: 4 }}
+            activeDot={{ r: 6 }}
+            name="Actual Revenue"
+          />
+          <Line
+            type="monotone"
+            dataKey="target"
+            stroke="hsl(var(--muted-foreground))"
+            strokeWidth={2}
+            strokeDasharray="5 5"
+            dot={false}
+            name="Target"
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </CardContent>
+  </Card>
   );
 }

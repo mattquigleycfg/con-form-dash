@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useFilteredData } from "./useFilteredData";
@@ -56,15 +56,17 @@ export const useOdooOpportunities = () => {
     fetchOpportunities();
   }, []);
 
-  // Apply filters to opportunities
-  const filteredOpportunities = useFilteredData(opportunities, {
+  // Apply filters to opportunities with stable config
+  const filterConfig = useMemo(() => ({
     dateField: 'create_date',
     stageField: 'stage_id',
     userField: 'user_id',
     valueField: 'expected_revenue',
     probabilityField: 'probability',
     searchFields: ['name', 'partner_id']
-  });
+  }), []);
+
+  const filteredOpportunities = useFilteredData(opportunities, filterConfig);
 
   return { 
     opportunities: filteredOpportunities, 

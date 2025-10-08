@@ -8,13 +8,13 @@ export function SankeyChart() {
 
   if (isLoading) {
     return (
-      <Card className="shadow-card">
+      <Card className="shadow-card h-full flex flex-col">
         <CardHeader>
           <CardTitle>Revenue Generation Flow</CardTitle>
           <p className="text-sm text-muted-foreground">Lead sources to revenue outcomes</p>
         </CardHeader>
-        <CardContent>
-          <Skeleton className="h-[400px] w-full" />
+        <CardContent className="flex-1 min-h-[220px] overflow-hidden">
+          <Skeleton className="h-full w-full" />
         </CardContent>
       </Card>
     );
@@ -32,19 +32,19 @@ export function SankeyChart() {
   }
 
   return (
-    <Card className="shadow-card">
+    <Card className="shadow-card h-full flex flex-col">
       <CardHeader>
         <CardTitle>Revenue Generation Flow</CardTitle>
         <p className="text-sm text-muted-foreground">Lead sources → Stages → Outcomes → Revenue</p>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={400}>
+      <CardContent className="flex-1 min-h-0 overflow-hidden">
+        <ResponsiveContainer width="100%" height="100%">
           <Sankey
             data={sankeyData}
             node={{ fill: "hsl(var(--primary))", fillOpacity: 0.8 }}
             link={{ stroke: "hsl(var(--muted-foreground))", strokeOpacity: 0.3 }}
-            nodePadding={50}
-            margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+            nodePadding={24}
+            margin={{ top: 8, right: 16, bottom: 8, left: 16 }}
           >
             <Tooltip
               contentStyle={{
