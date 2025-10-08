@@ -32,7 +32,7 @@ export const useOdooSankey = () => {
           method: 'search_read',
           args: [
             [['type', '=', 'opportunity']],
-            ['source_id', 'stage_id', 'expected_revenue', 'probability']
+            ['user_id', 'stage_id', 'expected_revenue', 'probability', 'partner_id']
           ]
         }
       });
@@ -40,18 +40,18 @@ export const useOdooSankey = () => {
       if (error) throw error;
 
       // Define node categories
-      const sources = new Set<string>();
+      const salesReps = new Set<string>();
       const stages = new Set<string>();
       const outcomes = new Set<string>();
-      const revenueBuckets = ["<$10K", "$10K-$50K", "$50K-$100K", ">$100K"];
+      const retentionCategories = ["High Value Retained", "Medium Value Retained", "Low Value Retained", "Lost"];
 
       // Map for tracking values
-      const sourceToStage = new Map<string, Map<string, number>>();
+      const repToStage = new Map<string, Map<string, number>>();
       const stageToOutcome = new Map<string, Map<string, number>>();
-      const outcomeToRevenue = new Map<string, Map<string, number>>();
+      const outcomeToRetention = new Map<string, Map<string, number>>();
 
       opportunities?.forEach((opp: any) => {
-        const source = opp.source_id ? opp.source_id[1] : "Unknown";
+        const salesRep = opp.user_id ? opp.user_id[1] : "Unassigned";
         const stage = opp.stage_id[1];
         const revenue = opp.expected_revenue || 0;
         
@@ -59,22 +59,27 @@ export const useOdooSankey = () => {
         let outcome: string;
         if (opp.probability >= 90) outcome = "Closed Won";
         else if (opp.probability <= 10) outcome = "Closed Lost";
-        else outcome = "Ongoing";
+        else outcome = "In Progress";
 
-        // Determine revenue bucket
-        let bucket: string;
-        if (revenue < 10000) bucket = "<$10K";
-        else if (revenue < 50000) bucket = "$10K-$50K";
-        else if (revenue < 100000) bucket = "$50K-$100K";
-        else bucket = ">$100K";
+        // Determine retention category based on outcome and revenue
+        let retention: string;
+        if (outcome === "Closed Won") {
+          if (revenue >= 100000) retention = "High Value Retained";
+          else if (revenue >= 50000) retention = "Medium Value Retained";
+          else retention = "Low Value Retained";
+        } else if (outcome === "Closed Lost") {
+          retention = "Lost";
+        } else {
+          retention = "Low Value Retained"; // In progress treated as potential retention
+        }
 
-        sources.add(source);
+        salesReps.add(salesRep);
         stages.add(stage);
         outcomes.add(outcome);
 
-        // Source -> Stage
-        if (!sourceToStage.has(source)) sourceToStage.set(source, new Map());
-        const stageMap = sourceToStage.get(source)!;
+        // Sales Rep -> Stage
+        if (!repToStage.has(salesRep)) repToStage.set(salesRep, new Map());
+        const stageMap = repToStage.get(salesRep)!;
         stageMap.set(stage, (stageMap.get(stage) || 0) + 1);
 
         // Stage -> Outcome
@@ -82,31 +87,29 @@ export const useOdooSankey = () => {
         const outcomeMap = stageToOutcome.get(stage)!;
         outcomeMap.set(outcome, (outcomeMap.get(outcome) || 0) + 1);
 
-        // Outcome -> Revenue Bucket (only for won deals)
-        if (outcome === "Closed Won") {
-          if (!outcomeToRevenue.has(outcome)) outcomeToRevenue.set(outcome, new Map());
-          const revenueMap = outcomeToRevenue.get(outcome)!;
-          revenueMap.set(bucket, (revenueMap.get(bucket) || 0) + revenue);
-        }
+        // Outcome -> Retention
+        if (!outcomeToRetention.has(outcome)) outcomeToRetention.set(outcome, new Map());
+        const retentionMap = outcomeToRetention.get(outcome)!;
+        retentionMap.set(retention, (retentionMap.get(retention) || 0) + 1);
       });
 
       // Build nodes array
       const nodes: SankeyNode[] = [
-        ...Array.from(sources).map(s => ({ name: s })),
+        ...Array.from(salesReps).map(s => ({ name: s })),
         ...Array.from(stages).map(s => ({ name: s })),
         ...Array.from(outcomes).map(o => ({ name: o })),
-        ...revenueBuckets.map(b => ({ name: b }))
+        ...retentionCategories.map(r => ({ name: r }))
       ];
 
       // Build links array
       const links: SankeyLink[] = [];
       const nodeIndex = (name: string) => nodes.findIndex(n => n.name === name);
 
-      // Source -> Stage links
-      sourceToStage.forEach((stages, source) => {
+      // Sales Rep -> Stage links
+      repToStage.forEach((stages, rep) => {
         stages.forEach((value, stage) => {
           links.push({
-            source: nodeIndex(source),
+            source: nodeIndex(rep),
             target: nodeIndex(stage),
             value
           });
@@ -124,13 +127,13 @@ export const useOdooSankey = () => {
         });
       });
 
-      // Outcome -> Revenue Bucket links
-      outcomeToRevenue.forEach((buckets, outcome) => {
-        buckets.forEach((value, bucket) => {
+      // Outcome -> Retention links
+      outcomeToRetention.forEach((retentions, outcome) => {
+        retentions.forEach((value, retention) => {
           links.push({
             source: nodeIndex(outcome),
-            target: nodeIndex(bucket),
-            value: Math.round(value / 1000) // Convert to thousands
+            target: nodeIndex(retention),
+            value
           });
         });
       });
