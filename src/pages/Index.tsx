@@ -13,6 +13,7 @@ import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOdooSync } from "@/hooks/useOdooSync";
 import { useOdooTeam } from "@/hooks/useOdooTeam";
+import { useFilteredMetrics } from "@/hooks/useFilteredMetrics";
 import { useEffect, useState } from "react";
 import { Responsive, WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
@@ -21,8 +22,9 @@ import "react-resizable/css/styles.css";
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const Index = () => {
-  const { syncOdooData, isLoading, metrics } = useOdooSync();
+  const { syncOdooData, isLoading } = useOdooSync();
   const { salesReps, isLoading: isTeamLoading } = useOdooTeam();
+  const { metrics, isLoading: isMetricsLoading } = useFilteredMetrics();
   const [customWidgets, setCustomWidgets] = useState<any[]>([]);
 
   // Auto-sync on mount
@@ -92,41 +94,41 @@ const Index = () => {
       <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <MetricsCard
           title="Total Revenue"
-          value={metrics ? formatCurrency(metrics.totalRevenue) : "Loading..."}
+          value={isMetricsLoading ? "Loading..." : formatCurrency(metrics.totalRevenue)}
           icon={DollarSign}
           footer={
             <p className="text-xs text-muted-foreground">
-              {metrics ? "From Odoo sales orders" : "Syncing with Odoo..."}
+              Expected revenue from opportunities
             </p>
           }
         />
         <MetricsCard
           title="Deals Closed"
-          value={metrics ? metrics.dealsClosed.toString() : "Loading..."}
+          value={isMetricsLoading ? "Loading..." : metrics.dealsClosed.toString()}
           icon={Award}
           footer={
             <p className="text-xs text-muted-foreground">
-              {metrics ? "Confirmed orders" : "Syncing with Odoo..."}
+              High probability deals (≥90%)
             </p>
           }
         />
         <MetricsCard
           title="Conversion Rate"
-          value={metrics ? `${metrics.conversionRate.toFixed(1)}%` : "Loading..."}
+          value={isMetricsLoading ? "Loading..." : `${metrics.conversionRate.toFixed(1)}%`}
           icon={TrendingUp}
           footer={
             <p className="text-xs text-muted-foreground">
-              {metrics ? "Won opportunities / Total" : "Syncing with Odoo..."}
+              Won deals / Total opportunities
             </p>
           }
         />
         <MetricsCard
           title="Active Customers"
-          value={metrics ? metrics.activeCustomers.toString() : "Loading..."}
+          value={isMetricsLoading ? "Loading..." : metrics.activeCustomers.toString()}
           icon={Users}
           footer={
             <p className="text-xs text-muted-foreground">
-              {metrics ? "Unique customers" : "Syncing with Odoo..."}
+              Unique customers with won deals
             </p>
           }
         />
