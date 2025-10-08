@@ -23,7 +23,11 @@ const tools = [
         properties: {
           date_filter: {
             type: "string",
-            description: "Date filter for orders, e.g., '>=2024-07-01' or '>=2024-01-01'. Use ISO date format.",
+            description: "Start date filter for orders (>=), e.g., '2024-07-01'. Use ISO date format YYYY-MM-DD.",
+          },
+          end_date_filter: {
+            type: "string",
+            description: "End date filter for orders (<=), e.g., '2024-09-30'. Use ISO date format YYYY-MM-DD. Optional - only use for specific date ranges like quarters.",
           },
           salesperson_name: {
             type: "string",
@@ -75,6 +79,11 @@ async function executeToolCall(toolName: string, toolArgs: any) {
       // Add date filter
       if (toolArgs.date_filter) {
         filters.push(['date_order', '>=', toolArgs.date_filter]);
+      }
+      
+      // Add end date filter if provided
+      if (toolArgs.end_date_filter) {
+        filters.push(['date_order', '<=', toolArgs.end_date_filter]);
       }
       
       // Add state filter
@@ -178,15 +187,42 @@ serve(async (req) => {
 
     console.log('AI Copilot request received, message count:', messages.length);
 
+    // Get current date for date-aware queries
+    const today = new Date();
+    const currentDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1; // 1-12
+    
+    // Calculate current quarter
+    const currentQuarter = Math.ceil(currentMonth / 3);
+    
+    // Calculate quarter date ranges for reference
+    const quarters = {
+      Q1: { start: `${currentYear}-01-01`, end: `${currentYear}-03-31` },
+      Q2: { start: `${currentYear}-04-01`, end: `${currentYear}-06-30` },
+      Q3: { start: `${currentYear}-07-01`, end: `${currentYear}-09-30` },
+      Q4: { start: `${currentYear}-10-01`, end: `${currentYear}-12-31` },
+    };
+
     // Process conversation with tool calling
     let conversationMessages = [
       {
         role: 'system',
         content: `You are a helpful sales analytics assistant with direct access to Odoo ERP data. You can query real sales orders and CRM opportunities to provide accurate, data-driven insights.
 
+CURRENT DATE CONTEXT:
+- Today's date: ${currentDate}
+- Current year: ${currentYear}
+- Current quarter: Q${currentQuarter} ${currentYear}
+- Q1 ${currentYear}: ${quarters.Q1.start} to ${quarters.Q1.end}
+- Q2 ${currentYear}: ${quarters.Q2.start} to ${quarters.Q2.end}
+- Q3 ${currentYear}: ${quarters.Q3.start} to ${quarters.Q3.end}
+- Q4 ${currentYear}: ${quarters.Q4.start} to ${quarters.Q4.end}
+
 IMPORTANT INSTRUCTIONS:
+- When asked about "last quarter" or "Q2" without a year, use the most recent completed quarter or the quarter from the current year
 - When asked about sales data, revenue, deals, or salesperson performance, ALWAYS use the available tools to query real Odoo data
-- For date ranges like "last 3 months", calculate the date (e.g., if today is October 26, 2024, use date_filter: '>=2024-07-26')
+- For date ranges, use the date_filter parameter with ISO format (YYYY-MM-DD)
 - When querying by salesperson, use their first name or full name in the salesperson_name parameter
 - Format currency amounts nicely (e.g., $458,250 instead of 458250)
 - Provide clear, actionable insights based on the actual data
@@ -197,9 +233,11 @@ AVAILABLE DATA:
 - CRM Leads/Opportunities: Contains pipeline data with stages, probabilities, and expected revenue
 
 EXAMPLES:
+- "Q2 sales" → Use query_sales_orders with date_filter: '>=${quarters.Q2.start}' and add filter for date_order '<=${quarters.Q2.end}'
+- "Last 3 months" → Calculate 3 months back from ${currentDate}
 - "Joel Boustani's sales last 3 months" → Use query_sales_orders with date_filter and salesperson_name: "Joel"
 - "Pipeline by stage" → Use query_crm_leads to get all opportunities and analyze by stage_id
-- "Top performers this year" → Use query_sales_orders with date_filter for this year, then aggregate by user_id`
+- "Top performers this year" → Use query_sales_orders with date_filter: '>=${currentYear}-01-01'`
       },
       ...messages,
     ];
