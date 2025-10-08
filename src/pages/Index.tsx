@@ -6,20 +6,51 @@ import { PerformanceTable } from "@/components/PerformanceTable";
 import { TargetProgress } from "@/components/TargetProgress";
 import { AICopilot } from "@/components/AICopilot";
 import { FilterBar } from "@/components/filters/FilterBar";
+import { SankeyChart } from "@/components/SankeyChart";
+import { WidgetCreatorDrawer } from "@/components/WidgetCreatorDrawer";
+import { DraggableWidget } from "@/components/DraggableWidget";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOdooSync } from "@/hooks/useOdooSync";
 import { useOdooTeam } from "@/hooks/useOdooTeam";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Responsive, WidthProvider } from "react-grid-layout";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
+
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const Index = () => {
   const { syncOdooData, isLoading, metrics } = useOdooSync();
   const { salesReps, isLoading: isTeamLoading } = useOdooTeam();
+  const [customWidgets, setCustomWidgets] = useState<any[]>([]);
 
   // Auto-sync on mount
   useEffect(() => {
     syncOdooData();
   }, []);
+
+  // Default layout configuration
+  const defaultLayout = {
+    lg: [
+      { i: "revenue-chart", x: 0, y: 0, w: 6, h: 4 },
+      { i: "pipeline-chart", x: 6, y: 0, w: 6, h: 4 },
+      { i: "sankey-chart", x: 0, y: 4, w: 12, h: 5 },
+      { i: "performance-table", x: 0, y: 9, w: 8, h: 5 },
+      { i: "target-progress", x: 8, y: 9, w: 4, h: 5 },
+    ],
+  };
+
+  const [layout, setLayout] = useState(defaultLayout);
+
+  const handleLayoutChange = (newLayout: any) => {
+    setLayout({ lg: newLayout });
+    localStorage.setItem("dashboardLayout", JSON.stringify({ lg: newLayout }));
+  };
+
+  const handleCreateWidget = (widget: any) => {
+    setCustomWidgets((prev) => [...prev, widget]);
+  };
 
   const formatCurrency = (value: number) => {
     if (value >= 1000) {
@@ -44,14 +75,17 @@ const Index = () => {
             Welcome back! Here's your sales performance overview.
           </p>
         </div>
-        <Button 
-          className="gap-2" 
-          onClick={syncOdooData}
-          disabled={isLoading}
-        >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          {isLoading ? 'Syncing...' : 'Sync Odoo Data'}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            className="gap-2" 
+            onClick={syncOdooData}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            {isLoading ? 'Syncing...' : 'Sync Odoo Data'}
+          </Button>
+          <WidgetCreatorDrawer onCreateWidget={handleCreateWidget} />
+        </div>
       </div>
 
       {/* Key Metrics */}
@@ -98,21 +132,44 @@ const Index = () => {
         />
       </div>
 
-      {/* Charts Row */}
-      <div className="mb-8 grid gap-6 lg:grid-cols-2">
-        <RevenueChart />
-        <PipelineChart />
-      </div>
-
-      {/* Performance & Targets */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <PerformanceTable salesReps={salesReps} isLoading={isTeamLoading} />
+      {/* Draggable Widgets */}
+      <ResponsiveGridLayout
+        className="layout"
+        layouts={layout}
+        onLayoutChange={handleLayoutChange}
+        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+        rowHeight={60}
+        isDraggable={true}
+        isResizable={true}
+        draggableHandle=".cursor-move"
+      >
+        <div key="revenue-chart">
+          <DraggableWidget>
+            <RevenueChart />
+          </DraggableWidget>
         </div>
-        <div>
-          <TargetProgress />
+        <div key="pipeline-chart">
+          <DraggableWidget>
+            <PipelineChart />
+          </DraggableWidget>
         </div>
-      </div>
+        <div key="sankey-chart">
+          <DraggableWidget>
+            <SankeyChart />
+          </DraggableWidget>
+        </div>
+        <div key="performance-table">
+          <DraggableWidget>
+            <PerformanceTable salesReps={salesReps} isLoading={isTeamLoading} />
+          </DraggableWidget>
+        </div>
+        <div key="target-progress">
+          <DraggableWidget>
+            <TargetProgress />
+          </DraggableWidget>
+        </div>
+      </ResponsiveGridLayout>
     </DashboardLayout>
     <AICopilot />
     </>
