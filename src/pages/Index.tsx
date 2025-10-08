@@ -55,10 +55,7 @@ const Index = () => {
   };
 
   const formatCurrency = (value: number) => {
-    if (value >= 1000) {
-      return `$${(value / 1000).toFixed(1)}K`;
-    }
-    return `$${value.toFixed(0)}`;
+    return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
   };
 
   return (
@@ -104,7 +101,7 @@ const Index = () => {
         />
         <MetricsCard
           title="Deals Closed"
-          value={isMetricsLoading ? "Loading..." : metrics.dealsClosed.toString()}
+          value={isMetricsLoading ? "Loading..." : metrics.dealsClosed.toLocaleString('en-US')}
           icon={Award}
           footer={
             <p className="text-xs text-muted-foreground">
@@ -124,7 +121,7 @@ const Index = () => {
         />
         <MetricsCard
           title="Active Customers"
-          value={isMetricsLoading ? "Loading..." : metrics.activeCustomers.toString()}
+          value={isMetricsLoading ? "Loading..." : metrics.activeCustomers.toLocaleString('en-US')}
           icon={Users}
           footer={
             <p className="text-xs text-muted-foreground">
