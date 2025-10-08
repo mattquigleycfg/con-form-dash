@@ -8,15 +8,21 @@ import { AICopilot } from "@/components/AICopilot";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOdooSync } from "@/hooks/useOdooSync";
+import { useEffect } from "react";
 
 const Index = () => {
   const { syncOdooData, isLoading, metrics } = useOdooSync();
 
+  // Auto-sync on mount
+  useEffect(() => {
+    syncOdooData();
+  }, []);
+
   const formatCurrency = (value: number) => {
     if (value >= 1000) {
-      return `$${(value / 1000).toFixed(0)}K`;
+      return `$${(value / 1000).toFixed(1)}K`;
     }
-    return `$${value}`;
+    return `$${value.toFixed(0)}`;
   };
 
   return (
@@ -44,49 +50,41 @@ const Index = () => {
       <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <MetricsCard
           title="Total Revenue"
-          value={metrics ? formatCurrency(metrics.totalRevenue) : "$458K"}
-          change={12.5}
-          trend="up"
+          value={metrics ? formatCurrency(metrics.totalRevenue) : "Loading..."}
           icon={DollarSign}
           footer={
             <p className="text-xs text-muted-foreground">
-              {metrics ? "From Odoo" : "$142K above target"}
+              {metrics ? "From Odoo sales orders" : "Syncing with Odoo..."}
             </p>
           }
         />
         <MetricsCard
           title="Deals Closed"
-          value={metrics ? metrics.dealsClosed.toString() : "142"}
-          change={8.2}
-          trend="up"
+          value={metrics ? metrics.dealsClosed.toString() : "Loading..."}
           icon={Award}
           footer={
             <p className="text-xs text-muted-foreground">
-              {metrics ? "Confirmed orders" : "38 deals this month"}
+              {metrics ? "Confirmed orders" : "Syncing with Odoo..."}
             </p>
           }
         />
         <MetricsCard
           title="Conversion Rate"
-          value={metrics ? `${metrics.conversionRate.toFixed(1)}%` : "24.8%"}
-          change={3.1}
-          trend="up"
+          value={metrics ? `${metrics.conversionRate.toFixed(1)}%` : "Loading..."}
           icon={TrendingUp}
           footer={
             <p className="text-xs text-muted-foreground">
-              {metrics ? "Won opportunities" : "+2.1% from last month"}
+              {metrics ? "Won opportunities / Total" : "Syncing with Odoo..."}
             </p>
           }
         />
         <MetricsCard
           title="Active Customers"
-          value={metrics ? metrics.activeCustomers.toString() : "1,248"}
-          change={15.3}
-          trend="up"
+          value={metrics ? metrics.activeCustomers.toString() : "Loading..."}
           icon={Users}
           footer={
             <p className="text-xs text-muted-foreground">
-              {metrics ? "Unique customers" : "156 new this quarter"}
+              {metrics ? "Unique customers" : "Syncing with Odoo..."}
             </p>
           }
         />

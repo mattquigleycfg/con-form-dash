@@ -7,6 +7,11 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import Pipeline from "./pages/Pipeline";
+import Targets from "./pages/Targets";
+import Analytics from "./pages/Analytics";
+import Team from "./pages/Team";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +30,46 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Index />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pipeline"
+              element={
+                <ProtectedRoute>
+                  <Pipeline />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/targets"
+              element={
+                <ProtectedRoute>
+                  <Targets />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedRoute>
+                  <Analytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/team"
+              element={
+                <ProtectedRoute>
+                  <Team />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
                 </ProtectedRoute>
               }
             />
