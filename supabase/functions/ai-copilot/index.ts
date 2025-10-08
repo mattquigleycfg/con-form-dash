@@ -46,10 +46,18 @@ const tools = [
     type: "function",
     function: {
       name: "query_order_lines",
-      description: "Query order lines (products) from sales orders/quotations. Use this to get detailed product information, quantities, prices, margins, and descriptions for specific orders. Returns order lines with: id, order_id, product_id, name (description), product_uom_qty (quantity), price_unit, price_subtotal, margin (profit), discount.",
+      description: "Query order lines (products) from sales orders/quotations. CRITICAL: Use this to analyze product sales over time periods (e.g., 'highest selling product last month'). Can filter by date range, order, or product. Returns order lines with: id, order_id, product_id, name (description), product_uom_qty (quantity), price_unit, price_subtotal, margin (profit), discount, order date.",
       parameters: {
         type: "object",
         properties: {
+          date_filter: {
+            type: "string",
+            description: "Start date filter for the order date (>=), e.g., '2024-07-01'. Use ISO date format YYYY-MM-DD. Use this to analyze products sold in specific time periods.",
+          },
+          end_date_filter: {
+            type: "string",
+            description: "End date filter for the order date (<=), e.g., '2024-09-30'. Use ISO date format YYYY-MM-DD. Use with date_filter to get products from specific time ranges.",
+          },
           order_name: {
             type: "string",
             description: "Filter by order reference/name (e.g., 'S00123'). Leave empty to get all order lines.",
@@ -57,6 +65,11 @@ const tools = [
           product_name: {
             type: "string",
             description: "Filter by product name (case-insensitive partial match). Leave empty for all products.",
+          },
+          state_filter: {
+            type: "array",
+            items: { type: "string" },
+            description: "Filter by order state. Values: 'draft', 'sent', 'sale', 'done', 'cancel'. Typically use ['sale', 'done'] for confirmed orders. Leave empty for all states.",
           },
         },
       },
@@ -211,7 +224,47 @@ async function executeToolCall(toolName: string, toolArgs: any) {
     }
 
     if (toolName === "query_order_lines") {
+      // First, get order IDs that match date/state filters
+      let orderIds: number[] | null = null;
+      
+      if (toolArgs.date_filter || toolArgs.end_date_filter || toolArgs.state_filter) {
+        const orderFilters: any[] = [];
+        
+        if (toolArgs.date_filter) {
+          orderFilters.push(['date_order', '>=', toolArgs.date_filter]);
+        }
+        if (toolArgs.end_date_filter) {
+          orderFilters.push(['date_order', '<=', toolArgs.end_date_filter]);
+        }
+        if (toolArgs.state_filter && toolArgs.state_filter.length > 0) {
+          orderFilters.push(['state', 'in', toolArgs.state_filter]);
+        }
+        
+        const { data: orders, error: orderError } = await supabase.functions.invoke('odoo-query', {
+          body: {
+            model: 'sale.order',
+            method: 'search_read',
+            args: [
+              orderFilters,
+              ['id', 'name', 'date_order']
+            ]
+          }
+        });
+        
+        if (orderError) throw orderError;
+        orderIds = orders?.map((o: any) => o.id) || [];
+        
+        if (orderIds !== null && orderIds.length === 0) {
+          console.log('No orders found matching date/state filters');
+          return JSON.stringify([]);
+        }
+      }
+
+      // Query order lines
       const filters: any[] = [];
+      if (orderIds !== null) {
+        filters.push(['order_id', 'in', orderIds]);
+      }
 
       const { data, error } = await supabase.functions.invoke('odoo-query', {
         body: {
@@ -473,6 +526,11 @@ IMPORTANT INSTRUCTIONS:
 - When asked about "quotations", use query_sales_orders with state_filter: ['draft', 'sent']
 - When asked about "confirmed orders" or "sales orders", use query_sales_orders with state_filter: ['sale', 'done']
 - When asked about product details, margins, or line items, use query_order_lines after getting the order
+- PRODUCT SALES ANALYSIS: To analyze product sales (e.g., "highest selling product last month"):
+  1. Use query_order_lines with date_filter, end_date_filter, and state_filter: ['sale', 'done']
+  2. This returns all product lines from confirmed orders in that date range
+  3. Group results by product_id and sum the product_uom_qty (quantity) or price_subtotal (revenue)
+  4. Identify the top product(s) by quantity or revenue as appropriate
 - When asked about "last quarter" or "Q2" without a year, use the most recent completed quarter or the quarter from the current year
 - When asked about sales data, revenue, deals, or salesperson performance, ALWAYS use the available tools to query real Odoo data
 - For date ranges, use the date_filter parameter with ISO format (YYYY-MM-DD)
