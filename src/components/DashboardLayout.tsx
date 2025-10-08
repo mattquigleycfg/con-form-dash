@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { FilterBar } from "@/components/filters/FilterBar";
+import conformLogo from "@/assets/conform-logo.png";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -57,14 +58,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar">
         <div className="flex h-full flex-col">
           {/* Logo */}
-          <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-6">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary">
-              <BarChart3 className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-sidebar-foreground">SalesPro</h1>
-              <p className="text-xs text-sidebar-foreground/60">Odoo Analytics</p>
-            </div>
+          <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
+            <img src={conformLogo} alt="Con-form Group" className="h-12 w-auto" />
           </div>
 
           {/* Navigation */}

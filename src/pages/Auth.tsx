@@ -6,8 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { BarChart3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import conformLogo from "@/assets/conform-logo.png";
 
 export default function Auth() {
   const { signInWithMicrosoft, signUp, user } = useAuth();
@@ -79,11 +79,11 @@ export default function Auth() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
       <Card className="w-full max-w-md shadow-hover">
         <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-primary">
-            <BarChart3 className="h-10 w-10 text-white" />
+          <div className="mx-auto">
+            <img src={conformLogo} alt="Con-form Group" className="h-16 w-auto mx-auto" />
           </div>
           <div>
-            <CardTitle className="text-3xl font-bold">Welcome to SalesPro</CardTitle>
+            <CardTitle className="text-3xl font-bold">Welcome to Con-form Group</CardTitle>
             <CardDescription className="mt-2 text-base">
               Access your Odoo analytics dashboard
             </CardDescription>
