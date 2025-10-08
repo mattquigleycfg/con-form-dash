@@ -143,7 +143,7 @@ const Index = () => {
         isDraggable={true}
         isResizable={true}
         draggableHandle=".cursor-move"
-        margin={[16, 16]}
+        margin={[16, 24]}
         containerPadding={[0, 0]}
         compactType="vertical"
         preventCollision={false}
