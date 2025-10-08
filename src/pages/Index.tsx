@@ -7,8 +7,18 @@ import { TargetProgress } from "@/components/TargetProgress";
 import { AICopilot } from "@/components/AICopilot";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useOdooSync } from "@/hooks/useOdooSync";
 
 const Index = () => {
+  const { syncOdooData, isLoading, metrics } = useOdooSync();
+
+  const formatCurrency = (value: number) => {
+    if (value >= 1000) {
+      return `$${(value / 1000).toFixed(0)}K`;
+    }
+    return `$${value}`;
+  };
+
   return (
     <>
       <DashboardLayout>
@@ -20,9 +30,13 @@ const Index = () => {
             Welcome back! Here's your sales performance overview.
           </p>
         </div>
-        <Button className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Sync Odoo Data
+        <Button 
+          className="gap-2" 
+          onClick={syncOdooData}
+          disabled={isLoading}
+        >
+          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          {isLoading ? 'Syncing...' : 'Sync Odoo Data'}
         </Button>
       </div>
 
@@ -30,49 +44,49 @@ const Index = () => {
       <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <MetricsCard
           title="Total Revenue"
-          value="$458K"
+          value={metrics ? formatCurrency(metrics.totalRevenue) : "$458K"}
           change={12.5}
           trend="up"
           icon={DollarSign}
           footer={
             <p className="text-xs text-muted-foreground">
-              $142K above target
+              {metrics ? "From Odoo" : "$142K above target"}
             </p>
           }
         />
         <MetricsCard
           title="Deals Closed"
-          value="142"
+          value={metrics ? metrics.dealsClosed.toString() : "142"}
           change={8.2}
           trend="up"
           icon={Award}
           footer={
             <p className="text-xs text-muted-foreground">
-              38 deals this month
+              {metrics ? "Confirmed orders" : "38 deals this month"}
             </p>
           }
         />
         <MetricsCard
           title="Conversion Rate"
-          value="24.8%"
+          value={metrics ? `${metrics.conversionRate.toFixed(1)}%` : "24.8%"}
           change={3.1}
           trend="up"
           icon={TrendingUp}
           footer={
             <p className="text-xs text-muted-foreground">
-              +2.1% from last month
+              {metrics ? "Won opportunities" : "+2.1% from last month"}
             </p>
           }
         />
         <MetricsCard
           title="Active Customers"
-          value="1,248"
+          value={metrics ? metrics.activeCustomers.toString() : "1,248"}
           change={15.3}
           trend="up"
           icon={Users}
           footer={
             <p className="text-xs text-muted-foreground">
-              156 new this quarter
+              {metrics ? "Unique customers" : "156 new this quarter"}
             </p>
           }
         />
