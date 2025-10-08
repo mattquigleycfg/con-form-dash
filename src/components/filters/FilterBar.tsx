@@ -13,14 +13,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useFilters } from '@/contexts/FilterContext';
-
-const OPPORTUNITY_STAGES = [
-  { value: 'New', label: 'New' },
-  { value: 'Qualified', label: 'Qualified' },
-  { value: 'Proposition', label: 'Proposition' },
-  { value: 'Won', label: 'Won' },
-  { value: 'Lost', label: 'Lost' },
-];
+import { useOdooStages } from '@/hooks/useOdooStages';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const DEAL_STATUS = [
   { value: 'sale', label: 'Open' },
@@ -31,6 +25,12 @@ const DEAL_STATUS = [
 export function FilterBar() {
   const [isExpanded, setIsExpanded] = useState(false);
   const { filters, setFilters, isFiltered } = useFilters();
+  const { stages, isLoading: stagesLoading } = useOdooStages();
+
+  const opportunityStages = stages.map(stage => ({
+    value: stage.name,
+    label: stage.name
+  }));
 
   return (
     <Card className="sticky top-0 z-10 shadow-md">
@@ -63,13 +63,17 @@ export function FilterBar() {
                 <div className="space-y-6 pr-4">
                   <div>
                     <h3 className="text-sm font-medium mb-3">Opportunity Stage</h3>
-                    <MultiSelectFilter
-                      label="Stages"
-                      options={OPPORTUNITY_STAGES}
-                      selected={filters.opportunityStage}
-                      onChange={(selected) => setFilters({ opportunityStage: selected })}
-                      placeholder="Select stages..."
-                    />
+                    {stagesLoading ? (
+                      <Skeleton className="h-10 w-full" />
+                    ) : (
+                      <MultiSelectFilter
+                        label="Stages"
+                        options={opportunityStages}
+                        selected={filters.opportunityStage}
+                        onChange={(selected) => setFilters({ opportunityStage: selected })}
+                        placeholder="Select stages..."
+                      />
+                    )}
                   </div>
 
                   <Separator />

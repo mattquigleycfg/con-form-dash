@@ -5,6 +5,7 @@ import { PipelineChart } from "@/components/PipelineChart";
 import { PerformanceTable } from "@/components/PerformanceTable";
 import { TargetProgress } from "@/components/TargetProgress";
 import { AICopilot } from "@/components/AICopilot";
+import { FilterBar } from "@/components/filters/FilterBar";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOdooSync } from "@/hooks/useOdooSync";
@@ -30,6 +31,11 @@ const Index = () => {
   return (
     <>
       <DashboardLayout>
+      {/* Filters */}
+      <div className="mb-6">
+        <FilterBar />
+      </div>
+
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>

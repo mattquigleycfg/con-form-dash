@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useOdooOpportunities } from "./useOdooOpportunities";
 
 interface OdooMetrics {
   totalRevenue: number;
@@ -13,6 +14,7 @@ export const useOdooSync = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [metrics, setMetrics] = useState<OdooMetrics | null>(null);
   const { toast } = useToast();
+  const { opportunities } = useOdooOpportunities();
 
   const syncOdooData = async () => {
     setIsLoading(true);
@@ -32,25 +34,11 @@ export const useOdooSync = () => {
 
       if (salesError) throw salesError;
 
-      // Fetch opportunities
-      const { data: opportunities, error: oppError } = await supabase.functions.invoke('odoo-query', {
-        body: {
-          model: 'crm.lead',
-          method: 'search_read',
-          args: [
-            [['type', '=', 'opportunity']],
-            ['probability', 'expected_revenue', 'stage_id']
-          ]
-        }
-      });
-
-      if (oppError) throw oppError;
-
-      // Calculate metrics
+      // Calculate metrics using filtered opportunities
       const totalRevenue = salesOrders?.reduce((sum: number, order: any) => sum + order.amount_total, 0) || 0;
       const dealsClosed = salesOrders?.length || 0;
-      const wonOpportunities = opportunities?.filter((opp: any) => opp.probability === 100).length || 0;
-      const totalOpportunities = opportunities?.length || 1;
+      const wonOpportunities = opportunities.filter((opp) => opp.probability === 100).length || 0;
+      const totalOpportunities = opportunities.length || 1;
       const conversionRate = (wonOpportunities / totalOpportunities) * 100;
       
       // Get unique customers
