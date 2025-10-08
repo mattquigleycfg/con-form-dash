@@ -10,8 +10,8 @@ export function SankeyChart() {
     return (
       <Card className="shadow-card h-full flex flex-col">
         <CardHeader>
-        <CardTitle>Sales Performance Flow</CardTitle>
-        <p className="text-sm text-muted-foreground">Sales team activity to customer retention</p>
+          <CardTitle>Sales Performance Flow</CardTitle>
+          <p className="text-sm text-muted-foreground">Loading sales data...</p>
         </CardHeader>
         <CardContent className="flex-1 min-h-[220px] overflow-hidden">
           <Skeleton className="h-full w-full" />
@@ -24,8 +24,8 @@ export function SankeyChart() {
     return (
       <Card className="shadow-card">
         <CardHeader>
-          <CardTitle>Revenue Generation Flow</CardTitle>
-          <p className="text-sm text-muted-foreground">No data available</p>
+          <CardTitle>Sales Performance Flow</CardTitle>
+          <p className="text-sm text-muted-foreground">No sales data available for the selected period</p>
         </CardHeader>
       </Card>
     );
@@ -35,7 +35,7 @@ export function SankeyChart() {
     <Card className="shadow-card h-full flex flex-col">
       <CardHeader>
         <CardTitle>Sales Performance Flow</CardTitle>
-        <p className="text-sm text-muted-foreground">Sales Reps → Deal Outcomes → Customer Retention</p>
+        <p className="text-sm text-muted-foreground">Sales Reps → Products Sold</p>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
