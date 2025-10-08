@@ -98,8 +98,6 @@ export const useOdooSankey = () => {
       });
 
       // Build Salesperson -> Product flow
-      const salesReps = new Set<string>();
-      const products = new Set<string>();
       const repToProduct = new Map<string, Map<string, number>>();
 
       orderLines?.forEach((line: any) => {
@@ -110,15 +108,12 @@ export const useOdooSankey = () => {
         const product = line.product_id ? line.product_id[1] : "Unknown Product";
         const value = line.price_subtotal || 0;
 
-        salesReps.add(salesRep);
-        products.add(product);
-
         if (!repToProduct.has(salesRep)) repToProduct.set(salesRep, new Map());
         const productMap = repToProduct.get(salesRep)!;
         productMap.set(product, (productMap.get(product) || 0) + value);
       });
 
-      // Limit to top 5 salespeople and top 10 products for readability
+      // Get top 4 salespeople by total sales
       const repTotals = new Map<string, number>();
       repToProduct.forEach((products, rep) => {
         let total = 0;
@@ -128,27 +123,34 @@ export const useOdooSankey = () => {
 
       const topReps = Array.from(repTotals.entries())
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
+        .slice(0, 4)
         .map(([rep]) => rep);
 
-      // Get top products across all top reps
-      const productTotals = new Map<string, number>();
-      repToProduct.forEach((products, rep) => {
-        if (!topReps.includes(rep)) return;
-        products.forEach((value, product) => {
-          productTotals.set(product, (productTotals.get(product) || 0) + value);
-        });
-      });
+      // For each top rep, get their top 4 products
+      const finalProducts = new Set<string>();
+      const finalRepToProduct = new Map<string, Map<string, number>>();
 
-      const topProducts = Array.from(productTotals.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([product]) => product);
+      topReps.forEach(rep => {
+        const repProducts = repToProduct.get(rep);
+        if (!repProducts) return;
+
+        const topRepProducts = Array.from(repProducts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 4);
+
+        const productMap = new Map<string, number>();
+        topRepProducts.forEach(([product, value]) => {
+          finalProducts.add(product);
+          productMap.set(product, value);
+        });
+
+        finalRepToProduct.set(rep, productMap);
+      });
 
       // Build nodes array
       const nodes: SankeyNode[] = [
         ...topReps.map(s => ({ name: s })),
-        ...topProducts.map(p => ({ name: p }))
+        ...Array.from(finalProducts).map(p => ({ name: p }))
       ];
 
       // Build links array
@@ -156,10 +158,8 @@ export const useOdooSankey = () => {
       const nodeIndex = (name: string) => nodes.findIndex(n => n.name === name);
 
       // Salesperson -> Product links
-      repToProduct.forEach((products, rep) => {
-        if (!topReps.includes(rep)) return;
+      finalRepToProduct.forEach((products, rep) => {
         products.forEach((value, product) => {
-          if (!topProducts.includes(product)) return;
           const sourceIdx = nodeIndex(rep);
           const targetIdx = nodeIndex(product);
           if (sourceIdx >= 0 && targetIdx >= 0) {
