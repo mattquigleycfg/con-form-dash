@@ -17,7 +17,7 @@ const tools = [
     type: "function",
     function: {
       name: "query_sales_orders",
-      description: "Query sales orders from Odoo. Use this to get revenue data, deal information, and sales by salesperson. Returns sales orders with fields: id, name, amount_total, date_order, state, user_id (salesperson).",
+      description: "Query sales orders from Odoo. Use this to get revenue data, deal information, and sales by salesperson. Returns sales orders with fields: id, name, amount_total, date_order, state, user_id (salesperson), partner_id (customer).",
       parameters: {
         type: "object",
         properties: {
@@ -46,7 +46,7 @@ const tools = [
     type: "function",
     function: {
       name: "query_crm_leads",
-      description: "Query CRM opportunities/leads from Odoo. Use this to get pipeline data, opportunity stages, and deal probabilities. Returns leads with fields: id, name, expected_revenue, probability, stage_id, user_id (salesperson), type.",
+      description: "Query CRM opportunities/leads from Odoo. Use this to get pipeline data, opportunity stages, and deal probabilities. Returns leads with fields: id, name, expected_revenue, probability, stage_id, user_id (salesperson), type, partner_id (customer).",
       parameters: {
         type: "object",
         properties: {
@@ -61,6 +61,79 @@ const tools = [
           stage_name: {
             type: "string",
             description: "Filter by stage name (e.g., 'New', 'Qualified', 'Proposition', 'Won', 'Lost'). Leave empty for all stages.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_products",
+      description: "Query product catalog from Odoo. Use this to get product information, pricing, categories, and inventory data. Returns products with fields: id, name, list_price, standard_price (cost), categ_id (category), qty_available (stock), type.",
+      parameters: {
+        type: "object",
+        properties: {
+          product_name: {
+            type: "string",
+            description: "Filter by product name (case-insensitive partial match). Leave empty to get all products.",
+          },
+          category_name: {
+            type: "string",
+            description: "Filter by category name. Leave empty for all categories.",
+          },
+          available_only: {
+            type: "boolean",
+            description: "If true, only returns products with qty_available > 0. Default false.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_customers",
+      description: "Query customer/partner data from Odoo. Use this to get customer information, contact details, and company data. Returns partners with fields: id, name, email, phone, city, country_id, is_company, customer_rank.",
+      parameters: {
+        type: "object",
+        properties: {
+          customer_name: {
+            type: "string",
+            description: "Filter by customer name (case-insensitive partial match). Leave empty to get all customers.",
+          },
+          customers_only: {
+            type: "boolean",
+            description: "If true, only returns customers (customer_rank > 0). Default true.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_invoices",
+      description: "Query invoices from Odoo. Use this to get invoice data, payment status, and amounts. Returns invoices with fields: id, name, invoice_date, amount_total, state, payment_state, partner_id (customer).",
+      parameters: {
+        type: "object",
+        properties: {
+          date_filter: {
+            type: "string",
+            description: "Start date filter for invoices (>=), e.g., '2024-07-01'. Use ISO date format YYYY-MM-DD.",
+          },
+          end_date_filter: {
+            type: "string",
+            description: "End date filter for invoices (<=). Use ISO date format YYYY-MM-DD. Optional.",
+          },
+          state_filter: {
+            type: "array",
+            items: { type: "string" },
+            description: "Filter by invoice state. Common values: 'draft', 'posted' (validated), 'cancel'. Leave empty for all states.",
+          },
+          payment_state: {
+            type: "string",
+            description: "Filter by payment state: 'not_paid', 'in_payment', 'paid', 'partial', 'reversed'. Leave empty for all.",
           },
         },
       },
@@ -100,7 +173,7 @@ async function executeToolCall(toolName: string, toolArgs: any) {
           method: 'search_read',
           args: [
             filters,
-            ['name', 'amount_total', 'date_order', 'state', 'user_id']
+            ['name', 'amount_total', 'date_order', 'state', 'user_id', 'partner_id']
           ]
         }
       });
@@ -134,7 +207,7 @@ async function executeToolCall(toolName: string, toolArgs: any) {
           method: 'search_read',
           args: [
             filters,
-            ['name', 'expected_revenue', 'probability', 'stage_id', 'user_id', 'type']
+            ['name', 'expected_revenue', 'probability', 'stage_id', 'user_id', 'type', 'partner_id']
           ]
         }
       });
@@ -161,6 +234,126 @@ async function executeToolCall(toolName: string, toolArgs: any) {
 
       console.log(`Found ${results.length} CRM leads/opportunities`);
       return JSON.stringify(results);
+    }
+
+    if (toolName === "query_products") {
+      const filters: any[] = [];
+
+      const { data, error } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'product.product',
+          method: 'search_read',
+          args: [
+            filters,
+            ['name', 'list_price', 'standard_price', 'categ_id', 'qty_available', 'type', 'active']
+          ]
+        }
+      });
+
+      if (error) throw error;
+
+      let results = data || [];
+      
+      // Filter by product name if provided
+      if (toolArgs.product_name && results.length > 0) {
+        const searchName = toolArgs.product_name.toLowerCase();
+        results = results.filter((product: any) => 
+          product.name && product.name.toLowerCase().includes(searchName)
+        );
+      }
+
+      // Filter by category name if provided
+      if (toolArgs.category_name && results.length > 0) {
+        const searchCategory = toolArgs.category_name.toLowerCase();
+        results = results.filter((product: any) => 
+          product.categ_id && product.categ_id[1].toLowerCase().includes(searchCategory)
+        );
+      }
+
+      // Filter by availability if requested
+      if (toolArgs.available_only && results.length > 0) {
+        results = results.filter((product: any) => 
+          product.qty_available && product.qty_available > 0
+        );
+      }
+
+      console.log(`Found ${results.length} products`);
+      return JSON.stringify(results);
+    }
+
+    if (toolName === "query_customers") {
+      const filters: any[] = [];
+      
+      // Default to customers only
+      if (toolArgs.customers_only !== false) {
+        filters.push(['customer_rank', '>', 0]);
+      }
+
+      const { data, error } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'res.partner',
+          method: 'search_read',
+          args: [
+            filters,
+            ['name', 'email', 'phone', 'city', 'country_id', 'is_company', 'customer_rank']
+          ]
+        }
+      });
+
+      if (error) throw error;
+
+      let results = data || [];
+      
+      // Filter by customer name if provided
+      if (toolArgs.customer_name && results.length > 0) {
+        const searchName = toolArgs.customer_name.toLowerCase();
+        results = results.filter((partner: any) => 
+          partner.name && partner.name.toLowerCase().includes(searchName)
+        );
+      }
+
+      console.log(`Found ${results.length} customers`);
+      return JSON.stringify(results);
+    }
+
+    if (toolName === "query_invoices") {
+      const filters: any[] = [['move_type', '=', 'out_invoice']]; // Customer invoices only
+      
+      // Add date filter
+      if (toolArgs.date_filter) {
+        filters.push(['invoice_date', '>=', toolArgs.date_filter]);
+      }
+      
+      // Add end date filter if provided
+      if (toolArgs.end_date_filter) {
+        filters.push(['invoice_date', '<=', toolArgs.end_date_filter]);
+      }
+      
+      // Add state filter
+      if (toolArgs.state_filter && toolArgs.state_filter.length > 0) {
+        filters.push(['state', 'in', toolArgs.state_filter]);
+      }
+
+      // Add payment state filter
+      if (toolArgs.payment_state) {
+        filters.push(['payment_state', '=', toolArgs.payment_state]);
+      }
+
+      const { data, error } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'account.move',
+          method: 'search_read',
+          args: [
+            filters,
+            ['name', 'invoice_date', 'amount_total', 'state', 'payment_state', 'partner_id']
+          ]
+        }
+      });
+
+      if (error) throw error;
+
+      console.log(`Found ${data?.length || 0} invoices`);
+      return JSON.stringify(data || []);
     }
 
     return JSON.stringify({ error: `Unknown tool: ${toolName}` });
@@ -229,15 +422,22 @@ IMPORTANT INSTRUCTIONS:
 - If tool execution fails, explain what went wrong and suggest alternatives
 
 AVAILABLE DATA:
-- Sales Orders: Contains confirmed and completed sales with revenue amounts and salespeople
-- CRM Leads/Opportunities: Contains pipeline data with stages, probabilities, and expected revenue
+- Sales Orders: Contains confirmed and completed sales with revenue amounts, salespeople, and customers
+- CRM Leads/Opportunities: Contains pipeline data with stages, probabilities, expected revenue, and salespeople
+- Products: Product catalog with pricing, categories, stock levels, and product types
+- Customers: Customer/partner information including contact details and company data
+- Invoices: Invoice data with amounts, payment status, dates, and customers
 
 EXAMPLES:
 - "Q2 sales" → Use query_sales_orders with date_filter: '>=${quarters.Q2.start}' and add filter for date_order '<=${quarters.Q2.end}'
 - "Last 3 months" → Calculate 3 months back from ${currentDate}
 - "Joel Boustani's sales last 3 months" → Use query_sales_orders with date_filter and salesperson_name: "Joel"
 - "Pipeline by stage" → Use query_crm_leads to get all opportunities and analyze by stage_id
-- "Top performers this year" → Use query_sales_orders with date_filter: '>=${currentYear}-01-01'`
+- "Top performers this year" → Use query_sales_orders with date_filter: '>=${currentYear}-01-01'
+- "Show me our products" → Use query_products to get product catalog
+- "Which products are in stock?" → Use query_products with available_only: true
+- "Customer list" → Use query_customers to get all customers
+- "Unpaid invoices" → Use query_invoices with payment_state: 'not_paid'`
       },
       ...messages,
     ];
