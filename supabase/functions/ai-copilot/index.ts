@@ -17,7 +17,7 @@ const tools = [
     type: "function",
     function: {
       name: "query_sales_orders",
-      description: "Query sales orders from Odoo. Use this to get revenue data, deal information, and sales by salesperson. Returns sales orders with fields: id, name, amount_total, date_order, state, user_id (salesperson), partner_id (customer).",
+      description: "Query sales orders and quotations from Odoo. IMPORTANT: In Odoo, quotations are sales orders in 'draft' or 'sent' state, while confirmed sales orders are in 'sale' or 'done' state. Use this to get revenue data, deal information, and sales by salesperson. Returns sales orders with fields: id, name, amount_total, date_order, state, user_id (salesperson), partner_id (customer), margin (profit margin), note (description/notes).",
       parameters: {
         type: "object",
         properties: {
@@ -36,7 +36,27 @@ const tools = [
           state_filter: {
             type: "array",
             items: { type: "string" },
-            description: "Filter by order state. Common values: 'sale' (confirmed), 'done' (completed), 'cancel' (cancelled). Leave empty for all states.",
+            description: "Filter by order state. Values: 'draft' (quotation), 'sent' (quotation sent), 'sale' (confirmed sales order), 'done' (completed), 'cancel' (cancelled). Leave empty for all states. To get only quotations use ['draft', 'sent']. To get only confirmed orders use ['sale', 'done'].",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_order_lines",
+      description: "Query order lines (products) from sales orders/quotations. Use this to get detailed product information, quantities, prices, margins, and descriptions for specific orders. Returns order lines with: id, order_id, product_id, name (description), product_uom_qty (quantity), price_unit, price_subtotal, margin (profit), discount.",
+      parameters: {
+        type: "object",
+        properties: {
+          order_name: {
+            type: "string",
+            description: "Filter by order reference/name (e.g., 'S00123'). Leave empty to get all order lines.",
+          },
+          product_name: {
+            type: "string",
+            description: "Filter by product name (case-insensitive partial match). Leave empty for all products.",
           },
         },
       },
@@ -162,9 +182,6 @@ async function executeToolCall(toolName: string, toolArgs: any) {
       // Add state filter
       if (toolArgs.state_filter && toolArgs.state_filter.length > 0) {
         filters.push(['state', 'in', toolArgs.state_filter]);
-      } else {
-        // Default to confirmed/done orders
-        filters.push(['state', 'in', ['sale', 'done']]);
       }
 
       const { data, error } = await supabase.functions.invoke('odoo-query', {
@@ -173,7 +190,7 @@ async function executeToolCall(toolName: string, toolArgs: any) {
           method: 'search_read',
           args: [
             filters,
-            ['name', 'amount_total', 'date_order', 'state', 'user_id', 'partner_id']
+            ['name', 'amount_total', 'date_order', 'state', 'user_id', 'partner_id', 'margin', 'note', 'amount_untaxed']
           ]
         }
       });
@@ -189,7 +206,46 @@ async function executeToolCall(toolName: string, toolArgs: any) {
         );
       }
 
-      console.log(`Found ${results.length} sales orders`);
+      console.log(`Found ${results.length} sales orders/quotations`);
+      return JSON.stringify(results);
+    }
+
+    if (toolName === "query_order_lines") {
+      const filters: any[] = [];
+
+      const { data, error } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'sale.order.line',
+          method: 'search_read',
+          args: [
+            filters,
+            ['order_id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'price_subtotal', 'margin', 'discount']
+          ]
+        }
+      });
+
+      if (error) throw error;
+
+      let results = data || [];
+      
+      // Filter by order name if provided
+      if (toolArgs.order_name && results.length > 0) {
+        const searchOrder = toolArgs.order_name.toLowerCase();
+        results = results.filter((line: any) => 
+          line.order_id && line.order_id[1].toLowerCase().includes(searchOrder)
+        );
+      }
+
+      // Filter by product name if provided
+      if (toolArgs.product_name && results.length > 0) {
+        const searchProduct = toolArgs.product_name.toLowerCase();
+        results = results.filter((line: any) => 
+          (line.product_id && line.product_id[1].toLowerCase().includes(searchProduct)) ||
+          (line.name && line.name.toLowerCase().includes(searchProduct))
+        );
+      }
+
+      console.log(`Found ${results.length} order lines`);
       return JSON.stringify(results);
     }
 
@@ -413,31 +469,37 @@ CURRENT DATE CONTEXT:
 - Q4 ${currentYear}: ${quarters.Q4.start} to ${quarters.Q4.end}
 
 IMPORTANT INSTRUCTIONS:
+- ODOO TERMINOLOGY: In Odoo, "quotations" are sales orders with state 'draft' or 'sent'. Confirmed "sales orders" have state 'sale' or 'done'. When users ask about quotations vs orders, filter by state accordingly.
+- When asked about "quotations", use query_sales_orders with state_filter: ['draft', 'sent']
+- When asked about "confirmed orders" or "sales orders", use query_sales_orders with state_filter: ['sale', 'done']
+- When asked about product details, margins, or line items, use query_order_lines after getting the order
 - When asked about "last quarter" or "Q2" without a year, use the most recent completed quarter or the quarter from the current year
 - When asked about sales data, revenue, deals, or salesperson performance, ALWAYS use the available tools to query real Odoo data
 - For date ranges, use the date_filter parameter with ISO format (YYYY-MM-DD)
 - When querying by salesperson, use their first name or full name in the salesperson_name parameter
 - Format currency amounts nicely (e.g., $458,250 instead of 458250)
+- Format percentages nicely (e.g., 23.5% for margin)
 - Provide clear, actionable insights based on the actual data
 - If tool execution fails, explain what went wrong and suggest alternatives
 
 AVAILABLE DATA:
-- Sales Orders: Contains confirmed and completed sales with revenue amounts, salespeople, and customers
+- Sales Orders & Quotations: Use query_sales_orders. Contains both quotations (draft/sent state) and confirmed orders (sale/done state) with revenue, margins, salespeople, customers, and notes/descriptions
+- Order Lines (Products): Use query_order_lines. Contains detailed product information for each order line including product name, description, quantity, unit price, subtotal, margin, and discount
 - CRM Leads/Opportunities: Contains pipeline data with stages, probabilities, expected revenue, and salespeople
 - Products: Product catalog with pricing, categories, stock levels, and product types
 - Customers: Customer/partner information including contact details and company data
 - Invoices: Invoice data with amounts, payment status, dates, and customers
 
 EXAMPLES:
-- "Q2 sales" → Use query_sales_orders with date_filter: '>=${quarters.Q2.start}' and add filter for date_order '<=${quarters.Q2.end}'
+- "Show me quotations from Q2" → Use query_sales_orders with state_filter: ['draft', 'sent'] and date filters for Q2
+- "What are our confirmed sales orders this month?" → Use query_sales_orders with state_filter: ['sale', 'done']
+- "Show me product details for order S00123" → Use query_order_lines with order_name: "S00123"
+- "What's the margin on our recent orders?" → Use query_sales_orders to get orders with margin field
+- "List products in quotations" → First use query_sales_orders with state_filter: ['draft', 'sent'], then use query_order_lines
+- "Q2 sales" → Use query_sales_orders with date_filter: '>=${quarters.Q2.start}' and end_date_filter: '<=${quarters.Q2.end}'
 - "Last 3 months" → Calculate 3 months back from ${currentDate}
-- "Joel Boustani's sales last 3 months" → Use query_sales_orders with date_filter and salesperson_name: "Joel"
 - "Pipeline by stage" → Use query_crm_leads to get all opportunities and analyze by stage_id
-- "Top performers this year" → Use query_sales_orders with date_filter: '>=${currentYear}-01-01'
-- "Show me our products" → Use query_products to get product catalog
-- "Which products are in stock?" → Use query_products with available_only: true
-- "Customer list" → Use query_customers to get all customers
-- "Unpaid invoices" → Use query_invoices with payment_state: 'not_paid'`
+- "Top performers this year" → Use query_sales_orders with date_filter: '>=${currentYear}-01-01'`
       },
       ...messages,
     ];
