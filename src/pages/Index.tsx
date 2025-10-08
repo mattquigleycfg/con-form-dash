@@ -4,12 +4,14 @@ import { RevenueChart } from "@/components/RevenueChart";
 import { PipelineChart } from "@/components/PipelineChart";
 import { PerformanceTable } from "@/components/PerformanceTable";
 import { TargetProgress } from "@/components/TargetProgress";
+import { AICopilot } from "@/components/AICopilot";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Index = () => {
   return (
-    <DashboardLayout>
+    <>
+      <DashboardLayout>
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
@@ -92,6 +94,8 @@ const Index = () => {
         </div>
       </div>
     </DashboardLayout>
+    <AICopilot />
+    </>
   );
 };
 

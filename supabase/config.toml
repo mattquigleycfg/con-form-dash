@@ -1,1 +1,7 @@
 project_id = "hfscflqjpozqyfpohvjj"
+
+[functions.odoo-query]
+verify_jwt = true
+
+[functions.ai-copilot]
+verify_jwt = true
