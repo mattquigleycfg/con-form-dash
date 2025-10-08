@@ -6,9 +6,10 @@ import { useNavigate } from "react-router-dom";
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  signInWithMicrosoft: () => Promise<void>;
+  signInWithMicrosoft: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
+  signUp: (email: string, password: string, fullName: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,19 +46,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const signInWithMicrosoft = async () => {
+  const signInWithMicrosoft = async (email: string, password: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "azure",
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.error("Error signing in:", error);
+      throw error;
+    }
+  };
+
+  const signUp = async (email: string, password: string, fullName: string) => {
+    const redirectUrl = `${window.location.origin}/`;
+    
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
       options: {
-        scopes: "email profile openid",
-        redirectTo: redirectUrl,
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: fullName,
+        },
       },
     });
 
     if (error) {
-      console.error("Error signing in with Microsoft:", error);
+      console.error("Error signing up:", error);
       throw error;
     }
   };
@@ -77,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         session,
         signInWithMicrosoft,
+        signUp,
         signOut,
         loading,
       }}
