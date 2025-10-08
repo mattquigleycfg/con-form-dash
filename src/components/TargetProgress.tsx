@@ -1,35 +1,57 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Target, Calendar, DollarSign } from "lucide-react";
-
-const targets = [
-  {
-    id: 1,
-    name: "Q4 Revenue Target",
-    current: 458000,
-    target: 600000,
-    period: "Oct - Dec 2024",
-    icon: DollarSign,
-  },
-  {
-    id: 2,
-    name: "Monthly Deals",
-    current: 142,
-    target: 180,
-    period: "November 2024",
-    icon: Target,
-  },
-  {
-    id: 3,
-    name: "New Customers",
-    current: 38,
-    target: 50,
-    period: "This Month",
-    icon: Calendar,
-  },
-];
+import { useOdooSync } from "@/hooks/useOdooSync";
+import { useEffect } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function TargetProgress() {
+  const { syncOdooData, metrics, isLoading } = useOdooSync();
+
+  useEffect(() => {
+    syncOdooData();
+  }, []);
+
+  const targets = [
+    {
+      id: 1,
+      name: "Q4 Revenue Target",
+      current: metrics?.totalRevenue || 0,
+      target: 600000,
+      period: "Oct - Dec 2024",
+      icon: DollarSign,
+    },
+    {
+      id: 2,
+      name: "Monthly Deals",
+      current: metrics?.dealsClosed || 0,
+      target: 180,
+      period: "November 2024",
+      icon: Target,
+    },
+    {
+      id: 3,
+      name: "New Customers",
+      current: metrics?.activeCustomers || 0,
+      target: 50,
+      period: "This Month",
+      icon: Calendar,
+    },
+  ];
+
+  if (isLoading) {
+    return (
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle>Active Targets</CardTitle>
+          <p className="text-sm text-muted-foreground">Progress towards goals</p>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-40 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card className="shadow-card">
       <CardHeader>

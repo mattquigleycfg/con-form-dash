@@ -1,13 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-
-const data = [
-  { stage: "Leads", count: 245, value: 612500 },
-  { stage: "Qualified", count: 156, value: 468000 },
-  { stage: "Proposal", count: 89, value: 356000 },
-  { stage: "Negotiation", count: 45, value: 247500 },
-  { stage: "Closed Won", count: 32, value: 192000 },
-];
+import { useOdooPipeline } from "@/hooks/useOdooPipeline";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const COLORS = [
   "hsl(var(--chart-1))",
@@ -18,6 +12,33 @@ const COLORS = [
 ];
 
 export function PipelineChart() {
+  const { pipelineData, isLoading } = useOdooPipeline();
+
+  if (isLoading) {
+    return (
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle>Sales Pipeline</CardTitle>
+          <p className="text-sm text-muted-foreground">Current opportunities by stage</p>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-[350px] w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (pipelineData.length === 0) {
+    return (
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle>Sales Pipeline</CardTitle>
+          <p className="text-sm text-muted-foreground">No pipeline data available</p>
+        </CardHeader>
+      </Card>
+    );
+  }
+
   return (
     <Card className="shadow-card">
       <CardHeader>
@@ -26,7 +47,7 @@ export function PipelineChart() {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={350}>
-          <BarChart data={data} layout="vertical">
+          <BarChart data={pipelineData} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               type="number"
@@ -56,7 +77,7 @@ export function PipelineChart() {
               }}
             />
             <Bar dataKey="count" radius={[0, 8, 8, 0]}>
-              {data.map((entry, index) => (
+              {pipelineData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Bar>
