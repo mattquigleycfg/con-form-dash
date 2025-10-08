@@ -7,26 +7,98 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Target {
   id: string;
   name: string;
-  targetValue: number;
+  target_value: number;
   period: string;
   metric: string;
 }
 
 export default function Settings() {
   const { toast } = useToast();
-  const [targets, setTargets] = useState<Target[]>([
-    { id: "1", name: "Quarterly Revenue", targetValue: 500000, period: "Q1 2025", metric: "revenue" },
-    { id: "2", name: "Deals Closed", targetValue: 200, period: "This Quarter", metric: "deals" },
-  ]);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  
   const [newTarget, setNewTarget] = useState({
     name: "",
     targetValue: 0,
     period: "This Quarter",
     metric: "revenue"
+  });
+
+  // Fetch targets from database
+  const { data: targets = [], isLoading } = useQuery({
+    queryKey: ['sales-targets'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sales_targets')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data as Target[];
+    },
+    enabled: !!user
+  });
+
+  // Add target mutation
+  const addTargetMutation = useMutation({
+    mutationFn: async (target: { name: string; target_value: number; period: string; metric: string }) => {
+      const { data, error } = await supabase
+        .from('sales_targets')
+        .insert([{ ...target, user_id: user?.id }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales-targets'] });
+      setNewTarget({ name: "", targetValue: 0, period: "This Quarter", metric: "revenue" });
+      toast({
+        title: "Target added",
+        description: "Your new target has been created successfully"
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Delete target mutation
+  const deleteTargetMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('sales_targets')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales-targets'] });
+      toast({
+        title: "Target deleted",
+        description: "The target has been removed"
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
   });
 
   const handleAddTarget = () => {
@@ -39,26 +111,16 @@ export default function Settings() {
       return;
     }
 
-    const target: Target = {
-      id: Date.now().toString(),
-      ...newTarget
-    };
-
-    setTargets([...targets, target]);
-    setNewTarget({ name: "", targetValue: 0, period: "This Quarter", metric: "revenue" });
-    
-    toast({
-      title: "Target added",
-      description: "Your new target has been created successfully"
+    addTargetMutation.mutate({
+      name: newTarget.name,
+      target_value: newTarget.targetValue,
+      period: newTarget.period,
+      metric: newTarget.metric
     });
   };
 
   const handleDeleteTarget = (id: string) => {
-    setTargets(targets.filter(t => t.id !== id));
-    toast({
-      title: "Target deleted",
-      description: "The target has been removed"
-    });
+    deleteTargetMutation.mutate(id);
   };
 
   return (
@@ -81,26 +143,33 @@ export default function Settings() {
           <CardContent className="space-y-6">
             {/* Existing Targets */}
             <div className="space-y-3">
-              {targets.map((target) => (
-                <div
-                  key={target.id}
-                  className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                >
-                  <div>
-                    <p className="font-medium">{target.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Target: {target.targetValue.toLocaleString()} • {target.period} • {target.metric}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteTarget(target.id)}
+              {isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading targets...</p>
+              ) : targets.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No targets set yet. Add your first target below.</p>
+              ) : (
+                targets.map((target) => (
+                  <div
+                    key={target.id}
+                    className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              ))}
+                    <div>
+                      <p className="font-medium">{target.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Target: {Number(target.target_value).toLocaleString()} • {target.period} • {target.metric}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteTarget(target.id)}
+                      disabled={deleteTargetMutation.isPending}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Add New Target */}
@@ -172,9 +241,13 @@ export default function Settings() {
                 </div>
               </div>
 
-              <Button onClick={handleAddTarget} className="w-full">
+              <Button 
+                onClick={handleAddTarget} 
+                className="w-full"
+                disabled={addTargetMutation.isPending}
+              >
                 <Plus className="mr-2 h-4 w-4" />
-                Add Target
+                {addTargetMutation.isPending ? "Adding..." : "Add Target"}
               </Button>
             </div>
           </CardContent>
