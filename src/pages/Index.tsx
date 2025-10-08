@@ -143,6 +143,10 @@ const Index = () => {
         isDraggable={true}
         isResizable={true}
         draggableHandle=".cursor-move"
+        margin={[16, 16]}
+        containerPadding={[0, 0]}
+        compactType="vertical"
+        preventCollision={false}
       >
         <div key="revenue-chart">
           <DraggableWidget>
