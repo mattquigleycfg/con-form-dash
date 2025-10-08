@@ -41,13 +41,11 @@ export const useOdooSankey = () => {
 
       // Define node categories
       const salesReps = new Set<string>();
-      const stages = new Set<string>();
       const outcomes = new Set<string>();
       const retentionCategories = ["High Value Retained", "Medium Value Retained", "Low Value Retained", "Lost"];
 
       // Map for tracking values
-      const repToStage = new Map<string, Map<string, number>>();
-      const stageToOutcome = new Map<string, Map<string, number>>();
+      const repToOutcome = new Map<string, Map<string, number>>();
       const outcomeToRetention = new Map<string, Map<string, number>>();
 
       // First pass: calculate total revenue per sales rep
@@ -71,7 +69,6 @@ export const useOdooSankey = () => {
         // Skip if not in top 4
         if (!topReps.includes(salesRep)) return;
 
-        const stage = opp.stage_id[1];
         const revenue = opp.expected_revenue || 0;
         
         // Determine outcome based on probability
@@ -93,17 +90,11 @@ export const useOdooSankey = () => {
         }
 
         salesReps.add(salesRep);
-        stages.add(stage);
         outcomes.add(outcome);
 
-        // Sales Rep -> Stage
-        if (!repToStage.has(salesRep)) repToStage.set(salesRep, new Map());
-        const stageMap = repToStage.get(salesRep)!;
-        stageMap.set(stage, (stageMap.get(stage) || 0) + 1);
-
-        // Stage -> Outcome
-        if (!stageToOutcome.has(stage)) stageToOutcome.set(stage, new Map());
-        const outcomeMap = stageToOutcome.get(stage)!;
+        // Sales Rep -> Outcome (direct connection, skip stages)
+        if (!repToOutcome.has(salesRep)) repToOutcome.set(salesRep, new Map());
+        const outcomeMap = repToOutcome.get(salesRep)!;
         outcomeMap.set(outcome, (outcomeMap.get(outcome) || 0) + 1);
 
         // Outcome -> Retention
@@ -115,7 +106,6 @@ export const useOdooSankey = () => {
       // Build nodes array
       const nodes: SankeyNode[] = [
         ...Array.from(salesReps).map(s => ({ name: s })),
-        ...Array.from(stages).map(s => ({ name: s })),
         ...Array.from(outcomes).map(o => ({ name: o })),
         ...retentionCategories.map(r => ({ name: r }))
       ];
@@ -124,22 +114,11 @@ export const useOdooSankey = () => {
       const links: SankeyLink[] = [];
       const nodeIndex = (name: string) => nodes.findIndex(n => n.name === name);
 
-      // Sales Rep -> Stage links
-      repToStage.forEach((stages, rep) => {
-        stages.forEach((value, stage) => {
-          links.push({
-            source: nodeIndex(rep),
-            target: nodeIndex(stage),
-            value
-          });
-        });
-      });
-
-      // Stage -> Outcome links
-      stageToOutcome.forEach((outcomes, stage) => {
+      // Sales Rep -> Outcome links (direct, no stages)
+      repToOutcome.forEach((outcomes, rep) => {
         outcomes.forEach((value, outcome) => {
           links.push({
-            source: nodeIndex(stage),
+            source: nodeIndex(rep),
             target: nodeIndex(outcome),
             value
           });

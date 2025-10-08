@@ -35,7 +35,7 @@ export function SankeyChart() {
     <Card className="shadow-card h-full flex flex-col">
       <CardHeader>
         <CardTitle>Sales Performance Flow</CardTitle>
-        <p className="text-sm text-muted-foreground">Sales Reps → Opportunity Stages → Deal Outcomes → Customer Retention</p>
+        <p className="text-sm text-muted-foreground">Sales Reps → Deal Outcomes → Customer Retention</p>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
