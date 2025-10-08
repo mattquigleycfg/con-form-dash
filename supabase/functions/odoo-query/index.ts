@@ -43,10 +43,12 @@ serve(async (req) => {
     });
 
     const authData = await authResponse.json();
-    console.log('Odoo auth result:', authData.result ? 'success' : 'failed');
+    console.log('Odoo auth response:', JSON.stringify(authData, null, 2));
 
     if (!authData.result || !authData.result.uid) {
-      throw new Error('Odoo authentication failed');
+      const errorDetails = authData.error ? JSON.stringify(authData.error) : 'No error details';
+      console.error('Odoo authentication failed. Details:', errorDetails);
+      throw new Error(`Odoo authentication failed: ${errorDetails}`);
     }
 
     // Make the actual query
