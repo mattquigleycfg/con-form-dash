@@ -1,7 +1,18 @@
 import { ReactNode } from "react";
-import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -18,6 +29,26 @@ const navigation = [
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
+  const { user, signOut } = useAuth();
+
+  const getUserInitials = () => {
+    if (!user?.user_metadata?.full_name && !user?.email) return "U";
+    const name = user?.user_metadata?.full_name || user?.email || "";
+    return name
+      .split(" ")
+      .map((n: string) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const getUserName = () => {
+    return user?.user_metadata?.full_name || user?.email || "User";
+  };
+
+  const getUserEmail = () => {
+    return user?.email || "";
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -59,15 +90,37 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {/* User section */}
           <div className="border-t border-sidebar-border p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                JD
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-sidebar-foreground">John Doe</p>
-                <p className="text-xs text-sidebar-foreground/60">Sales Manager</p>
-              </div>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-3 px-2 py-6 hover:bg-sidebar-accent"
+                >
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={user?.user_metadata?.avatar_url} />
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {getUserInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 text-left">
+                    <p className="text-sm font-medium text-sidebar-foreground">
+                      {getUserName()}
+                    </p>
+                    <p className="text-xs text-sidebar-foreground/60">
+                      {getUserEmail()}
+                    </p>
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={signOut} className="text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </aside>
