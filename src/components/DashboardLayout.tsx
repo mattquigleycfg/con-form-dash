@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { FilterBar } from "@/components/filters/FilterBar";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -127,6 +128,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Main content */}
       <div className="pl-64">
+        <div className="sticky top-0 z-10 bg-background">
+          <FilterBar />
+        </div>
         <main className="min-h-screen p-8">{children}</main>
       </div>
     </div>
