@@ -122,28 +122,27 @@ export const useOdooSalesByRegion = () => {
     
     filteredOrders.forEach((order: any) => {
       const state = order.state;
-      const existing = regionMap.get(state) || { sales: 0, orders: 0 };
-      regionMap.set(state, {
-        sales: existing.sales + order.amount_total,
-        orders: existing.orders + 1
-      });
+      // Map full state name to abbreviation
+      const stateAbbr = Object.entries(STATE_MAP).find(
+        ([fullName]) => state.includes(fullName)
+      )?.[1];
+      
+      if (stateAbbr) {
+        const existing = regionMap.get(stateAbbr) || { sales: 0, orders: 0 };
+        regionMap.set(stateAbbr, {
+          sales: existing.sales + order.amount_total,
+          orders: existing.orders + 1
+        });
+      }
     });
 
-    // Convert to array and map to abbreviated state names
+    // Convert to array
     const data: RegionSales[] = Array.from(regionMap.entries())
-      .map(([region, stats]) => {
-        // Try to find abbreviated state name
-        const stateAbbr = Object.entries(STATE_MAP).find(
-          ([fullName]) => region.includes(fullName)
-        )?.[1] || region;
-        
-        return {
-          region: stateAbbr,
-          sales: Math.round(stats.sales),
-          orders: stats.orders
-        };
-      })
-      .filter(item => item.region !== 'Unknown')
+      .map(([region, stats]) => ({
+        region,
+        sales: Math.round(stats.sales),
+        orders: stats.orders
+      }))
       .sort((a, b) => b.sales - a.sales);
 
     setRegionData(data);
