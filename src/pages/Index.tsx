@@ -9,6 +9,7 @@ import { FilterBar } from "@/components/filters/FilterBar";
 import { SankeyChart } from "@/components/SankeyChart";
 import { WidgetCreatorDrawer } from "@/components/WidgetCreatorDrawer";
 import { DraggableWidget } from "@/components/DraggableWidget";
+import { AustraliaSalesMap } from "@/components/AustraliaSalesMap";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOdooSync } from "@/hooks/useOdooSync";
@@ -37,7 +38,8 @@ const Index = () => {
     lg: [
       { i: "revenue-chart", x: 0, y: 0, w: 6, h: 4 },
       { i: "pipeline-chart", x: 6, y: 0, w: 6, h: 4 },
-      { i: "sankey-chart", x: 0, y: 4, w: 12, h: 6 },
+      { i: "australia-map", x: 0, y: 4, w: 6, h: 6 },
+      { i: "sankey-chart", x: 6, y: 4, w: 6, h: 6 },
       { i: "performance-table", x: 0, y: 10, w: 8, h: 5 },
       { i: "target-progress", x: 8, y: 10, w: 4, h: 5 },
     ],
@@ -155,6 +157,11 @@ const Index = () => {
         <div key="pipeline-chart">
           <DraggableWidget>
             <PipelineChart />
+          </DraggableWidget>
+        </div>
+        <div key="australia-map">
+          <DraggableWidget>
+            <AustraliaSalesMap />
           </DraggableWidget>
         </div>
         <div key="sankey-chart">
