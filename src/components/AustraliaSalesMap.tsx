@@ -11,9 +11,9 @@ const STATE_COORDINATES: Record<string, { x: number; y: number }> = {
   QLD: { x: 700, y: 350 },
   SA: { x: 450, y: 600 },
   NSW: { x: 830, y: 620 },
-  VIC: { x: 750, y: 780 },
+  VIC: { x: 750, y: 750 },
   TAS: { x: 780, y: 900 },
-  ACT: { x: 870, y: 680 },
+  ACT: { x: 890, y: 680 },
 };
 
 export function AustraliaSalesMap() {
