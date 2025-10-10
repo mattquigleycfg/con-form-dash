@@ -20,9 +20,19 @@ export default function Calculator() {
 
   // Calculated values for MR
   const platformArea = (mrWidth * mrLength) / 1000000; // m²
-  const endHeight = 929; // Simplified - would need formula
-  const manDays = 4;
-  const platformWeight = (platformArea * 14); // Simplified kg calculation
+  const endHeight = mrStartHeight + (mrLength * Math.tan((mrPitch * Math.PI) / 180));
+  const manDays = Math.ceil(platformArea / 30); // Approx 30m² per day
+  const platformWeight = platformArea * 14;
+
+  // Price calculations for MR
+  const mrPlatformCost = platformArea * 72.50;
+  const mrProductionLabour = manDays * 298.54;
+  const mrEngineeringLabour = platformArea * 10.88;
+  const mrPackaging = platformArea * 1.52;
+  const mrCogsRunning = platformArea * 1.89;
+  const mrTotalCostPrice = mrPlatformCost + mrProductionLabour + mrEngineeringLabour + mrPackaging + mrCogsRunning;
+  const mrTotalSalePrice = mrTotalCostPrice / 0.55; // 45% GP
+  const mrGpPercent = ((mrTotalSalePrice - mrTotalCostPrice) / mrTotalSalePrice) * 100;
 
   // EasyMech CR state
   const [crWidth, setCrWidth] = useState(6000);
@@ -31,7 +41,17 @@ export default function Calculator() {
   const [crLoadRating, setCrLoadRating] = useState(2.5);
 
   const crPlatformArea = (crWidth * crLength) / 1000000;
-  const crPlatformWeight = (crPlatformArea * 12);
+  const crPlatformWeight = crPlatformArea * 12;
+
+  // Price calculations for CR
+  const crManDays = Math.ceil(crPlatformArea / 35); // Approx 35m² per day for CR
+  const crPlatformCost = crPlatformArea * 65.20;
+  const crProductionLabour = crManDays * 298.54;
+  const crEngineeringLabour = crPlatformArea * 9.50;
+  const crPackaging = crPlatformArea * 1.35;
+  const crCogsRunning = crPlatformArea * 1.67;
+  const crTotalCostPrice = crPlatformCost + crProductionLabour + crEngineeringLabour + crPackaging + crCogsRunning;
+  const crTotalSalePrice = crTotalCostPrice / 0.55; // 45% GP
 
   return (
     <DashboardLayout>
@@ -176,35 +196,35 @@ export default function Calculator() {
                   <div className="mt-6 space-y-2 border-t pt-4">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Platform</span>
-                      <span>$9,951.36</span>
+                      <span>${mrPlatformCost.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Production Labour</span>
-                      <span>$1,194.16</span>
+                      <span>${mrProductionLabour.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Engineering Labour</span>
-                      <span>$1,492.70</span>
+                      <span>${mrEngineeringLabour.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Packaging & Consumables</span>
-                      <span>$208.98</span>
+                      <span>${mrPackaging.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">COGS Running Costs</span>
-                      <span>$258.74</span>
+                      <span>${mrCogsRunning.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-lg border-t pt-2 mt-2">
                       <span>Total Cost Price</span>
-                      <span>$13,105.94</span>
+                      <span>${mrTotalCostPrice.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-lg text-primary">
                       <span>Total Sale Price</span>
-                      <span>$23,828.98</span>
+                      <span>${mrTotalSalePrice.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>GP %</span>
-                      <span>45%</span>
+                      <span>{mrGpPercent.toFixed(1)}%</span>
                     </div>
                   </div>
                 </CardContent>
@@ -288,11 +308,11 @@ export default function Calculator() {
                   <div className="mt-6 space-y-2 border-t pt-4">
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total Cost Price</span>
-                      <span>$10,847.86</span>
+                      <span>${crTotalCostPrice.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-lg text-primary">
                       <span>Total Sale Price</span>
-                      <span>$19,723.38</span>
+                      <span>${crTotalSalePrice.toFixed(2)}</span>
                     </div>
                   </div>
                 </CardContent>
