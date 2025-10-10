@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, LogOut } from "lucide-react";
+import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +25,7 @@ const navigation = [
   { name: "Targets", href: "/targets", icon: Target },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Team", href: "/team", icon: Users },
+  { name: "Accounting", href: "/accounting", icon: DollarSign },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 

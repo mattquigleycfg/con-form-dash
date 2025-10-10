@@ -12,6 +12,7 @@ import Pipeline from "./pages/Pipeline";
 import Targets from "./pages/Targets";
 import Analytics from "./pages/Analytics";
 import Team from "./pages/Team";
+import Accounting from "./pages/Accounting";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -64,6 +65,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Team />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/accounting"
+                element={
+                  <ProtectedRoute>
+                    <Accounting />
                   </ProtectedRoute>
                 }
               />
