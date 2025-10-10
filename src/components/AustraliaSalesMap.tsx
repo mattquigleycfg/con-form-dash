@@ -76,14 +76,14 @@ export function AustraliaSalesMap() {
       </CardHeader>
       <CardContent>
         <div className="relative">
-          <div className="relative">
+          <div className="relative mb-24 overflow-visible">
             {/* Base Australia SVG Map */}
             <img 
               src={australiaMap} 
               alt="Australia Map" 
               className="w-full h-auto"
               style={{ 
-                maxHeight: '500px',
+                maxHeight: '620px',
                 filter: 'grayscale(1)'
               }}
             />
@@ -101,7 +101,7 @@ export function AustraliaSalesMap() {
             <svg
               viewBox="0 0 1000 966"
               className="absolute inset-0 w-full h-full pointer-events-none"
-              style={{ maxHeight: '500px' }}
+              style={{ maxHeight: '620px' }}
             >
               {/* Render circles for each region with data */}
               {regionData.map((region) => {
