@@ -63,6 +63,12 @@ const navigation: NavSection[] = [
     ],
   },
   {
+    title: "Tools",
+    items: [
+      { name: "Estimator", href: "/calculator", icon: Receipt },
+    ],
+  },
+  {
     title: "Settings",
     items: [
       { name: "Settings", href: "/settings", icon: Settings },
@@ -79,6 +85,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (path.startsWith("/accounting")) return "Accounting";
     if (path.startsWith("/project")) return "Project";
     if (path.startsWith("/helpdesk")) return "Helpdesk";
+    if (path.startsWith("/calculator")) return "Tools";
     if (path.startsWith("/settings")) return "Settings";
     return "Sales"; // Default for /, /pipeline, /targets, /analytics, /team
   };
@@ -90,6 +97,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     Accounting: activeSection === "Accounting",
     Project: activeSection === "Project",
     Helpdesk: activeSection === "Helpdesk",
+    Tools: activeSection === "Tools",
     Settings: activeSection === "Settings",
   }));
 
@@ -101,6 +109,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       Accounting: section === "Accounting",
       Project: section === "Project",
       Helpdesk: section === "Helpdesk",
+      Tools: section === "Tools",
       Settings: section === "Settings",
     });
   }, [location.pathname]);

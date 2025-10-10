@@ -26,7 +26,32 @@ export function AICopilot() {
   const getContextualPrompt = () => {
     const path = location.pathname;
     
-    if (path === "/accounting/purchase") {
+    if (path === "/calculator") {
+      return `You are an AI assistant for the Con-form Estimator calculator. This is a comprehensive construction estimator with 60,000+ formulas that calculates costs for:
+      
+      **Platform Types:**
+      - EasyMech MR: Roofed platforms with trusses (inputs: pitch, width, length, height, roof type, flooring, load rating)
+      - EasyMech CR: Cantilever platforms (inputs: width, length, flooring, load rating)
+      - Span+: Span platforms with rafters (inputs: pitch, width, rafter spacing/quantity, length, flooring, load rating)
+      
+      **Screen Systems:**
+      - Classic Screens: Standard screening with various cladding types
+      - RF Screens: Roofed screening systems with louvre options
+      - Acoustic+ Louvre & UltraWall: Acoustic screening solutions
+      - Guardrail: Safety guardrail systems
+      - Screen to Concrete & Steel: Mounting to existing structures
+      - Screen to Roof: Roof-mounted screens
+      
+      **Walkway & Guardrail:** Modular walkway systems with configurable lengths and guardrail options
+      
+      **Key Calculations:**
+      - Platform area (m²), weight (kg), and dimensions
+      - Cost breakdowns: Platform, Production Labour, Engineering Labour, Packaging, COGS
+      - Pricing: Cost Price vs Sale Price with GP% (typically 45-60%)
+      - Technical specs: Man days, load ratings (kPa), heights, and material specifications
+      
+      When users ask about calculations, explain the formulas, inputs required, and how different parameters affect the final costs. Help them understand material choices, load ratings, and pricing structures.`;
+    } else if (path === "/accounting/purchase") {
       return "You are an AI assistant for the Purchase module. Focus on purchase orders, vendor management, and procurement. When asked about data, default to showing only OPEN purchase orders unless the user specifically asks for historical data. Ask 'Would you like to include historical data?' when appropriate.";
     } else if (path === "/project") {
       return "You are an AI assistant for the Project module. Focus on projects, tasks, and activities. When asked about data, default to showing only ACTIVE/OPEN tasks and projects unless the user specifically asks for completed items. Ask 'Would you like to include completed projects and tasks?' when appropriate.";
@@ -164,7 +189,8 @@ export function AICopilot() {
             <div className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-white" />
               <CardTitle className="text-white">
-                {location.pathname.startsWith("/accounting") ? "AI Accounting Assistant" :
+                {location.pathname === "/calculator" ? "AI Estimator Assistant" :
+                 location.pathname.startsWith("/accounting") ? "AI Accounting Assistant" :
                  location.pathname === "/project" ? "AI Project Assistant" :
                  location.pathname === "/helpdesk" ? "AI Helpdesk Assistant" :
                  "AI Sales Copilot"}
@@ -185,13 +211,15 @@ export function AICopilot() {
                 <div className="flex h-full items-center justify-center text-center">
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-foreground">
-                      {location.pathname.startsWith("/accounting") ? "Ask me about accounting and finances!" :
+                      {location.pathname === "/calculator" ? "Ask me about the Con-form Estimator!" :
+                       location.pathname.startsWith("/accounting") ? "Ask me about accounting and finances!" :
                        location.pathname === "/project" ? "Ask me about projects and tasks!" :
                        location.pathname === "/helpdesk" ? "Ask me about support tickets!" :
                        "Ask me anything about your sales data!"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {location.pathname.startsWith("/accounting") ? "I default to recent/open items but can search historical data on request." :
+                      {location.pathname === "/calculator" ? "I can explain formulas, inputs, pricing, and help you understand the calculations." :
+                       location.pathname.startsWith("/accounting") ? "I default to recent/open items but can search historical data on request." :
                        location.pathname === "/project" ? "I default to active tasks but can search completed projects on request." :
                        location.pathname === "/helpdesk" ? "I default to open tickets but can search resolved tickets on request." :
                        "I default to open opportunities but can search historical data on request."}
@@ -235,6 +263,7 @@ export function AICopilot() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={
+                    location.pathname === "/calculator" ? "Ask about calculator..." :
                     location.pathname.startsWith("/accounting") ? "Ask about accounting..." :
                     location.pathname === "/project" ? "Ask about projects..." :
                     location.pathname === "/helpdesk" ? "Ask about tickets..." :
