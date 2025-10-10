@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -73,13 +73,37 @@ const navigation: NavSection[] = [
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const { user, signOut } = useAuth();
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    Sales: true,
-    Accounting: false,
-    Project: false,
-    Helpdesk: false,
-    Settings: false,
-  });
+
+  // Determine which section should be open based on current route
+  const getActiveSectionFromPath = (path: string): string => {
+    if (path.startsWith("/accounting")) return "Accounting";
+    if (path.startsWith("/project")) return "Project";
+    if (path.startsWith("/helpdesk")) return "Helpdesk";
+    if (path.startsWith("/settings")) return "Settings";
+    return "Sales"; // Default for /, /pipeline, /targets, /analytics, /team
+  };
+
+  const activeSection = getActiveSectionFromPath(location.pathname);
+  
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => ({
+    Sales: activeSection === "Sales",
+    Accounting: activeSection === "Accounting",
+    Project: activeSection === "Project",
+    Helpdesk: activeSection === "Helpdesk",
+    Settings: activeSection === "Settings",
+  }));
+
+  // Update open sections when route changes
+  useEffect(() => {
+    const section = getActiveSectionFromPath(location.pathname);
+    setOpenSections({
+      Sales: section === "Sales",
+      Accounting: section === "Accounting",
+      Project: section === "Project",
+      Helpdesk: section === "Helpdesk",
+      Settings: section === "Settings",
+    });
+  }, [location.pathname]);
 
   const getUserInitials = () => {
     if (!user?.user_metadata?.full_name && !user?.email) return "U";
