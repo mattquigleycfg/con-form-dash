@@ -8,8 +8,8 @@ import australiaMap from "@/assets/australia-map.svg";
 const STATE_COORDINATES: Record<string, { x: number; y: number }> = {
   WA: { x: 250, y: 420 },
   NT: { x: 450, y: 350 },
-  QLD: { x: 700, y: 350 },
-  SA: { x: 450, y: 600 },
+  QLD: { x: 780, y: 350 },
+  SA: { x: 550, y: 520 },
   NSW: { x: 830, y: 620 },
   VIC: { x: 750, y: 750 },
   TAS: { x: 780, y: 900 },
