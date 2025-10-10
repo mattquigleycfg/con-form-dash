@@ -6,9 +6,36 @@ import { useOdooHelpdesk } from "@/hooks/useOdooHelpdesk";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { MultiSelectFilter } from "@/components/filters/MultiSelectFilter";
+import { useState, useMemo } from "react";
 
 export default function HelpdeskDashboard() {
   const { data: tickets, isLoading } = useOdooHelpdesk();
+  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
+
+  // Extract unique teams from tickets
+  const teamOptions = useMemo(() => {
+    if (!tickets) return [];
+    const teams = new Set<string>();
+    tickets.forEach((ticket) => {
+      if (ticket.team_id) {
+        teams.add(JSON.stringify({ id: ticket.team_id[0], name: ticket.team_id[1] }));
+      }
+    });
+    return Array.from(teams).map((team) => {
+      const parsed = JSON.parse(team);
+      return { value: String(parsed.id), label: parsed.name };
+    });
+  }, [tickets]);
+
+  // Filter tickets by selected teams
+  const filteredTickets = useMemo(() => {
+    if (!tickets) return [];
+    if (selectedTeams.length === 0) return tickets;
+    return tickets.filter((ticket) => 
+      ticket.team_id && selectedTeams.includes(String(ticket.team_id[0]))
+    );
+  }, [tickets, selectedTeams]);
 
   const getPriorityBadge = (priority: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive"> = {
@@ -38,6 +65,16 @@ export default function HelpdeskDashboard() {
 
         <FilterBar />
 
+        <div className="flex gap-4 items-start">
+          <MultiSelectFilter
+            label="Teams"
+            options={teamOptions}
+            selected={selectedTeams}
+            onChange={setSelectedTeams}
+            placeholder="Filter by team..."
+          />
+        </div>
+
         <Card>
           <CardHeader>
             <CardTitle>Open Tickets</CardTitle>
@@ -64,7 +101,7 @@ export default function HelpdeskDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {tickets?.map((ticket) => (
+                  {filteredTickets?.map((ticket) => (
                     <TableRow key={ticket.id}>
                       <TableCell className="font-medium">{ticket.id}</TableCell>
                       <TableCell>{ticket.name}</TableCell>
