@@ -96,6 +96,11 @@ const tools = [
             type: "string",
             description: "Filter by activity type name (e.g., 'Call', 'Meeting', 'To Do'). Leave empty for all types.",
           },
+          opportunity_ids: {
+            type: "array",
+            items: { type: "number" },
+            description: "Filter activities by opportunity/lead IDs. Only returns activities linked to these CRM opportunities (res_model='crm.lead'). Use this with query_crm_leads to get activities for specific opportunities.",
+          },
         },
       },
     },
@@ -104,13 +109,17 @@ const tools = [
     type: "function",
     function: {
       name: "query_crm_leads",
-      description: "Query CRM opportunities/leads from Odoo. Use this to get pipeline data, opportunity stages, and deal probabilities. Returns leads with fields: id, name, expected_revenue, probability, stage_id, user_id (salesperson), type, partner_id (customer).",
+      description: "Query CRM opportunities/leads from Odoo. Use this to get pipeline data, opportunity stages, and deal probabilities. Returns leads with fields: id, name, expected_revenue, probability, stage_id, user_id (salesperson), type, partner_id (customer), active (true if not won/lost).",
       parameters: {
         type: "object",
         properties: {
           opportunity_only: {
             type: "boolean",
             description: "If true, only returns opportunities (type='opportunity'). Default true.",
+          },
+          active_only: {
+            type: "boolean",
+            description: "If true, only returns active/open opportunities (not Won or Lost). Use this to filter for opportunities that are still in progress. Default false.",
           },
           salesperson_name: {
             type: "string",
@@ -609,6 +618,11 @@ async function executeToolCall(toolName: string, toolArgs: any) {
         filters.push(['date_deadline', '<', today]);
       }
 
+      if (toolArgs.opportunity_ids && toolArgs.opportunity_ids.length > 0) {
+        filters.push(['res_model', '=', 'crm.lead']);
+        filters.push(['res_id', 'in', toolArgs.opportunity_ids]);
+      }
+
       const { data, error } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'mail.activity',
@@ -649,13 +663,17 @@ async function executeToolCall(toolName: string, toolArgs: any) {
         filters.push(['type', '=', 'opportunity']);
       }
 
+      if (toolArgs.active_only) {
+        filters.push(['active', '=', true]);
+      }
+
       const { data, error } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'crm.lead',
           method: 'search_read',
           args: [
             filters,
-            ['name', 'expected_revenue', 'probability', 'stage_id', 'user_id', 'type', 'partner_id']
+            ['name', 'expected_revenue', 'probability', 'stage_id', 'user_id', 'type', 'partner_id', 'active']
           ]
         }
       });
@@ -676,6 +694,14 @@ async function executeToolCall(toolName: string, toolArgs: any) {
         results = results.filter((lead: any) => 
           lead.stage_id && lead.stage_id[1].toLowerCase().includes(searchStage)
         );
+      }
+
+      // If active_only, filter out won/lost stages as additional safeguard
+      if (toolArgs.active_only && results.length > 0) {
+        results = results.filter((lead: any) => {
+          const stageName = lead.stage_id ? lead.stage_id[1].toLowerCase() : '';
+          return !stageName.includes('won') && !stageName.includes('lost');
+        });
       }
 
       console.log(`Found ${results.length} CRM leads`);

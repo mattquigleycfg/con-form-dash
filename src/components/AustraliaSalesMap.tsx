@@ -57,12 +57,12 @@ export function AustraliaSalesMap() {
   };
 
   if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Sales by Region</CardTitle>
-        </CardHeader>
-        <CardContent>
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sales by Region</CardTitle>
+      </CardHeader>
+      <CardContent className="pb-6">
           <Skeleton className="h-[400px] w-full" />
         </CardContent>
       </Card>
