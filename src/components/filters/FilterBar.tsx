@@ -46,6 +46,7 @@ export function FilterBar() {
             selected={filters.dealStatus}
             onChange={(selected) => setFilters({ dealStatus: selected })}
             placeholder="All statuses"
+            showSelectedBadges={false}
           />
           
           <FilterTemplates />

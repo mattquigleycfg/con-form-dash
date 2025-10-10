@@ -12,6 +12,7 @@ interface MultiSelectFilterProps {
   selected: string[];
   onChange: (selected: string[]) => void;
   placeholder?: string;
+  showSelectedBadges?: boolean;
 }
 
 export function MultiSelectFilter({
@@ -20,6 +21,7 @@ export function MultiSelectFilter({
   selected,
   onChange,
   placeholder = 'Select options...',
+  showSelectedBadges = true,
 }: MultiSelectFilterProps) {
   const [open, setOpen] = useState(false);
 
@@ -98,7 +100,7 @@ export function MultiSelectFilter({
         </PopoverContent>
       </Popover>
 
-      {selected.length > 0 && (
+      {showSelectedBadges && selected.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {selected.map((value) => {
             const option = options.find((opt) => opt.value === value);
