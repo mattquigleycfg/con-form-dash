@@ -52,14 +52,9 @@ export function FilterBar() {
           
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="relative">
+              <Button variant="outline" size="sm">
                 <Filter className="h-4 w-4 mr-2" />
                 Advanced Filters
-                {isFiltered && (
-                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] font-bold text-primary-foreground flex items-center justify-center">
-                    !
-                  </span>
-                )}
               </Button>
             </SheetTrigger>
             <SheetContent className="w-[400px] sm:w-[540px]">

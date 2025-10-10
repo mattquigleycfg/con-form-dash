@@ -35,9 +35,24 @@ export function FilterChips() {
     }
   };
 
+  const activeFilterCount = [
+    filters.dateRange.preset !== 'all',
+    filters.opportunityStage.length > 0,
+    filters.dealStatus.length > 0,
+    filters.salesRep.length > 0,
+    filters.dealValue.min > 0 || filters.dealValue.max < 1000000,
+    filters.probability.min > 0 || filters.probability.max < 100,
+    filters.searchQuery !== ''
+  ].filter(Boolean).length;
+
   return (
     <div className="flex flex-wrap items-center gap-2 py-2">
-      <span className="text-sm text-muted-foreground">Active filters:</span>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Active filters:</span>
+        <Badge variant="default" className="h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+          {activeFilterCount}
+        </Badge>
+      </div>
 
       {filters.dateRange.preset !== 'all' && (
         <Badge variant="secondary" className="gap-1">
