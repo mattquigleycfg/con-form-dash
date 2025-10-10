@@ -84,7 +84,8 @@ export function AustraliaSalesMap() {
               className="w-full h-auto"
               style={{ 
                 maxHeight: '500px',
-                filter: 'brightness(1.5) grayscale(1) contrast(0.8)'
+                filter: 'brightness(2) grayscale(1)',
+                opacity: 0.4
               }}
             />
             
@@ -108,9 +109,7 @@ export function AustraliaSalesMap() {
                       cy={coords.y}
                       r={getCircleRadius(region.orders)}
                       fill={getCircleColor(region.orders)}
-                      opacity={0.7}
-                      stroke="hsl(180, 80%, 30%)"
-                      strokeWidth="2"
+                      opacity={0.8}
                       className="pointer-events-auto cursor-pointer transition-all hover:opacity-90"
                       onMouseEnter={() => setHoveredRegion(region.region)}
                       onMouseLeave={() => setHoveredRegion(null)}
