@@ -84,8 +84,16 @@ export function AustraliaSalesMap() {
               className="w-full h-auto"
               style={{ 
                 maxHeight: '500px',
-                filter: 'grayscale(1) brightness(2.5)',
-                opacity: 0.5
+                filter: 'grayscale(1)'
+              }}
+            />
+            {/* Light gray overlay to make map #D3D3D3 */}
+            <div 
+              className="absolute inset-0"
+              style={{ 
+                backgroundColor: '#D3D3D3',
+                mixBlendMode: 'lighten',
+                pointerEvents: 'none'
               }}
             />
             
