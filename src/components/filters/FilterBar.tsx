@@ -38,6 +38,16 @@ export function FilterBar() {
         <div className="flex items-center gap-4 flex-wrap">
           <SearchFilter />
           <DateRangeFilter />
+          
+          {/* Deal Status Filter */}
+          <MultiSelectFilter
+            label="Deal Status"
+            options={DEAL_STATUS}
+            selected={filters.dealStatus}
+            onChange={(selected) => setFilters({ dealStatus: selected })}
+            placeholder="All statuses"
+          />
+          
           <FilterTemplates />
           
           <Sheet>
@@ -74,19 +84,6 @@ export function FilterBar() {
                         placeholder="Select stages..."
                       />
                     )}
-                  </div>
-
-                  <Separator />
-
-                  <div>
-                    <h3 className="text-sm font-medium mb-3">Deal Status</h3>
-                    <MultiSelectFilter
-                      label="Status"
-                      options={DEAL_STATUS}
-                      selected={filters.dealStatus}
-                      onChange={(selected) => setFilters({ dealStatus: selected })}
-                      placeholder="Select status..."
-                    />
                   </div>
 
                   <Separator />
