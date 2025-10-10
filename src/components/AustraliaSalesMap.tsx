@@ -84,8 +84,8 @@ export function AustraliaSalesMap() {
               className="w-full h-auto"
               style={{ 
                 maxHeight: '500px',
-                filter: 'brightness(2) grayscale(1)',
-                opacity: 0.3
+                filter: 'grayscale(1) brightness(2.5)',
+                opacity: 0.5
               }}
             />
             
