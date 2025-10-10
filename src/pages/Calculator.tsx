@@ -54,30 +54,40 @@ export default function Calculator() {
   const crTotalSalePrice = crTotalCostPrice / 0.55; // 45% GP
 
   // Span+ state
-  const [spanWidth, setSpanWidth] = useState(1200);
-  const [spanLength, setSpanLength] = useState(6000);
-  const [spanHeight, setSpanHeight] = useState(2000);
-  const [spanLoadRating, setSpanLoadRating] = useState(2.5);
-  const [spanHandrails, setSpanHandrails] = useState("Both Sides");
-  const [spanAccess, setSpanAccess] = useState("Ladder");
+  const [spanPitch, setSpanPitch] = useState(3);
+  const [spanWidth, setSpanWidth] = useState(4800);
+  const [spanRafterSpacing, setSpanRafterSpacing] = useState(6000);
+  const [spanRafterQuantity, setSpanRafterQuantity] = useState(2);
+  const [spanTotalLength, setSpanTotalLength] = useState(6000);
+  const [spanFlooring, setSpanFlooring] = useState("Mesh");
+  const [spanKit, setSpanKit] = useState("No");
+  const [spanVersion, setSpanVersion] = useState("2");
+  const [spanJoistCentres, setSpanJoistCentres] = useState(300);
+  const [spanBoxedJoist, setSpanBoxedJoist] = useState(false);
+  const [spanStubSpacing, setSpanStubSpacing] = useState(1200);
+  const [spanStartHeight, setSpanStartHeight] = useState(550);
+  const [spanLoadRating, setSpanLoadRating] = useState(5);
+  const [spanCantilever, setSpanCantilever] = useState(true);
+  const [spanAccess, setSpanAccess] = useState("Access Stairs & Landing");
 
   // Calculated values for Span+
-  const spanArea = (spanWidth * spanLength) / 1000000;
-  const spanWeight = spanArea * 18; // kg/m² for Span+
-  const spanLinearMeters = (spanWidth + spanLength) * 2 / 1000;
+  const spanPlatformArea = (spanWidth * spanTotalLength) / 1000000;
+  const spanBays = Math.max(1, Math.floor(spanTotalLength / spanRafterSpacing));
+  const spanScreenArea = spanPlatformArea * 3.25; // Approximate screen area
+  const spanEndHeight = spanStartHeight + (spanTotalLength * Math.tan((spanPitch * Math.PI) / 180));
+  const spanManDays = Math.ceil(spanPlatformArea / 7.2);
+  const spanPlatformWeight = spanPlatformArea * 17;
   
   // Price calculations for Span+
-  const spanPlatformCost = spanArea * 85.40;
-  const spanHandrailCost = spanHandrails === "Both Sides" ? spanLinearMeters * 45.20 : spanLinearMeters * 22.60;
-  const spanAccessCost = spanAccess === "Stairs" ? 1250 : spanAccess === "Ladder" ? 380 : 0;
-  const spanManDays = Math.ceil(spanArea / 25 + (spanAccess === "Stairs" ? 0.5 : 0.2));
-  const spanProductionLabour = spanManDays * 298.54;
-  const spanEngineeringLabour = spanArea * 12.30;
-  const spanPackaging = spanArea * 1.75;
-  const spanCogsRunning = spanArea * 2.10;
-  const spanTotalCostPrice = spanPlatformCost + spanHandrailCost + spanAccessCost + spanProductionLabour + spanEngineeringLabour + spanPackaging + spanCogsRunning;
+  const spanPlatformCost = spanPlatformArea * 660.77;
+  const spanProductionLabour = spanManDays * 570.90;
+  const spanEngineeringLabour = spanPlatformArea * 99.12;
+  const spanPackaging = spanPlatformArea * 13.22;
+  const spanCogsRunning = spanPlatformArea * 17.19;
+  const spanTotalCostPrice = spanPlatformCost + spanProductionLabour + spanEngineeringLabour + spanPackaging + spanCogsRunning;
   const spanTotalSalePrice = spanTotalCostPrice / 0.55; // 45% GP
   const spanGpPercent = ((spanTotalSalePrice - spanTotalCostPrice) / spanTotalSalePrice) * 100;
+  const spanSqMtrRate = spanTotalSalePrice / spanPlatformArea;
 
   return (
     <DashboardLayout>
@@ -351,79 +361,145 @@ export default function Calculator() {
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
                 <CardHeader>
-                  <CardTitle>Walkway System Inputs</CardTitle>
+                  <CardTitle>Platform Inputs</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="span-width">Width (mm)</Label>
-                    <Input
-                      id="span-width"
-                      type="number"
-                      value={spanWidth}
-                      onChange={(e) => setSpanWidth(Number(e.target.value))}
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-pitch">Pitch (Degrees)</Label>
+                      <Input
+                        id="span-pitch"
+                        type="number"
+                        value={spanPitch}
+                        onChange={(e) => setSpanPitch(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-width">Width (mm)</Label>
+                      <Input
+                        id="span-width"
+                        type="number"
+                        value={spanWidth}
+                        onChange={(e) => setSpanWidth(Number(e.target.value))}
+                      />
+                    </div>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="span-length">Length (mm)</Label>
-                    <Input
-                      id="span-length"
-                      type="number"
-                      value={spanLength}
-                      onChange={(e) => setSpanLength(Number(e.target.value))}
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-rafter-spacing">Rafter Spacing (mm)</Label>
+                      <Input
+                        id="span-rafter-spacing"
+                        type="number"
+                        value={spanRafterSpacing}
+                        onChange={(e) => setSpanRafterSpacing(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-rafter-qty">Rafter Quantity</Label>
+                      <Input
+                        id="span-rafter-qty"
+                        type="number"
+                        value={spanRafterQuantity}
+                        onChange={(e) => setSpanRafterQuantity(Number(e.target.value))}
+                      />
+                    </div>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="span-height">Height (mm)</Label>
-                    <Input
-                      id="span-height"
-                      type="number"
-                      value={spanHeight}
-                      onChange={(e) => setSpanHeight(Number(e.target.value))}
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-total-length">Total Length (mm)</Label>
+                      <Input
+                        id="span-total-length"
+                        type="number"
+                        value={spanTotalLength}
+                        onChange={(e) => setSpanTotalLength(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-flooring">Flooring</Label>
+                      <Select value={spanFlooring} onValueChange={setSpanFlooring}>
+                        <SelectTrigger id="span-flooring">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Mesh">Mesh</SelectItem>
+                          <SelectItem value="Plywood">Plywood</SelectItem>
+                          <SelectItem value="Steel Plate">Steel Plate</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="span-load-rating">Load Rating (kPa)</Label>
-                    <Select value={String(spanLoadRating)} onValueChange={(v) => setSpanLoadRating(Number(v))}>
-                      <SelectTrigger id="span-load-rating">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="2.5">2.5</SelectItem>
-                        <SelectItem value="5">5</SelectItem>
-                        <SelectItem value="7.5">7.5</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-version">Version (Steel)</Label>
+                      <Input
+                        id="span-version"
+                        type="text"
+                        value={spanVersion}
+                        onChange={(e) => setSpanVersion(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-joist-centres">Joist Centres (mm)</Label>
+                      <Input
+                        id="span-joist-centres"
+                        type="number"
+                        value={spanJoistCentres}
+                        onChange={(e) => setSpanJoistCentres(Number(e.target.value))}
+                      />
+                    </div>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="span-handrails">Handrails</Label>
-                    <Select value={spanHandrails} onValueChange={setSpanHandrails}>
-                      <SelectTrigger id="span-handrails">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Both Sides">Both Sides</SelectItem>
-                        <SelectItem value="One Side">One Side</SelectItem>
-                        <SelectItem value="None">None</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-stub-spacing">Stub Spacing (mm)</Label>
+                      <Input
+                        id="span-stub-spacing"
+                        type="number"
+                        value={spanStubSpacing}
+                        onChange={(e) => setSpanStubSpacing(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-start-height">Start Height (mm)</Label>
+                      <Input
+                        id="span-start-height"
+                        type="number"
+                        value={spanStartHeight}
+                        onChange={(e) => setSpanStartHeight(Number(e.target.value))}
+                      />
+                    </div>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="span-access">Access Type</Label>
-                    <Select value={spanAccess} onValueChange={setSpanAccess}>
-                      <SelectTrigger id="span-access">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Ladder">Ladder</SelectItem>
-                        <SelectItem value="Stairs">Stairs</SelectItem>
-                        <SelectItem value="None">None</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-load-rating">Load Rating (kPa)</Label>
+                      <Select value={String(spanLoadRating)} onValueChange={(v) => setSpanLoadRating(Number(v))}>
+                        <SelectTrigger id="span-load-rating">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2.5">2.5</SelectItem>
+                          <SelectItem value="5">5</SelectItem>
+                          <SelectItem value="7.5">7.5</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="span-access">Access</Label>
+                      <Select value={spanAccess} onValueChange={setSpanAccess}>
+                        <SelectTrigger id="span-access">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Access Stairs & Landing">Access Stairs & Landing</SelectItem>
+                          <SelectItem value="Ladder">Ladder</SelectItem>
+                          <SelectItem value="None">None</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -433,38 +509,43 @@ export default function Calculator() {
                   <CardTitle>Calculated Results</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-muted-foreground">Walkway Area</span>
-                    <span className="font-semibold">{spanArea.toFixed(1)} m²</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex justify-between border-b pb-2">
+                      <span className="text-muted-foreground">Platform Area</span>
+                      <span className="font-semibold">{spanPlatformArea.toFixed(1)} m²</span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span className="text-muted-foreground">Screen Area</span>
+                      <span className="font-semibold">{spanScreenArea.toFixed(1)} m²</span>
+                    </div>
                   </div>
 
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-muted-foreground">Linear Meters</span>
-                    <span className="font-semibold">{spanLinearMeters.toFixed(1)} m</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex justify-between border-b pb-2">
+                      <span className="text-muted-foreground">End Height</span>
+                      <span className="font-semibold">{spanEndHeight.toFixed(0)} mm</span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span className="text-muted-foreground">Man Days</span>
+                      <span className="font-semibold">{spanManDays} Days</span>
+                    </div>
                   </div>
 
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-muted-foreground">Man Days</span>
-                    <span className="font-semibold">{spanManDays} Days</span>
-                  </div>
-
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-muted-foreground">System Weight</span>
-                    <span className="font-semibold">{spanWeight.toFixed(1)} Kg</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex justify-between border-b pb-2">
+                      <span className="text-muted-foreground">Platform Weight</span>
+                      <span className="font-semibold">{spanPlatformWeight.toFixed(0)} Kg</span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <span className="text-muted-foreground">Sq/Mtr Rate</span>
+                      <span className="font-semibold">${spanSqMtrRate.toFixed(2)}</span>
+                    </div>
                   </div>
 
                   <div className="mt-6 space-y-2 border-t pt-4">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Platform</span>
                       <span>${spanPlatformCost.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Handrails</span>
-                      <span>${spanHandrailCost.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Access System</span>
-                      <span>${spanAccessCost.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Production Labour</span>
@@ -475,7 +556,7 @@ export default function Calculator() {
                       <span>${spanEngineeringLabour.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Packaging & Consumables</span>
+                      <span className="text-muted-foreground">Packaging</span>
                       <span>${spanPackaging.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
@@ -492,7 +573,7 @@ export default function Calculator() {
                     </div>
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>GP %</span>
-                      <span>{spanGpPercent.toFixed(1)}%</span>
+                      <span>{spanGpPercent.toFixed(0)}%</span>
                     </div>
                   </div>
                 </CardContent>
