@@ -10,7 +10,7 @@ const STATE_COORDINATES: Record<string, { x: number; y: number }> = {
   NT: { x: 450, y: 350 },
   QLD: { x: 700, y: 350 },
   SA: { x: 450, y: 600 },
-  NSW: { x: 750, y: 700 },
+  NSW: { x: 800, y: 650 },
   VIC: { x: 700, y: 850 },
   TAS: { x: 720, y: 950 },
   ACT: { x: 790, y: 750 },
