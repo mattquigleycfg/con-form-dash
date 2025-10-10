@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useFilters } from "@/contexts/FilterContext";
 
 export interface SalesRep {
   id: number;
@@ -14,14 +15,16 @@ export interface SalesRep {
 
 export const useOdooTeam = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
   const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
   const { toast } = useToast();
+  const { filters } = useFilters();
 
   const fetchTeamData = async () => {
     setIsLoading(true);
     
     try {
-      // Fetch sales orders with user information
+      // Fetch all confirmed sales orders
       const { data: salesOrders, error: salesError } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order',
@@ -35,56 +38,8 @@ export const useOdooTeam = () => {
 
       if (salesError) throw salesError;
 
-      // Aggregate data by salesperson
-      const salesByUser: Record<number, { name: string; deals: number; revenue: number }> = {};
-      
-      salesOrders?.forEach((order: any) => {
-        if (order.user_id) {
-          const userId = order.user_id[0];
-          const userName = order.user_id[1];
-          
-          if (!salesByUser[userId]) {
-            salesByUser[userId] = {
-              name: userName,
-              deals: 0,
-              revenue: 0
-            };
-          }
-          
-          salesByUser[userId].deals += 1;
-          salesByUser[userId].revenue += order.amount_total;
-        }
-      });
-
-      // Convert to array and sort by revenue
-      const repsArray: SalesRep[] = Object.entries(salesByUser)
-        .map(([id, data]) => {
-          const initials = data.name
-            .split(' ')
-            .map(n => n[0])
-            .join('')
-            .toUpperCase()
-            .slice(0, 2);
-          
-          // Set a default target (can be customized later)
-          const target = 150000;
-          const trend: "up" | "down" = data.revenue >= target ? "up" : "down";
-          
-          return {
-            id: parseInt(id),
-            name: data.name,
-            avatar: initials,
-            deals: data.deals,
-            revenue: Math.round(data.revenue),
-            target,
-            trend
-          };
-        })
-        .sort((a, b) => b.revenue - a.revenue);
-
-      setSalesReps(repsArray);
-      
-      return repsArray;
+      setAllOrders(salesOrders || []);
+      return salesOrders || [];
     } catch (error) {
       console.error('Odoo team sync error:', error);
       toast({
@@ -101,6 +56,71 @@ export const useOdooTeam = () => {
   useEffect(() => {
     fetchTeamData();
   }, []);
+
+  // Apply filters and recalculate sales reps data
+  useEffect(() => {
+    let filteredOrders = [...allOrders];
+
+    // Apply date range filter
+    if (filters.dateRange.startDate && filters.dateRange.endDate) {
+      filteredOrders = filteredOrders.filter((order) => {
+        const orderDate = new Date(order.date_order);
+        return (
+          orderDate >= filters.dateRange.startDate! &&
+          orderDate <= filters.dateRange.endDate!
+        );
+      });
+    }
+
+    // Aggregate data by salesperson
+    const salesByUser: Record<number, { name: string; deals: number; revenue: number }> = {};
+    
+    filteredOrders.forEach((order: any) => {
+      if (order.user_id) {
+        const userId = order.user_id[0];
+        const userName = order.user_id[1];
+        
+        if (!salesByUser[userId]) {
+          salesByUser[userId] = {
+            name: userName,
+            deals: 0,
+            revenue: 0
+          };
+        }
+        
+        salesByUser[userId].deals += 1;
+        salesByUser[userId].revenue += order.amount_total;
+      }
+    });
+
+    // Convert to array and sort by revenue
+    const repsArray: SalesRep[] = Object.entries(salesByUser)
+      .map(([id, data]) => {
+        const initials = data.name
+          .split(' ')
+          .map(n => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2);
+        
+        // Set a default target (can be customized later)
+        const target = 150000;
+        const trend: "up" | "down" = data.revenue >= target ? "up" : "down";
+        
+        return {
+          id: parseInt(id),
+          name: data.name,
+          avatar: initials,
+          deals: data.deals,
+          revenue: Math.round(data.revenue),
+          target,
+          trend
+        };
+      })
+      .sort((a, b) => b.revenue - a.revenue);
+
+    setSalesReps(repsArray);
+  }, [allOrders, filters.dateRange]);
 
   return { salesReps, isLoading, refetch: fetchTeamData };
 };
