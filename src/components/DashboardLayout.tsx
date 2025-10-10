@@ -1,5 +1,5 @@
-import { ReactNode } from "react";
-import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut } from "lucide-react";
+import { ReactNode, useState } from "react";
+import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,25 +13,73 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import conformLogo from "@/assets/conform-logo-white.png";
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Sales Pipeline", href: "/pipeline", icon: TrendingUp },
-  { name: "Targets", href: "/targets", icon: Target },
-  { name: "Analytics", href: "/analytics", icon: BarChart3 },
-  { name: "Team", href: "/team", icon: Users },
-  { name: "Accounting", href: "/accounting", icon: DollarSign },
-  { name: "Settings", href: "/settings", icon: Settings },
+interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const navigation: NavSection[] = [
+  {
+    title: "Sales",
+    items: [
+      { name: "Dashboard", href: "/", icon: LayoutDashboard },
+      { name: "Sales Pipeline", href: "/pipeline", icon: TrendingUp },
+      { name: "Targets", href: "/targets", icon: Target },
+      { name: "Analytics", href: "/analytics", icon: BarChart3 },
+      { name: "Team", href: "/team", icon: Users },
+    ],
+  },
+  {
+    title: "Accounting",
+    items: [
+      { name: "Dashboard", href: "/accounting", icon: LayoutDashboard },
+      { name: "Invoicing", href: "/accounting/invoicing", icon: FileText },
+      { name: "Purchase", href: "/accounting/purchase", icon: ShoppingCart },
+    ],
+  },
+  {
+    title: "Project",
+    items: [
+      { name: "Dashboard", href: "/project", icon: FolderKanban },
+    ],
+  },
+  {
+    title: "Helpdesk",
+    items: [
+      { name: "Dashboard", href: "/helpdesk", icon: Headphones },
+    ],
+  },
+  {
+    title: "Settings",
+    items: [
+      { name: "Settings", href: "/settings", icon: Settings },
+    ],
+  },
 ];
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const { user, signOut } = useAuth();
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    Sales: true,
+    Accounting: false,
+    Project: false,
+    Helpdesk: false,
+    Settings: false,
+  });
 
   const getUserInitials = () => {
     if (!user?.user_metadata?.full_name && !user?.email) return "U";
@@ -63,25 +111,46 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-1 px-3 py-4">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.name}
-                </Link>
-              );
-            })}
+          <nav className="flex-1 space-y-2 px-3 py-4">
+            {navigation.map((section) => (
+              <Collapsible
+                key={section.title}
+                open={openSections[section.title]}
+                onOpenChange={(open) =>
+                  setOpenSections((prev) => ({ ...prev, [section.title]: open }))
+                }
+              >
+                <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold text-sidebar-foreground hover:bg-sidebar-accent/30 transition-all">
+                  <span>{section.title}</span>
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 transition-transform",
+                      openSections[section.title] && "rotate-180"
+                    )}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-1 pt-1">
+                  {section.items.map((item) => {
+                    const isActive = location.pathname === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        to={item.href}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 pl-6 text-sm font-medium transition-all",
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                        )}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {item.name}
+                      </Link>
+                    );
+                  })}
+                </CollapsibleContent>
+              </Collapsible>
+            ))}
           </nav>
 
           {/* User section */}

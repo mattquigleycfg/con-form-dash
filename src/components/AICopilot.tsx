@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "react-router-dom";
 
 interface Message {
   role: "user" | "assistant";
@@ -20,6 +21,23 @@ export function AICopilot() {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const location = useLocation();
+
+  const getContextualPrompt = () => {
+    const path = location.pathname;
+    
+    if (path === "/accounting/purchase") {
+      return "You are an AI assistant for the Purchase module. Focus on purchase orders, vendor management, and procurement. When asked about data, default to showing only OPEN purchase orders unless the user specifically asks for historical data. Ask 'Would you like to include historical data?' when appropriate.";
+    } else if (path === "/project") {
+      return "You are an AI assistant for the Project module. Focus on projects, tasks, and activities. When asked about data, default to showing only ACTIVE/OPEN tasks and projects unless the user specifically asks for completed items. Ask 'Would you like to include completed projects and tasks?' when appropriate.";
+    } else if (path === "/helpdesk") {
+      return "You are an AI assistant for the Helpdesk module. Focus on support tickets and customer inquiries. When asked about data, default to showing only OPEN tickets unless the user specifically asks for resolved/closed tickets. Ask 'Would you like to include closed tickets?' when appropriate.";
+    } else if (path.startsWith("/accounting")) {
+      return "You are an AI assistant for the Accounting module. Focus on invoices, expenses, and financial data. When asked about data, default to showing recent/unpaid invoices unless the user specifies otherwise. Ask 'Would you like to include paid/historical invoices?' when appropriate.";
+    } else {
+      return "You are an AI assistant for the Sales module. Focus on sales data, pipeline, team performance, and revenue insights. When asked about data, default to showing OPEN opportunities unless the user specifically asks for historical data. Ask 'Would you like to include closed/won deals?' when appropriate.";
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -28,6 +46,13 @@ export function AICopilot() {
   }, [messages]);
 
   const streamChat = async (userMessage: string) => {
+    const contextPrompt = getContextualPrompt();
+    const messagesWithContext = [
+      { role: "system" as const, content: contextPrompt },
+      ...messages,
+      { role: "user" as const, content: userMessage }
+    ];
+    
     const newMessages = [...messages, { role: "user" as const, content: userMessage }];
     setMessages(newMessages);
     setIsLoading(true);
@@ -41,7 +66,7 @@ export function AICopilot() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ messages: messagesWithContext }),
       });
 
       if (!resp.ok) {
@@ -138,7 +163,12 @@ export function AICopilot() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-gradient-primary p-4">
             <div className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-white" />
-              <CardTitle className="text-white">AI Sales Copilot</CardTitle>
+              <CardTitle className="text-white">
+                {location.pathname.startsWith("/accounting") ? "AI Accounting Assistant" :
+                 location.pathname === "/project" ? "AI Project Assistant" :
+                 location.pathname === "/helpdesk" ? "AI Helpdesk Assistant" :
+                 "AI Sales Copilot"}
+              </CardTitle>
             </div>
             <Button
               variant="ghost"
@@ -155,10 +185,16 @@ export function AICopilot() {
                 <div className="flex h-full items-center justify-center text-center">
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-foreground">
-                      Ask me anything about your sales data!
+                      {location.pathname.startsWith("/accounting") ? "Ask me about accounting and finances!" :
+                       location.pathname === "/project" ? "Ask me about projects and tasks!" :
+                       location.pathname === "/helpdesk" ? "Ask me about support tickets!" :
+                       "Ask me anything about your sales data!"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      I can help with revenue insights, team performance, and more.
+                      {location.pathname.startsWith("/accounting") ? "I default to recent/open items but can search historical data on request." :
+                       location.pathname === "/project" ? "I default to active tasks but can search completed projects on request." :
+                       location.pathname === "/helpdesk" ? "I default to open tickets but can search resolved tickets on request." :
+                       "I default to open opportunities but can search historical data on request."}
                     </p>
                   </div>
                 </div>
@@ -198,7 +234,12 @@ export function AICopilot() {
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask about sales data..."
+                  placeholder={
+                    location.pathname.startsWith("/accounting") ? "Ask about accounting..." :
+                    location.pathname === "/project" ? "Ask about projects..." :
+                    location.pathname === "/helpdesk" ? "Ask about tickets..." :
+                    "Ask about sales data..."
+                  }
                   disabled={isLoading}
                   className="flex-1"
                 />
