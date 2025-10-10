@@ -2,22 +2,41 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOdooSalesByRegion } from "@/hooks/useOdooSalesByRegion";
 import { useState } from "react";
+import australiaMap from "@/assets/australia-map.svg";
+
+// Approximate center coordinates for each state on the SVG (viewBox 0 0 1000 966)
+const STATE_COORDINATES: Record<string, { x: number; y: number }> = {
+  WA: { x: 250, y: 420 },
+  NT: { x: 450, y: 350 },
+  QLD: { x: 700, y: 350 },
+  SA: { x: 450, y: 600 },
+  NSW: { x: 750, y: 700 },
+  VIC: { x: 700, y: 850 },
+  TAS: { x: 720, y: 950 },
+  ACT: { x: 790, y: 750 },
+};
 
 export function AustraliaSalesMap() {
   const { regionData, isLoading } = useOdooSalesByRegion();
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
 
-  // Calculate color intensity based on sales
+  // Calculate circle size based on sales (larger sales = larger circle)
   const maxSales = Math.max(...regionData.map(r => r.sales), 1);
-  const getRegionColor = (regionCode: string) => {
-    const region = regionData.find(r => r.region === regionCode);
-    if (!region) return '#e5e7eb'; // gray-200 for no data
-    
-    const intensity = (region.sales / maxSales) * 100;
-    if (intensity > 75) return '#16a34a'; // green-600
-    if (intensity > 50) return '#22c55e'; // green-500
-    if (intensity > 25) return '#86efac'; // green-300
-    return '#bbf7d0'; // green-200
+  const getCircleRadius = (sales: number) => {
+    const minRadius = 8;
+    const maxRadius = 50;
+    const normalized = sales / maxSales;
+    return minRadius + (normalized * (maxRadius - minRadius));
+  };
+
+  // Get teal color with varying opacity based on sales
+  const getCircleColor = (sales: number) => {
+    const normalized = sales / maxSales;
+    // Using teal with varying opacity
+    if (normalized > 0.75) return 'hsl(180, 70%, 40%)'; // Dark teal
+    if (normalized > 0.5) return 'hsl(180, 65%, 50%)'; // Medium teal
+    if (normalized > 0.25) return 'hsl(180, 60%, 60%)'; // Light teal
+    return 'hsl(180, 55%, 70%)'; // Pale teal
   };
 
   const getRegionData = (regionCode: string) => {
@@ -50,132 +69,65 @@ export function AustraliaSalesMap() {
       </CardHeader>
       <CardContent>
         <div className="relative">
-          <svg
-            viewBox="0 0 1000 800"
-            className="w-full h-auto"
-            style={{ maxHeight: '500px' }}
-          >
-            {/* Western Australia */}
-            <path
-              d="M 100 100 L 100 500 L 400 500 L 400 100 Z"
-              fill={getRegionColor('WA')}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer transition-opacity hover:opacity-80"
-              onMouseEnter={() => setHoveredRegion('WA')}
-              onMouseLeave={() => setHoveredRegion(null)}
+          <div className="relative">
+            {/* Base Australia SVG Map */}
+            <img 
+              src={australiaMap} 
+              alt="Australia Map" 
+              className="w-full h-auto"
+              style={{ maxHeight: '500px' }}
             />
-            <text x="250" y="300" textAnchor="middle" fill="#000" fontSize="20" fontWeight="bold">
-              WA
-            </text>
-
-            {/* Northern Territory */}
-            <path
-              d="M 400 100 L 400 400 L 550 400 L 550 100 Z"
-              fill={getRegionColor('NT')}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer transition-opacity hover:opacity-80"
-              onMouseEnter={() => setHoveredRegion('NT')}
-              onMouseLeave={() => setHoveredRegion(null)}
-            />
-            <text x="475" y="250" textAnchor="middle" fill="#000" fontSize="20" fontWeight="bold">
-              NT
-            </text>
-
-            {/* Queensland */}
-            <path
-              d="M 550 100 L 550 500 L 750 500 L 750 100 Z"
-              fill={getRegionColor('QLD')}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer transition-opacity hover:opacity-80"
-              onMouseEnter={() => setHoveredRegion('QLD')}
-              onMouseLeave={() => setHoveredRegion(null)}
-            />
-            <text x="650" y="300" textAnchor="middle" fill="#000" fontSize="20" fontWeight="bold">
-              QLD
-            </text>
-
-            {/* South Australia */}
-            <path
-              d="M 400 400 L 400 600 L 550 600 L 550 400 Z"
-              fill={getRegionColor('SA')}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer transition-opacity hover:opacity-80"
-              onMouseEnter={() => setHoveredRegion('SA')}
-              onMouseLeave={() => setHoveredRegion(null)}
-            />
-            <text x="475" y="500" textAnchor="middle" fill="#000" fontSize="20" fontWeight="bold">
-              SA
-            </text>
-
-            {/* New South Wales */}
-            <path
-              d="M 550 500 L 550 650 L 700 650 L 700 500 Z"
-              fill={getRegionColor('NSW')}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer transition-opacity hover:opacity-80"
-              onMouseEnter={() => setHoveredRegion('NSW')}
-              onMouseLeave={() => setHoveredRegion(null)}
-            />
-            <text x="625" y="575" textAnchor="middle" fill="#000" fontSize="20" fontWeight="bold">
-              NSW
-            </text>
-
-            {/* Victoria */}
-            <path
-              d="M 500 600 L 500 700 L 650 700 L 650 600 Z"
-              fill={getRegionColor('VIC')}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer transition-opacity hover:opacity-80"
-              onMouseEnter={() => setHoveredRegion('VIC')}
-              onMouseLeave={() => setHoveredRegion(null)}
-            />
-            <text x="575" y="650" textAnchor="middle" fill="#000" fontSize="20" fontWeight="bold">
-              VIC
-            </text>
-
-            {/* Tasmania */}
-            <ellipse
-              cx="600"
-              cy="750"
-              rx="50"
-              ry="30"
-              fill={getRegionColor('TAS')}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer transition-opacity hover:opacity-80"
-              onMouseEnter={() => setHoveredRegion('TAS')}
-              onMouseLeave={() => setHoveredRegion(null)}
-            />
-            <text x="600" y="755" textAnchor="middle" fill="#000" fontSize="16" fontWeight="bold">
-              TAS
-            </text>
-
-            {/* ACT (small dot near NSW) */}
-            <circle
-              cx="670"
-              cy="620"
-              r="15"
-              fill={getRegionColor('ACT')}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer transition-opacity hover:opacity-80"
-              onMouseEnter={() => setHoveredRegion('ACT')}
-              onMouseLeave={() => setHoveredRegion(null)}
-            />
-            <text x="670" y="625" textAnchor="middle" fill="#000" fontSize="10" fontWeight="bold">
-              ACT
-            </text>
-          </svg>
+            
+            {/* SVG Overlay for scatter points */}
+            <svg
+              viewBox="0 0 1000 966"
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              style={{ maxHeight: '500px' }}
+            >
+              {/* Render circles for each region with data */}
+              {regionData.map((region) => {
+                const coords = STATE_COORDINATES[region.region];
+                if (!coords) return null;
+                
+                return (
+                  <circle
+                    key={region.region}
+                    cx={coords.x}
+                    cy={coords.y}
+                    r={getCircleRadius(region.sales)}
+                    fill={getCircleColor(region.sales)}
+                    opacity={0.7}
+                    stroke="hsl(180, 80%, 30%)"
+                    strokeWidth="2"
+                    className="pointer-events-auto cursor-pointer transition-all hover:opacity-90"
+                    onMouseEnter={() => setHoveredRegion(region.region)}
+                    onMouseLeave={() => setHoveredRegion(null)}
+                  />
+                );
+              })}
+              
+              {/* State labels */}
+              {Object.entries(STATE_COORDINATES).map(([state, coords]) => (
+                <text
+                  key={state}
+                  x={coords.x}
+                  y={coords.y + 4}
+                  textAnchor="middle"
+                  fill="#fff"
+                  fontSize="14"
+                  fontWeight="bold"
+                  className="pointer-events-none"
+                  style={{ textShadow: '0 0 3px rgba(0,0,0,0.8)' }}
+                >
+                  {state}
+                </text>
+              ))}
+            </svg>
+          </div>
 
           {/* Tooltip */}
           {hoveredRegion && getRegionData(hoveredRegion) && (
-            <div className="absolute top-4 right-4 bg-background border border-border rounded-lg p-4 shadow-lg">
+            <div className="absolute top-4 right-4 bg-background border border-border rounded-lg p-4 shadow-lg z-10">
               <h4 className="font-semibold text-lg mb-2">{hoveredRegion}</h4>
               <div className="space-y-1 text-sm">
                 <p className="text-muted-foreground">
@@ -195,20 +147,23 @@ export function AustraliaSalesMap() {
           {/* Legend */}
           <div className="mt-4 flex items-center justify-center gap-4 flex-wrap text-sm">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#bbf7d0' }} />
-              <span>Low</span>
+              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: 'hsl(180, 55%, 70%)' }} />
+              <span>Low Sales</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#86efac' }} />
+              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: 'hsl(180, 60%, 60%)' }} />
               <span>Medium-Low</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#22c55e' }} />
+              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: 'hsl(180, 65%, 50%)' }} />
               <span>Medium-High</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#16a34a' }} />
-              <span>High</span>
+              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: 'hsl(180, 70%, 40%)' }} />
+              <span>High Sales</span>
+            </div>
+            <div className="flex items-center gap-2 ml-4">
+              <span className="text-muted-foreground text-xs">Circle size = Sales amount</span>
             </div>
           </div>
         </div>
