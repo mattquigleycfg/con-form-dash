@@ -30,8 +30,8 @@ export function AustraliaSalesMap() {
   // Calculate circle size based on percentage share
   const getCircleRadius = (orders: number) => {
     const percentage = getPercentageShare(orders);
-    const minRadius = 15;
-    const maxRadius = 60;
+    const minRadius = 25;
+    const maxRadius = 90;
     // Scale based on percentage (0-100%)
     return minRadius + (percentage / 100) * (maxRadius - minRadius);
   };
@@ -82,7 +82,10 @@ export function AustraliaSalesMap() {
               src={australiaMap} 
               alt="Australia Map" 
               className="w-full h-auto"
-              style={{ maxHeight: '500px' }}
+              style={{ 
+                maxHeight: '500px',
+                filter: 'brightness(1.5) grayscale(1) contrast(0.8)'
+              }}
             />
             
             {/* SVG Overlay for scatter points */}
