@@ -14,12 +14,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMonthlyTargets } from "@/hooks/useMonthlyTargets";
 import { MonthlyTargetsTable } from "@/components/MonthlyTargetsTable";
+import { MonthlyTargetsGantt } from "@/components/MonthlyTargetsGantt";
+import { BarChart3, Table2 } from "lucide-react";
 
 export default function Targets() {
   const { syncOdooData, metrics } = useOdooSync();
   const { targets, isLoading, createTarget, updateTarget, deleteTarget } = useTargets();
   const { targets: monthlyTargets, isLoading: isMonthlyLoading, updateTarget: updateMonthlyTarget, seedFY2526Data } = useMonthlyTargets("FY25-26");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [monthlyView, setMonthlyView] = useState<"table" | "gantt">("table");
   const [editingTarget, setEditingTarget] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [targetToDelete, setTargetToDelete] = useState<string | null>(null);
@@ -129,10 +132,29 @@ export default function Targets() {
         </TabsList>
 
         <TabsContent value="monthly" className="space-y-6">
-          <MonthlyTargetsTable 
-            targets={monthlyTargets} 
-            onUpdate={updateMonthlyTarget}
-          />
+          <div className="flex justify-end mb-4">
+            <Tabs value={monthlyView} onValueChange={(v) => setMonthlyView(v as "table" | "gantt")}>
+              <TabsList>
+                <TabsTrigger value="table" className="flex items-center gap-2">
+                  <Table2 className="h-4 w-4" />
+                  Table View
+                </TabsTrigger>
+                <TabsTrigger value="gantt" className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  Gantt View
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {monthlyView === "table" ? (
+            <MonthlyTargetsTable 
+              targets={monthlyTargets} 
+              onUpdate={updateMonthlyTarget}
+            />
+          ) : (
+            <MonthlyTargetsGantt targets={monthlyTargets} />
+          )}
         </TabsContent>
 
         <TabsContent value="goals" className="space-y-6">

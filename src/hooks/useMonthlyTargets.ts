@@ -150,6 +150,7 @@ export const useMonthlyTargets = (financialYear?: string) => {
     try {
       if (!user) throw new Error("User not authenticated");
 
+      // Data from Monthly Targets sheet in Excel
       const fy2526Data = [
         { month: "Jul-25", date: "2025-07-01", cfg_sales: 1850000, cfg_invoice: 1700000, dsf_sales: 50000, dsf_invoice: 80000 },
         { month: "Aug-25", date: "2025-08-01", cfg_sales: 1850000, cfg_invoice: 1800000, dsf_sales: 100000, dsf_invoice: 80000 },
