@@ -65,7 +65,12 @@ export function MonthlyTargetsTable({ targets, onUpdate }: MonthlyTargetsTablePr
         <CardTitle>Monthly Targets & Actuals</CardTitle>
       </CardHeader>
       <CardContent className="overflow-x-auto">
-        <Table>
+        {targets.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No monthly targets found. Click "Seed FY25-26" to import data from Excel.
+          </div>
+        ) : (
+          <Table>
           <TableHeader>
             <TableRow>
               <TableHead rowSpan={2} className="border-r font-semibold">Month</TableHead>
@@ -209,6 +214,7 @@ export function MonthlyTargetsTable({ targets, onUpdate }: MonthlyTargetsTablePr
             ))}
           </TableBody>
         </Table>
+        )}
       </CardContent>
     </Card>
   );
