@@ -12,10 +12,13 @@ import { DraggableWidget } from "@/components/DraggableWidget";
 import { AustraliaSalesMap } from "@/components/AustraliaSalesMap";
 import { HuddleMetrics } from "@/components/HuddleMetrics";
 import { YTDPerformanceChart } from "@/components/YTDPerformanceChart";
+import { SalesOrdersTable } from "@/components/SalesOrdersTable";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useOdooSync } from "@/hooks/useOdooSync";
 import { useOdooTeam } from "@/hooks/useOdooTeam";
+import { useOdooSalesOrders } from "@/hooks/useOdooSalesOrders";
 import { useFilteredMetrics } from "@/hooks/useFilteredMetrics";
 import { useEffect, useState } from "react";
 import { Responsive, WidthProvider } from "react-grid-layout";
@@ -27,6 +30,7 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 const Index = () => {
   const { syncOdooData, isLoading } = useOdooSync();
   const { salesReps, isLoading: isTeamLoading } = useOdooTeam();
+  const { salesOrders, isLoading: isOrdersLoading } = useOdooSalesOrders();
   const { metrics, isLoading: isMetricsLoading } = useFilteredMetrics();
   const [customWidgets, setCustomWidgets] = useState<any[]>([]);
 
@@ -91,19 +95,28 @@ const Index = () => {
         </div>
       </div>
 
+      {/* Tabs for Dashboard and Sales Orders */}
+      <Tabs defaultValue="dashboard" className="w-full">
+        <TabsList className="mb-6">
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="sales-orders">Sales Orders</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="space-y-8">
+
       {/* Huddle Metrics */}
-      <div className="mb-8">
+      <div>
         <h2 className="text-xl font-semibold text-foreground mb-4">Huddle Overview</h2>
         <HuddleMetrics />
       </div>
 
       {/* YTD Performance Chart */}
-      <div className="mb-8">
+      <div>
         <YTDPerformanceChart />
       </div>
 
       {/* Key Metrics */}
-      <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <MetricsCard
           title="Expected Revenue"
           value={isMetricsLoading ? "Loading..." : formatCurrency(metrics.totalRevenue)}
@@ -193,6 +206,12 @@ const Index = () => {
           </DraggableWidget>
         </div>
       </ResponsiveGridLayout>
+      </TabsContent>
+
+      <TabsContent value="sales-orders">
+        <SalesOrdersTable orders={salesOrders} isLoading={isOrdersLoading} />
+      </TabsContent>
+    </Tabs>
     </DashboardLayout>
     <AICopilot />
     </>
