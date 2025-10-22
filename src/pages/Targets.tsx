@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { useOdooSync } from "@/hooks/useOdooSync";
 import { useEffect, useState, useMemo } from "react";
-import { Target, TrendingUp, Users, Award, Plus, Pencil, Trash2 } from "lucide-react";
+import { Target, TrendingUp, Users, Award, Plus, Pencil, Trash2, Download, Calendar } from "lucide-react";
 import { useTargets } from "@/hooks/useTargets";
 import { TargetDialog } from "@/components/TargetDialog";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useMonthlyTargets } from "@/hooks/useMonthlyTargets";
+import { MonthlyTargetsTable } from "@/components/MonthlyTargetsTable";
 
 export default function Targets() {
   const { syncOdooData, metrics } = useOdooSync();
   const { targets, isLoading, createTarget, updateTarget, deleteTarget } = useTargets();
+  const { targets: monthlyTargets, isLoading: isMonthlyLoading, updateTarget: updateMonthlyTarget, seedFY2526Data } = useMonthlyTargets("FY25-26");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTarget, setEditingTarget] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -97,14 +101,41 @@ export default function Targets() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Sales Targets</h1>
           <p className="mt-1 text-muted-foreground">
-            Track progress towards your goals
+            Track progress towards your goals and manage monthly targets
           </p>
         </div>
-        <Button onClick={() => { setEditingTarget(null); setDialogOpen(true); }}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Target
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={seedFY2526Data}>
+            <Download className="mr-2 h-4 w-4" />
+            Seed FY25-26
+          </Button>
+          <Button onClick={() => { setEditingTarget(null); setDialogOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Target
+          </Button>
+        </div>
       </div>
+
+      <Tabs defaultValue="monthly" className="space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="monthly" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Monthly Targets
+          </TabsTrigger>
+          <TabsTrigger value="goals" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Goals
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="monthly" className="space-y-6">
+          <MonthlyTargetsTable 
+            targets={monthlyTargets} 
+            onUpdate={updateMonthlyTarget}
+          />
+        </TabsContent>
+
+        <TabsContent value="goals" className="space-y-6">
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <div className="space-y-2">
@@ -205,6 +236,8 @@ export default function Targets() {
           </Card>
         )}
       </div>
+        </TabsContent>
+      </Tabs>
 
       <TargetDialog
         open={dialogOpen}

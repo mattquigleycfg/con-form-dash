@@ -14,6 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      monthly_targets: {
+        Row: {
+          cfg_invoice_actual: number | null
+          cfg_invoice_target: number
+          cfg_invoice_variance: number | null
+          cfg_sales_actual: number | null
+          cfg_sales_target: number
+          cfg_sales_variance: number | null
+          created_at: string
+          dsf_invoice_actual: number | null
+          dsf_invoice_target: number
+          dsf_invoice_variance: number | null
+          dsf_sales_actual: number | null
+          dsf_sales_target: number
+          dsf_sales_variance: number | null
+          financial_year: string
+          id: string
+          month: string
+          month_date: string
+          notes: string | null
+          total_invoice_actual: number | null
+          total_invoice_target: number | null
+          total_sales_actual: number | null
+          total_sales_target: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cfg_invoice_actual?: number | null
+          cfg_invoice_target?: number
+          cfg_invoice_variance?: number | null
+          cfg_sales_actual?: number | null
+          cfg_sales_target?: number
+          cfg_sales_variance?: number | null
+          created_at?: string
+          dsf_invoice_actual?: number | null
+          dsf_invoice_target?: number
+          dsf_invoice_variance?: number | null
+          dsf_sales_actual?: number | null
+          dsf_sales_target?: number
+          dsf_sales_variance?: number | null
+          financial_year: string
+          id?: string
+          month: string
+          month_date: string
+          notes?: string | null
+          total_invoice_actual?: number | null
+          total_invoice_target?: number | null
+          total_sales_actual?: number | null
+          total_sales_target?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cfg_invoice_actual?: number | null
+          cfg_invoice_target?: number
+          cfg_invoice_variance?: number | null
+          cfg_sales_actual?: number | null
+          cfg_sales_target?: number
+          cfg_sales_variance?: number | null
+          created_at?: string
+          dsf_invoice_actual?: number | null
+          dsf_invoice_target?: number
+          dsf_invoice_variance?: number | null
+          dsf_sales_actual?: number | null
+          dsf_sales_target?: number
+          dsf_sales_variance?: number | null
+          financial_year?: string
+          id?: string
+          month?: string
+          month_date?: string
+          notes?: string | null
+          total_invoice_actual?: number | null
+          total_invoice_target?: number | null
+          total_sales_actual?: number | null
+          total_sales_target?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       sales_targets: {
         Row: {
           created_at: string
