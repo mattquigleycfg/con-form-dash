@@ -10,6 +10,8 @@ import { SankeyChart } from "@/components/SankeyChart";
 import { WidgetCreatorDrawer } from "@/components/WidgetCreatorDrawer";
 import { DraggableWidget } from "@/components/DraggableWidget";
 import { AustraliaSalesMap } from "@/components/AustraliaSalesMap";
+import { HuddleMetrics } from "@/components/HuddleMetrics";
+import { YTDPerformanceChart } from "@/components/YTDPerformanceChart";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOdooSync } from "@/hooks/useOdooSync";
@@ -87,6 +89,17 @@ const Index = () => {
           </Button>
           <WidgetCreatorDrawer onCreateWidget={handleCreateWidget} />
         </div>
+      </div>
+
+      {/* Huddle Metrics */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-foreground mb-4">Huddle Overview</h2>
+        <HuddleMetrics />
+      </div>
+
+      {/* YTD Performance Chart */}
+      <div className="mb-8">
+        <YTDPerformanceChart />
       </div>
 
       {/* Key Metrics */}
