@@ -35,31 +35,28 @@ const navigation: NavSection[] = [
   {
     title: "Sales",
     items: [
-      { name: "Dashboard", href: "/", icon: LayoutDashboard },
-      { name: "Sales Pipeline", href: "/pipeline", icon: TrendingUp },
+      { name: "Overview", href: "/", icon: LayoutDashboard },
+      { name: "Pipeline", href: "/pipeline", icon: TrendingUp },
       { name: "Targets", href: "/targets", icon: Target },
-      { name: "Analytics", href: "/analytics", icon: BarChart3 },
       { name: "Team", href: "/team", icon: Users },
     ],
   },
   {
     title: "Accounting",
     items: [
-      { name: "Dashboard", href: "/accounting", icon: LayoutDashboard },
-      { name: "Invoicing", href: "/accounting/invoicing", icon: FileText },
-      { name: "Purchase", href: "/accounting/purchase", icon: ShoppingCart },
+      { name: "Overview", href: "/accounting", icon: DollarSign },
     ],
   },
   {
     title: "Project",
     items: [
-      { name: "Dashboard", href: "/project", icon: FolderKanban },
+      { name: "Overview", href: "/project", icon: FolderKanban },
     ],
   },
   {
     title: "Helpdesk",
     items: [
-      { name: "Dashboard", href: "/helpdesk", icon: Headphones },
+      { name: "Overview", href: "/helpdesk", icon: Headphones },
     ],
   },
   {

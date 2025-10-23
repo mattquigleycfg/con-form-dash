@@ -7,82 +7,47 @@ import { TargetProgress } from "@/components/TargetProgress";
 import { AICopilot } from "@/components/AICopilot";
 import { FilterBar } from "@/components/filters/FilterBar";
 import { SankeyChart } from "@/components/SankeyChart";
-import { WidgetCreatorDrawer } from "@/components/WidgetCreatorDrawer";
-import { DraggableWidget } from "@/components/DraggableWidget";
 import { AustraliaSalesMap } from "@/components/AustraliaSalesMap";
 import { HuddleMetrics } from "@/components/HuddleMetrics";
 import { YTDPerformanceChart } from "@/components/YTDPerformanceChart";
-import { SalesOrdersTable } from "@/components/SalesOrdersTable";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOdooSync } from "@/hooks/useOdooSync";
 import { useOdooTeam } from "@/hooks/useOdooTeam";
-import { useOdooSalesOrders } from "@/hooks/useOdooSalesOrders";
 import { useFilteredMetrics } from "@/hooks/useFilteredMetrics";
-import { useEffect, useState } from "react";
-import { Responsive, WidthProvider } from "react-grid-layout";
-import "react-grid-layout/css/styles.css";
-import "react-resizable/css/styles.css";
-
-const ResponsiveGridLayout = WidthProvider(Responsive);
+import { useEffect } from "react";
 
 const Index = () => {
-  const { syncOdooData, isLoading } = useOdooSync();
+  const { syncOdooData, isLoading, metrics: syncMetrics } = useOdooSync();
   const { salesReps, isLoading: isTeamLoading } = useOdooTeam();
-  const { salesOrders, isLoading: isOrdersLoading } = useOdooSalesOrders();
   const { metrics, isLoading: isMetricsLoading } = useFilteredMetrics();
-  const [customWidgets, setCustomWidgets] = useState<any[]>([]);
 
   // Auto-sync on mount
   useEffect(() => {
     syncOdooData();
   }, []);
 
-  // Default layout configuration
-  const defaultLayout = {
-    lg: [
-      { i: "revenue-chart", x: 0, y: 0, w: 6, h: 4 },
-      { i: "pipeline-chart", x: 6, y: 0, w: 6, h: 4 },
-      { i: "australia-map", x: 0, y: 4, w: 6, h: 6 },
-      { i: "sankey-chart", x: 6, y: 4, w: 6, h: 6 },
-      { i: "performance-table", x: 0, y: 10, w: 8, h: 5 },
-      { i: "target-progress", x: 8, y: 10, w: 4, h: 5 },
-    ],
-  };
-
-  const [layout, setLayout] = useState(defaultLayout);
-
-  const handleLayoutChange = (newLayout: any) => {
-    setLayout({ lg: newLayout });
-    localStorage.setItem("dashboardLayout", JSON.stringify({ lg: newLayout }));
-  };
-
-  const handleCreateWidget = (widget: any) => {
-    setCustomWidgets((prev) => [...prev, widget]);
-  };
-
   const formatCurrency = (value: number) => {
     return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
   };
 
+  const avgDealSize = syncMetrics?.totalRevenue && syncMetrics?.dealsClosed 
+    ? Math.round(syncMetrics.totalRevenue / syncMetrics.dealsClosed / 1000)
+    : 0;
+
   return (
     <>
       <DashboardLayout>
-      {/* Filters */}
-      <div className="mb-6">
-        <FilterBar />
-      </div>
-
-      {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Sales Dashboard</h1>
-          <p className="mt-1 text-muted-foreground">
-            Welcome back! Here's your sales performance overview.
-          </p>
-        </div>
-        <div className="flex gap-2">
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Sales Overview</h1>
+            <p className="mt-1 text-muted-foreground">
+              Welcome back! Here's your complete sales performance overview.
+            </p>
+          </div>
           <Button 
             className="gap-2" 
             onClick={syncOdooData}
@@ -91,127 +56,119 @@ const Index = () => {
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             {isLoading ? 'Syncing...' : 'Sync Odoo Data'}
           </Button>
-          <WidgetCreatorDrawer onCreateWidget={handleCreateWidget} />
         </div>
-      </div>
 
-      {/* Tabs for Dashboard and Sales Orders */}
-      <Tabs defaultValue="dashboard" className="w-full">
-        <TabsList className="mb-6">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="sales-orders">Sales Orders</TabsTrigger>
-        </TabsList>
+        {/* Filters */}
+        <FilterBar />
 
-        <TabsContent value="dashboard" className="space-y-8">
+        {/* Huddle Metrics */}
+        <div>
+          <h2 className="text-xl font-semibold text-foreground mb-4">Huddle Overview</h2>
+          <HuddleMetrics />
+        </div>
 
-      {/* Huddle Metrics */}
-      <div>
-        <h2 className="text-xl font-semibold text-foreground mb-4">Huddle Overview</h2>
-        <HuddleMetrics />
-      </div>
-
-      {/* YTD Performance Chart */}
-      <div>
+        {/* YTD Performance Chart */}
         <YTDPerformanceChart />
-      </div>
 
-      {/* Key Metrics */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <MetricsCard
-          title="Expected Revenue"
-          value={isMetricsLoading ? "Loading..." : formatCurrency(metrics.totalRevenue)}
-          icon={DollarSign}
-          footer={
-            <p className="text-xs text-muted-foreground">
-              From open opportunities (10-90% probability)
-            </p>
-          }
-        />
-        <MetricsCard
-          title="Deals Closed"
-          value={isMetricsLoading ? "Loading..." : metrics.dealsClosed.toLocaleString('en-US')}
-          icon={Award}
-          footer={
-            <p className="text-xs text-muted-foreground">
-              High probability deals (≥90%)
-            </p>
-          }
-        />
-        <MetricsCard
-          title="Conversion Rate"
-          value={isMetricsLoading ? "Loading..." : `${metrics.conversionRate.toFixed(1)}%`}
-          icon={TrendingUp}
-          footer={
-            <p className="text-xs text-muted-foreground">
-              Won deals / Total opportunities
-            </p>
-          }
-        />
-        <MetricsCard
-          title="Active Customers"
-          value={isMetricsLoading ? "Loading..." : metrics.activeCustomers.toLocaleString('en-US')}
-          icon={Users}
-          footer={
-            <p className="text-xs text-muted-foreground">
-              Unique customers with won deals
-            </p>
-          }
-        />
-      </div>
+        {/* Key Metrics */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <MetricsCard
+            title="Expected Revenue"
+            value={isMetricsLoading ? "Loading..." : formatCurrency(metrics.totalRevenue)}
+            icon={DollarSign}
+            footer={
+              <p className="text-xs text-muted-foreground">
+                From open opportunities (10-90% probability)
+              </p>
+            }
+          />
+          <MetricsCard
+            title="Deals Closed"
+            value={isMetricsLoading ? "Loading..." : metrics.dealsClosed.toLocaleString('en-US')}
+            icon={Award}
+            footer={
+              <p className="text-xs text-muted-foreground">
+                High probability deals (≥90%)
+              </p>
+            }
+          />
+          <MetricsCard
+            title="Conversion Rate"
+            value={isMetricsLoading ? "Loading..." : `${metrics.conversionRate.toFixed(1)}%`}
+            icon={TrendingUp}
+            footer={
+              <p className="text-xs text-muted-foreground">
+                Won deals / Total opportunities
+              </p>
+            }
+          />
+          <MetricsCard
+            title="Active Customers"
+            value={isMetricsLoading ? "Loading..." : metrics.activeCustomers.toLocaleString('en-US')}
+            icon={Users}
+            footer={
+              <p className="text-xs text-muted-foreground">
+                Unique customers with won deals
+              </p>
+            }
+          />
+        </div>
 
-      {/* Draggable Widgets */}
-      <ResponsiveGridLayout
-        className="layout"
-        layouts={layout}
-        onLayoutChange={handleLayoutChange}
-        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-        rowHeight={60}
-        isDraggable={true}
-        isResizable={true}
-        draggableHandle=".cursor-move"
-        margin={[16, 24]}
-        containerPadding={[0, 0]}
-        compactType="vertical"
-        preventCollision={false}
-      >
-        <div key="revenue-chart">
-          <DraggableWidget>
-            <RevenueChart />
-          </DraggableWidget>
+        {/* Charts */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <RevenueChart />
+          <PipelineChart />
         </div>
-        <div key="pipeline-chart">
-          <DraggableWidget>
-            <PipelineChart />
-          </DraggableWidget>
+
+        {/* Secondary Charts */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <AustraliaSalesMap />
+          <SankeyChart />
         </div>
-        <div key="australia-map">
-          <DraggableWidget>
-            <AustraliaSalesMap />
-          </DraggableWidget>
-        </div>
-        <div key="sankey-chart">
-          <DraggableWidget>
-            <SankeyChart />
-          </DraggableWidget>
-        </div>
-        <div key="performance-table">
-          <DraggableWidget>
+
+        {/* Performance Insights */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Performance Insights</CardTitle>
+            <CardDescription>
+              Key metrics and trends from your Odoo data
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-sm font-medium text-muted-foreground">Avg Deal Size</p>
+                <p className="mt-2 text-2xl font-bold text-foreground">
+                  ${avgDealSize > 0 ? `${avgDealSize}K` : 'N/A'}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">Based on closed deals</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-sm font-medium text-muted-foreground">Total Deals</p>
+                <p className="mt-2 text-2xl font-bold text-foreground">{syncMetrics?.dealsClosed || 0}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Closed this period</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-sm font-medium text-muted-foreground">Conversion Rate</p>
+                <p className="mt-2 text-2xl font-bold text-foreground">
+                  {syncMetrics?.conversionRate ? `${syncMetrics.conversionRate.toFixed(1)}%` : 'N/A'}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">Opportunity to closed</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Performance Table and Target Progress */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
             <PerformanceTable salesReps={salesReps} isLoading={isTeamLoading} />
-          </DraggableWidget>
-        </div>
-        <div key="target-progress">
-          <DraggableWidget>
+          </div>
+          <div>
             <TargetProgress />
-          </DraggableWidget>
+          </div>
         </div>
-      </ResponsiveGridLayout>
-      </TabsContent>
-
-      <TabsContent value="sales-orders">
-        <SalesOrdersTable orders={salesOrders} isLoading={isOrdersLoading} />
-      </TabsContent>
-    </Tabs>
+      </div>
     </DashboardLayout>
     <AICopilot />
     </>

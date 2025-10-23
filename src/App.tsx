@@ -10,11 +10,8 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Pipeline from "./pages/Pipeline";
 import Targets from "./pages/Targets";
-import Analytics from "./pages/Analytics";
 import Team from "./pages/Team";
 import AccountingDashboard from "./pages/AccountingDashboard";
-import Invoicing from "./pages/Invoicing";
-import Purchase from "./pages/Purchase";
 import ProjectDashboard from "./pages/ProjectDashboard";
 import HelpdeskDashboard from "./pages/HelpdeskDashboard";
 import Calculator from "./pages/Calculator";
@@ -36,11 +33,8 @@ const App = () => (
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/pipeline" element={<ProtectedRoute><Pipeline /></ProtectedRoute>} />
               <Route path="/targets" element={<ProtectedRoute><Targets /></ProtectedRoute>} />
-              <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
               <Route path="/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
               <Route path="/accounting" element={<ProtectedRoute><AccountingDashboard /></ProtectedRoute>} />
-              <Route path="/accounting/invoicing" element={<ProtectedRoute><Invoicing /></ProtectedRoute>} />
-              <Route path="/accounting/purchase" element={<ProtectedRoute><Purchase /></ProtectedRoute>} />
               <Route path="/project" element={<ProtectedRoute><ProjectDashboard /></ProtectedRoute>} />
               <Route path="/helpdesk" element={<ProtectedRoute><HelpdeskDashboard /></ProtectedRoute>} />
               <Route path="/calculator" element={<ProtectedRoute><Calculator /></ProtectedRoute>} />
