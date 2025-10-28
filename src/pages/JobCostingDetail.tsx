@@ -466,12 +466,6 @@ export default function JobCostingDetail() {
                               <TableCell className="text-right">{formatCurrency(line.subtotal)}</TableCell>
                             </TableRow>
                           ))}
-                          <TableRow className={`font-semibold ${materialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
-                            <TableCell colSpan={3}>Remaining</TableCell>
-                            <TableCell className={`text-right ${materialOverBudget ? 'text-destructive' : 'text-primary'}`}>
-                              {formatCurrency(materialRemaining)}
-                            </TableCell>
-                          </TableRow>
                         </TableBody>
                       </Table>
                     )}
@@ -479,7 +473,7 @@ export default function JobCostingDetail() {
 
                   {/* BOM Actuals */}
                   <div>
-                    <h3 className="font-semibold mb-3 text-sm">BOM</h3>
+                    <h3 className="font-semibold mb-3 text-sm">BOM and Actuals</h3>
                     {loadingBOM ? (
                       <Skeleton className="h-32 w-full" />
                     ) : (
@@ -521,16 +515,24 @@ export default function JobCostingDetail() {
                               </TableCell>
                             </TableRow>
                           ))}
-                          <TableRow className={`font-semibold ${materialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
-                            <TableCell colSpan={3}>Remaining</TableCell>
-                            <TableCell className={`text-right ${materialOverBudget ? 'text-destructive' : 'text-primary'}`}>
-                              {formatCurrency(materialRemaining)}
-                            </TableCell>
-                            <TableCell></TableCell>
-                          </TableRow>
                         </TableBody>
                       </Table>
                     )}
+                  </div>
+
+                  {/* Remaining Section */}
+                  <div>
+                    <h3 className="font-semibold mb-3 text-sm">Remaining</h3>
+                    <Table>
+                      <TableBody>
+                        <TableRow className={`font-semibold ${materialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
+                          <TableCell className="font-semibold">Total Remaining</TableCell>
+                          <TableCell className={`text-right text-lg ${materialOverBudget ? 'text-destructive' : 'text-primary'}`}>
+                            {formatCurrency(materialRemaining)}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
               </CardContent>
@@ -716,73 +718,84 @@ export default function JobCostingDetail() {
                               </TableRow>
                             ))
                           )}
-                          <TableRow className={`font-semibold ${nonMaterialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
-                            <TableCell colSpan={3}>Remaining</TableCell>
-                            <TableCell className={`text-right ${nonMaterialOverBudget ? 'text-destructive' : 'text-primary'}`}>
-                              {formatCurrency(nonMaterialRemaining)}
-                            </TableCell>
-                          </TableRow>
                         </TableBody>
                       </Table>
                     )}
                   </div>
 
                   {/* Actual Costs by Category */}
-                  <h3 className="font-semibold text-sm">Actual</h3>
-                  {['installation', 'freight', 'cranage', 'accommodation', 'travel', 'other'].map((type) => {
-                    const typeCosts = costs?.filter(c => c.cost_type === type) || [];
-                    if (typeCosts.length === 0) return null;
+                  <div>
+                    <h3 className="font-semibold mb-3 text-sm">Actual (From Purchase Orders)</h3>
+                    {['installation', 'freight', 'cranage', 'accommodation', 'travel', 'other'].map((type) => {
+                      const typeCosts = costs?.filter(c => c.cost_type === type) || [];
+                      if (typeCosts.length === 0) return null;
 
-                    return (
-                      <div key={type}>
-                        <h4 className="font-medium mb-2 text-sm capitalize text-muted-foreground">{type}</h4>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Description</TableHead>
-                              <TableHead className="text-right">Amount</TableHead>
-                              <TableHead className="w-[50px]"></TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {typeCosts.map((cost) => (
-                              <TableRow key={cost.id}>
-                                <TableCell>
-                                  {cost.description || "-"}
-                                  {cost.is_from_odoo && (
-                                    <Badge variant="outline" className="ml-2 text-xs">Odoo</Badge>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right font-medium">{formatCurrency(cost.amount)}</TableCell>
-                                <TableCell>
-                                  {!cost.is_from_odoo && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (confirm("Delete this cost?")) {
-                                          deleteCost(cost.id);
-                                        }
-                                      }}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                </TableCell>
+                      return (
+                        <div key={type}>
+                          <h4 className="font-medium mb-2 text-sm capitalize text-muted-foreground">{type}</h4>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Description</TableHead>
+                                <TableHead className="text-right">Amount</TableHead>
+                                <TableHead className="w-[50px]"></TableHead>
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    );
-                  })}
+                            </TableHeader>
+                            <TableBody>
+                              {typeCosts.map((cost) => (
+                                <TableRow key={cost.id}>
+                                  <TableCell>
+                                    {cost.description || "-"}
+                                    {cost.is_from_odoo && (
+                                      <Badge variant="outline" className="ml-2 text-xs">Odoo</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right font-medium">{formatCurrency(cost.amount)}</TableCell>
+                                  <TableCell>
+                                    {!cost.is_from_odoo && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (confirm("Delete this cost?")) {
+                                            deleteCost(cost.id);
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      );
+                    })}
 
-                  {(!costs || costs.length === 0) && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No non-material costs added yet. Click "Add Cost" to start tracking.
-                    </div>
-                  )}
+                    {(!costs || costs.length === 0) && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No non-material costs added yet. Click "Add Cost" to start tracking.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Remaining Section */}
+                  <div>
+                    <h3 className="font-semibold mb-3 text-sm">Remaining</h3>
+                    <Table>
+                      <TableBody>
+                        <TableRow className={`font-semibold ${nonMaterialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
+                          <TableCell className="font-semibold">Total Remaining</TableCell>
+                          <TableCell className={`text-right text-lg ${nonMaterialOverBudget ? 'text-destructive' : 'text-primary'}`}>
+                            {formatCurrency(nonMaterialRemaining)}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               </CardContent>
             </Card>
