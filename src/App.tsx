@@ -16,6 +16,9 @@ import ProjectDashboard from "./pages/ProjectDashboard";
 import HelpdeskDashboard from "./pages/HelpdeskDashboard";
 import Calculator from "./pages/Calculator";
 import Settings from "./pages/Settings";
+import JobCosting from "./pages/JobCosting";
+import JobCostingDetail from "./pages/JobCostingDetail";
+import JobCostingReports from "./pages/JobCostingReports";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +40,9 @@ const App = () => (
               <Route path="/accounting" element={<ProtectedRoute><AccountingDashboard /></ProtectedRoute>} />
               <Route path="/project" element={<ProtectedRoute><ProjectDashboard /></ProtectedRoute>} />
               <Route path="/helpdesk" element={<ProtectedRoute><HelpdeskDashboard /></ProtectedRoute>} />
+              <Route path="/job-costing" element={<ProtectedRoute><JobCosting /></ProtectedRoute>} />
+              <Route path="/job-costing/:id" element={<ProtectedRoute><JobCostingDetail /></ProtectedRoute>} />
+              <Route path="/job-costing/reports" element={<ProtectedRoute><JobCostingReports /></ProtectedRoute>} />
               <Route path="/calculator" element={<ProtectedRoute><Calculator /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />

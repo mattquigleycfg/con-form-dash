@@ -1,5 +1,5 @@
 import { ReactNode, useState, useEffect } from "react";
-import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt } from "lucide-react";
+import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt, Briefcase } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,6 +51,7 @@ const navigation: NavSection[] = [
     title: "Project",
     items: [
       { name: "Overview", href: "/project", icon: FolderKanban },
+      { name: "Job Costing", href: "/job-costing", icon: Briefcase },
     ],
   },
   {
@@ -80,7 +81,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Determine which section should be open based on current route
   const getActiveSectionFromPath = (path: string): string => {
     if (path.startsWith("/accounting")) return "Accounting";
-    if (path.startsWith("/project")) return "Project";
+    if (path.startsWith("/project") || path.startsWith("/job-costing")) return "Project";
     if (path.startsWith("/helpdesk")) return "Helpdesk";
     if (path.startsWith("/calculator")) return "Tools";
     if (path.startsWith("/settings")) return "Settings";

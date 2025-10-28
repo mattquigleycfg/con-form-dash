@@ -14,6 +14,251 @@ export type Database = {
   }
   public: {
     Tables: {
+      job_bom_lines: {
+        Row: {
+          created_at: string
+          id: string
+          job_id: string
+          notes: string | null
+          odoo_product_id: number | null
+          product_name: string
+          quantity: number
+          total_cost: number
+          unit_cost: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          job_id: string
+          notes?: string | null
+          odoo_product_id?: number | null
+          product_name: string
+          quantity: number
+          total_cost: number
+          unit_cost: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          job_id?: string
+          notes?: string | null
+          odoo_product_id?: number | null
+          product_name?: string
+          quantity?: number
+          total_cost?: number
+          unit_cost?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_bom_lines_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_budget_lines: {
+        Row: {
+          cost_category: string
+          created_at: string
+          id: string
+          job_id: string
+          odoo_line_id: number
+          product_id: number
+          product_name: string
+          product_type: string
+          quantity: number
+          subtotal: number
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          cost_category: string
+          created_at?: string
+          id?: string
+          job_id: string
+          odoo_line_id: number
+          product_id: number
+          product_name: string
+          product_type: string
+          quantity: number
+          subtotal: number
+          unit_price: number
+          updated_at?: string
+        }
+        Update: {
+          cost_category?: string
+          created_at?: string
+          id?: string
+          job_id?: string
+          odoo_line_id?: number
+          product_id?: number
+          product_name?: string
+          product_type?: string
+          quantity?: number
+          subtotal?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_budget_lines_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_non_material_costs: {
+        Row: {
+          amount: number
+          cost_type: string
+          created_at: string
+          description: string | null
+          id: string
+          is_from_odoo: boolean
+          job_id: string
+          odoo_purchase_order_id: number | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          cost_type: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_from_odoo?: boolean
+          job_id: string
+          odoo_purchase_order_id?: number | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          cost_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_from_odoo?: boolean
+          job_id?: string
+          odoo_purchase_order_id?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_non_material_costs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_purchase_orders: {
+        Row: {
+          amount_total: number
+          cost_category: string
+          created_at: string
+          id: string
+          job_id: string
+          odoo_po_id: number
+          po_name: string
+          updated_at: string
+          vendor_name: string | null
+        }
+        Insert: {
+          amount_total: number
+          cost_category: string
+          created_at?: string
+          id?: string
+          job_id: string
+          odoo_po_id: number
+          po_name: string
+          updated_at?: string
+          vendor_name?: string | null
+        }
+        Update: {
+          amount_total?: number
+          cost_category?: string
+          created_at?: string
+          id?: string
+          job_id?: string
+          odoo_po_id?: number
+          po_name?: string
+          updated_at?: string
+          vendor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_purchase_orders_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobs: {
+        Row: {
+          analytic_account_id: number | null
+          analytic_account_name: string | null
+          created_at: string
+          customer_name: string
+          id: string
+          material_actual: number
+          material_budget: number
+          non_material_actual: number
+          non_material_budget: number
+          odoo_sale_order_id: number
+          sale_order_name: string
+          status: string
+          total_actual: number
+          total_budget: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analytic_account_id?: number | null
+          analytic_account_name?: string | null
+          created_at?: string
+          customer_name: string
+          id?: string
+          material_actual?: number
+          material_budget?: number
+          non_material_actual?: number
+          non_material_budget?: number
+          odoo_sale_order_id: number
+          sale_order_name: string
+          status?: string
+          total_actual?: number
+          total_budget?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analytic_account_id?: number | null
+          analytic_account_name?: string | null
+          created_at?: string
+          customer_name?: string
+          id?: string
+          material_actual?: number
+          material_budget?: number
+          non_material_actual?: number
+          non_material_budget?: number
+          odoo_sale_order_id?: number
+          sale_order_name?: string
+          status?: string
+          total_actual?: number
+          total_budget?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       monthly_targets: {
         Row: {
           cfg_invoice_actual: number | null
