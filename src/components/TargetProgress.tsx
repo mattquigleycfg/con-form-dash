@@ -2,23 +2,58 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Target, Calendar, DollarSign } from "lucide-react";
 import { useOdooSync } from "@/hooks/useOdooSync";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function TargetProgress() {
-  const { syncOdooData, metrics, isLoading } = useOdooSync();
+  const { syncOdooData, metrics, isLoading: metricsLoading } = useOdooSync();
+  const { user } = useAuth();
+  const [monthlyTarget, setMonthlyTarget] = useState<any>(null);
+  const [isLoadingTarget, setIsLoadingTarget] = useState(false);
 
   useEffect(() => {
     syncOdooData();
   }, []);
 
+  useEffect(() => {
+    const fetchMonthlyTarget = async () => {
+      if (!user) return;
+      
+      setIsLoadingTarget(true);
+      try {
+        const now = new Date();
+        const currentMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        
+        const { data, error } = await supabase
+          .from('monthly_targets')
+          .select('*')
+          .gte('month_date', currentMonthDate.toISOString())
+          .lt('month_date', new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString())
+          .single();
+        
+        if (error) throw error;
+        setMonthlyTarget(data);
+      } catch (error) {
+        console.error('Error fetching monthly target:', error);
+      } finally {
+        setIsLoadingTarget(false);
+      }
+    };
+    
+    fetchMonthlyTarget();
+  }, [user]);
+
+  const isLoading = metricsLoading || isLoadingTarget;
+  
   const targets = [
     {
       id: 1,
-      name: "Q4 Revenue Target",
+      name: "Monthly Revenue Target",
       current: metrics?.totalRevenue || 0,
-      target: 600000,
-      period: "Oct - Dec 2024",
+      target: monthlyTarget?.total_sales_target || 0,
+      period: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
       icon: DollarSign,
     },
     {
@@ -26,7 +61,7 @@ export function TargetProgress() {
       name: "Monthly Deals",
       current: metrics?.dealsClosed || 0,
       target: 180,
-      period: "November 2024",
+      period: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
       icon: Target,
     },
     {

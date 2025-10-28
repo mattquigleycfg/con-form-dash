@@ -20,13 +20,22 @@ export const useOdooSync = () => {
     setIsLoading(true);
     
     try {
-      // Fetch sales orders
+      // Get current month start and end dates
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      
+      // Fetch only current month's sales orders
       const { data: salesOrders, error: salesError } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order',
           method: 'search_read',
           args: [
-            [['state', 'in', ['sale', 'done']]], // Only confirmed and done orders
+            [
+              ['state', 'in', ['sale', 'done']], // Only confirmed and done orders
+              ['date_order', '>=', monthStart.toISOString()],
+              ['date_order', '<=', monthEnd.toISOString()]
+            ],
             ['amount_total', 'state', 'partner_id', 'date_order']
           ]
         }
