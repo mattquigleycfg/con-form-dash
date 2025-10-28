@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,8 +30,84 @@ export default function JobCosting() {
   const [selectedSaleOrderId, setSelectedSaleOrderId] = useState<number | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [allOrdersWithLines, setAllOrdersWithLines] = useState<Array<{ order: any; hasInstallation: boolean }>>([]);
+  const [loadingOrdersWithLines, setLoadingOrdersWithLines] = useState(false);
 
   const { data: saleOrderLines, isLoading: loadingLines } = useOdooSaleOrderLines(selectedSaleOrderId || undefined);
+
+  // Fetch all orders and check for INSTALLATION lines when dialog opens
+  useEffect(() => {
+    if (isCreateDialogOpen && salesOrders && !loadingOrdersWithLines) {
+      const checkOrdersForInstallation = async () => {
+        setLoadingOrdersWithLines(true);
+        try {
+          const oneMonthAgo = new Date();
+          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+          
+          // Filter orders from last month
+          const recentOrders = salesOrders.filter(order => {
+            const orderDate = new Date(order.date_order);
+            return orderDate >= oneMonthAgo;
+          });
+
+          const ordersWithInstallationStatus = await Promise.all(
+            recentOrders.map(async (order) => {
+              try {
+                // Fetch lines for this order
+                const { data: lines } = await supabase.functions.invoke("odoo-query", {
+                  body: {
+                    model: "sale.order.line",
+                    method: "search_read",
+                    args: [
+                      [["order_id", "=", order.id]],
+                      ["id", "product_id"],
+                    ],
+                  },
+                });
+
+                if (!lines || lines.length === 0) {
+                  return { order, hasInstallation: false };
+                }
+
+                const productIds = lines.map((l: any) => l.product_id[0]);
+                
+                // Fetch product details to check for INS001 SKU
+                const { data: products } = await supabase.functions.invoke("odoo-query", {
+                  body: {
+                    model: "product.product",
+                    method: "search_read",
+                    args: [
+                      [["id", "in", productIds], ["default_code", "=", "INS001"]],
+                      ["id", "default_code", "name"],
+                    ],
+                  },
+                });
+
+                return { 
+                  order, 
+                  hasInstallation: products && products.length > 0 
+                };
+              } catch (error) {
+                console.error(`Error checking order ${order.id}:`, error);
+                return { order, hasInstallation: false };
+              }
+            })
+          );
+
+          // Filter to only show orders with INSTALLATION line
+          const ordersWithInstallation = ordersWithInstallationStatus.filter(o => o.hasInstallation);
+          setAllOrdersWithLines(ordersWithInstallation);
+        } catch (error) {
+          console.error("Error fetching orders with INSTALLATION:", error);
+          toast.error("Failed to load orders");
+        } finally {
+          setLoadingOrdersWithLines(false);
+        }
+      };
+
+      checkOrdersForInstallation();
+    }
+  }, [isCreateDialogOpen, salesOrders, loadingOrdersWithLines]);
 
   const handleSyncFromOdoo = async () => {
     if (!selectedSaleOrderId || !saleOrderLines || !user) return;
@@ -139,23 +215,35 @@ export default function JobCosting() {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>Select Sales Order</Label>
-                    <Select
-                      value={selectedSaleOrderId?.toString()}
-                      onValueChange={(value) => setSelectedSaleOrderId(parseInt(value))}
-                      disabled={loadingSalesOrders}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a sales order..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {salesOrders?.map((order) => (
-                          <SelectItem key={order.id} value={order.id.toString()}>
-                            {order.name} - {order.partner_id[1]} ({formatCurrency(order.amount_total)})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>Select Sales Order (with INSTALLATION - Last Month)</Label>
+                    {loadingOrdersWithLines ? (
+                      <div className="text-sm text-muted-foreground">
+                        Checking orders for INSTALLATION line items...
+                      </div>
+                    ) : (
+                      <Select
+                        value={selectedSaleOrderId?.toString()}
+                        onValueChange={(value) => setSelectedSaleOrderId(parseInt(value))}
+                        disabled={loadingSalesOrders || loadingOrdersWithLines}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a sales order..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allOrdersWithLines.length === 0 ? (
+                            <div className="p-2 text-sm text-muted-foreground">
+                              No orders with INSTALLATION (INS001) found in the last month
+                            </div>
+                          ) : (
+                            allOrdersWithLines.map(({ order }) => (
+                              <SelectItem key={order.id} value={order.id.toString()}>
+                                {order.name} - {order.partner_id[1]} ({formatCurrency(order.amount_total)})
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
 
                   {selectedSaleOrderId && loadingLines && (

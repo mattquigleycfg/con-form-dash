@@ -10,6 +10,7 @@ export interface SaleOrderLine {
   price_subtotal: number;
   detailed_type: string; // 'service', 'consu', 'product'
   standard_price: number; // product cost
+  default_code: string | false; // product SKU
 }
 
 export const useOdooSaleOrderLines = (saleOrderId?: number) => {
@@ -41,7 +42,7 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
           method: "search_read",
           args: [
             [["id", "in", productIds]],
-            ["id", "detailed_type", "standard_price"],
+            ["id", "detailed_type", "standard_price", "default_code"],
           ],
         },
       });
@@ -56,6 +57,7 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
           ...line,
           detailed_type: product?.detailed_type || 'product',
           standard_price: product?.standard_price || 0,
+          default_code: product?.default_code || false,
         };
       }) as SaleOrderLine[];
     },
