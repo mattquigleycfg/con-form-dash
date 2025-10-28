@@ -8,8 +8,9 @@ export interface SaleOrderLine {
   product_uom_qty: number;
   price_unit: number;
   price_subtotal: number;
+  purchase_price: number; // actual cost for this order line
   detailed_type: string; // 'service', 'consu', 'product'
-  standard_price: number; // product cost
+  standard_price: number; // product cost (fallback)
   default_code: string | false; // product SKU
 }
 
@@ -25,7 +26,7 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
           method: "search_read",
           args: [
             [["order_id", "=", saleOrderId]],
-            ["id", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal"],
+            ["id", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal", "purchase_price"],
           ],
         },
       });
@@ -55,8 +56,9 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
         const product = productMap.get(line.product_id[0]);
         return {
           ...line,
+          purchase_price: line.purchase_price || 0, // Use actual quoted cost
           detailed_type: product?.detailed_type || 'product',
-          standard_price: product?.standard_price || 0,
+          standard_price: product?.standard_price || 0, // Fallback if purchase_price missing
           default_code: product?.default_code || false,
         };
       }) as SaleOrderLine[];

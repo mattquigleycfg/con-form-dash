@@ -91,7 +91,7 @@ export default function JobCosting() {
             method: "search_read",
             args: [
               [["order_id", "=", order.id]],
-              ["id", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal"],
+              ["id", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal", "purchase_price"],
             ],
           },
         });
@@ -150,7 +150,8 @@ export default function JobCosting() {
         lines.forEach(line => {
           const product = productMap.get(line.product_id[0]);
           const productType = product?.detailed_type || 'product';
-          const costPrice = product?.standard_price || 0;
+          // Use purchase_price from sale order line (actual quoted cost) instead of generic product cost
+          const costPrice = line.purchase_price || product?.standard_price || 0;
           const quantity = line.product_uom_qty;
           const costSubtotal = costPrice * quantity;
           
