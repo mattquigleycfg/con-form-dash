@@ -70,7 +70,7 @@ export default function JobCosting() {
 
         if (linesError) throw linesError;
 
-        const lines = orderLines as any[];
+        const lines = (orderLines as any[]).filter(line => line.product_id && line.product_id[0]);
         const productIds = lines.map(line => line.product_id[0]);
 
         const { data: products } = await supabase.functions.invoke("odoo-query", {
