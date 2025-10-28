@@ -81,48 +81,28 @@ export const useFilteredMetrics = () => {
     const now = new Date();
     const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
 
-    // Start from all opportunities to ensure consistent metric independent of UI filters
-    const baseOpps = (allOpportunities && allOpportunities.length) ? allOpportunities : opportunities;
-
-    // Last 3 months by opportunity create date
-    const last3MonthsOpps = baseOpps.filter((opp) => {
+    // All opportunities created in last 3 months (cohort-based analysis)
+    const opportunitiesInPeriod = allOpportunities.filter((opp) => {
       const createDate = new Date(opp.create_date);
       return createDate >= threeMonthsAgo && createDate <= now;
     });
 
-    // Active/open opportunities: exclude won/lost (use probability between 10% and 90%)
-    const openOpps = last3MonthsOpps.filter((opp) => {
+    // Won opportunities from that same cohort (probability >= 90)
+    const wonOpportunities = opportunitiesInPeriod.filter((opp) => {
       const prob = Number(opp.probability ?? 0);
-      return prob > 10 && prob < 90;
+      return prob >= 90;
     });
 
-    // Exclude stages containing "proposal required" (case-insensitive)
-    const filteredOpportunities = openOpps.filter((opp) => {
-      const stageArr = Array.isArray(opp.stage_id) ? opp.stage_id : [];
-      const stageName = String(stageArr[1] ?? '').toLowerCase();
-      return !stageName.includes('proposal required');
-    });
-
-    // Count of opportunities (open, last 3 months, excluding "Proposal Required")
-    const opportunityCount = filteredOpportunities.length;
-
-    // Count of confirmed sales
-    const confirmedSalesCount = salesOrders.length;
-
-    // Debug counts to verify calculation correctness
-    console.log('useFilteredMetrics conversion debug', {
-      totalOpps: baseOpps.length,
-      last3Months: last3MonthsOpps.length,
-      openOpps: openOpps.length,
-      excludedProposal: openOpps.length - filteredOpportunities.length,
-      opportunityCount,
-      confirmedSalesCount,
-    });
-
-    // New conversion rate: (count of opportunities / count of confirmed sales) * 100
-    const conversionRate = confirmedSalesCount > 0
-      ? (opportunityCount / confirmedSalesCount) * 100
+    // Conversion Rate = (Won Opportunities / Total Opportunities Created) × 100
+    const conversionRate = opportunitiesInPeriod.length > 0
+      ? (wonOpportunities.length / opportunitiesInPeriod.length) * 100
       : 0;
+
+    console.log('Conversion Rate Debug', {
+      totalCreated: opportunitiesInPeriod.length,
+      wonCount: wonOpportunities.length,
+      conversionRate: conversionRate.toFixed(1) + '%'
+    });
 
     // Filter to only active/open opportunities (exclude won >= 90% and lost <= 10%)
     const activeOpportunities = opportunities.filter(

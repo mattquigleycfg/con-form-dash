@@ -73,26 +73,12 @@ export const useOdooSync = () => {
               ['create_date', '>=', threeMonthsAgo.toISOString()],
               ['create_date', '<=', now.toISOString()]
             ],
-            ['id', 'stage_id', 'expected_revenue', 'active']
+            ['id', 'probability']
           ]
         }
       });
 
       if (oppError) throw oppError;
-
-      // Fetch stages to filter out "Proposal Required"
-      const { data: stages, error: stagesError } = await supabase.functions.invoke('odoo-query', {
-        body: {
-          model: 'crm.stage',
-          method: 'search_read',
-          args: [
-            [],
-            ['id', 'name']
-          ]
-        }
-      });
-
-      if (stagesError) throw stagesError;
 
       // Calculate metrics from current month
       const totalRevenue = salesOrders?.reduce((sum: number, order: any) => sum + order.amount_total, 0) || 0;
@@ -102,25 +88,19 @@ export const useOdooSync = () => {
       const uniqueCustomers = new Set(salesOrders?.map((order: any) => order.partner_id[0]) || []);
       const activeCustomers = uniqueCustomers.size;
 
-      // Calculate conversion rate: (count of opportunities excluding "Proposal Required" / count of confirmed sales) * 100
-      // Find ALL stages that contain "proposal required" (case-insensitive)
-      const proposalRequiredStages = stages?.filter((stage: any) => 
-        stage.name.toLowerCase().includes("proposal required")
-      ) || [];
-      const proposalRequiredStageIds = proposalRequiredStages.map((s: any) => s.id);
+      // Cohort-based conversion rate calculation
+      // All opportunities created in last 3 months
+      const opportunitiesInPeriod = threeMonthOpps || [];
+      
+      // Won opportunities from that same cohort (probability >= 90)
+      const wonOpportunities = opportunitiesInPeriod.filter(
+        (opp: any) => (opp.probability ?? 0) >= 90
+      );
 
-      // Filter: Must be active (Open) AND stage doesn't contain "proposal required"
-      const filteredOpportunities = threeMonthOpps?.filter(
-        (opp: any) => opp.active === true && !proposalRequiredStageIds.includes(opp.stage_id[0])
-      ) || [];
-
-      // Count of opportunities (excluding "Proposal Required")
-      const opportunityCount = filteredOpportunities.length;
-
-      // Count of confirmed sales
-      const confirmedSalesCount = threeMonthOrders?.length || 1;
-
-      const conversionRate = (opportunityCount / confirmedSalesCount) * 100;
+      // Conversion Rate = (Won Opportunities / Total Opportunities Created) × 100
+      const conversionRate = opportunitiesInPeriod.length > 0
+        ? (wonOpportunities.length / opportunitiesInPeriod.length) * 100
+        : 0;
 
       const calculatedMetrics = {
         totalRevenue,
