@@ -10,7 +10,7 @@ interface FilteredMetrics {
 }
 
 export const useFilteredMetrics = () => {
-  const { opportunities, isLoading: isOpportunitiesLoading } = useOdooOpportunities();
+  const { opportunities, allOpportunities, isLoading: isOpportunitiesLoading } = useOdooOpportunities();
   const [salesOrders, setSalesOrders] = useState<any[]>([]);
   const [stages, setStages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,7 +82,7 @@ export const useFilteredMetrics = () => {
     const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
 
     // Filter opportunities from last 3 months
-    const last3MonthsOpportunities = opportunities.filter((opp) => {
+    const last3MonthsOpportunities = (allOpportunities || opportunities).filter((opp) => {
       const createDate = new Date(opp.create_date);
       return createDate >= threeMonthsAgo && createDate <= now;
     });
