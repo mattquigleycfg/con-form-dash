@@ -14,7 +14,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useJobBOM } from "@/hooks/useJobBOM";
 import { useJobNonMaterialCosts } from "@/hooks/useJobNonMaterialCosts";
-import { useOdooAnalyticLines } from "@/hooks/useOdooAnalyticLines";
+import { useJobCostAnalysis } from "@/hooks/useJobCostAnalysis";
+import { CostAnalysisCard } from "@/components/job-costing/CostAnalysisCard";
+import { AnalyticLinesTable } from "@/components/job-costing/AnalyticLinesTable";
+import { BomBreakdownCard } from "@/components/job-costing/BomBreakdownCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,7 +63,7 @@ export default function JobCostingDetail() {
 
   const { bomLines, isLoading: loadingBOM, createBOMLine, updateBOMLine, deleteBOMLine, importBOMFromCSV } = useJobBOM(id);
   const { costs, isLoading: loadingCosts, createCost, updateCost, deleteCost } = useJobNonMaterialCosts(id);
-  const { data: analyticLines } = useOdooAnalyticLines(job?.analytic_account_id || undefined);
+  const { analysis, isLoading: loadingAnalysis } = useJobCostAnalysis(job);
 
   const [isAddBOMOpen, setIsAddBOMOpen] = useState(false);
   const [isAddCostOpen, setIsAddCostOpen] = useState(false);
@@ -330,6 +333,15 @@ export default function JobCostingDetail() {
           </Card>
         </div>
 
+        {/* Cost Analysis Section */}
+        {analysis && (
+          <div className="space-y-4">
+            <CostAnalysisCard analysis={analysis} />
+            <AnalyticLinesTable analyticLines={analysis.analyticLines} />
+            <BomBreakdownCard bomBreakdowns={analysis.bomBreakdowns} />
+          </div>
+        )}
+
         <Tabs defaultValue="material" className="w-full">
           <TabsList>
             <TabsTrigger value="material">Material</TabsTrigger>
@@ -553,11 +565,11 @@ export default function JobCostingDetail() {
                     variant="outline"
                     size="sm"
                     onClick={async () => {
-                      if (!analyticLines || !id) return;
+                      if (!analysis?.analyticLines || !id) return;
                       
                       toast.info("Importing non-material costs from analytic account...");
                       
-                      console.log('Analytic lines:', analyticLines);
+                      console.log('Analytic lines:', analysis.analyticLines);
                       
                       // Check existing costs to avoid duplicates
                       const { data: existingCosts } = await supabase
@@ -569,7 +581,7 @@ export default function JobCostingDetail() {
                       const existingDescriptions = new Set(existingCosts?.map(c => c.description) || []);
                       
                       // Filter for lines with costs (checking both negative and positive amounts)
-                      const expenseLines = analyticLines.filter(line => {
+                      const expenseLines = analysis.analyticLines.filter(line => {
                         const lineDescription = `${line.name} (${line.date})`;
                         return line.amount !== 0 && !existingDescriptions.has(lineDescription);
                       });
@@ -627,7 +639,7 @@ export default function JobCostingDetail() {
                         toast.info('No new costs to import (all already imported or no cost lines found)');
                       }
                     }}
-                    disabled={!analyticLines || analyticLines.length === 0}
+                    disabled={!analysis?.analyticLines || analysis.analyticLines.length === 0}
                   >
                     <RefreshCw className="mr-2 h-4 w-4" />
                     Import from Analytic
