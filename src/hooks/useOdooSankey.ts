@@ -59,7 +59,7 @@ export const useOdooSankey = () => {
           method: 'search_read',
           args: [
             orderFilters,
-            ['id', 'name', 'user_id', 'amount_total', 'original_confirmation_date', 'x_original_confirmation_date', 'date_order']
+            ['id', 'name', 'user_id', 'amount_total', 'x_original_confirmation_date', 'date_order']
           ]
         }
       });

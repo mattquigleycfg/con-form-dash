@@ -37,14 +37,14 @@ export const useOdooSalesOrders = () => {
         odooFilters.push(['date_order', '<=', filters.dateRange.endDate.toISOString()]);
       }
 
-      // Fetch sales orders with original confirmation date (try both field names)
+      // Fetch sales orders with original confirmation date
       const { data: orders, error } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order',
           method: 'search_read',
           args: [
             odooFilters,
-            ['id', 'name', 'partner_id', 'date_order', 'original_confirmation_date', 'x_original_confirmation_date', 'amount_total', 'state', 'user_id', 'team_id']
+            ['id', 'name', 'partner_id', 'date_order', 'x_original_confirmation_date', 'amount_total', 'state', 'user_id', 'team_id']
           ]
         }
       });

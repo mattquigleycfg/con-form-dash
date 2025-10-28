@@ -39,7 +39,7 @@ export const useOdooSalesByRegion = () => {
           method: 'search_read',
           args: [
             [['state', 'in', ['sale', 'done']]],
-            ['amount_total', 'date_order', 'original_confirmation_date', 'x_original_confirmation_date', 'partner_id']
+            ['amount_total', 'date_order', 'x_original_confirmation_date', 'partner_id']
           ]
         }
       });

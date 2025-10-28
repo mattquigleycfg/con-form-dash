@@ -30,7 +30,7 @@ export const useOdooRevenue = () => {
               ['state', 'in', ['sale', 'done']],
               ['date_order', '>=', new Date(new Date().getFullYear(), 0, 1).toISOString()]
             ],
-            ['amount_total', 'date_order', 'original_confirmation_date', 'x_original_confirmation_date']
+            ['amount_total', 'date_order', 'x_original_confirmation_date']
           ]
         }
       });
