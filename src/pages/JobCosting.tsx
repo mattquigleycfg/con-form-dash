@@ -147,7 +147,7 @@ export default function JobCosting() {
         const materialBudget = materialLines.reduce((sum, line) => sum + line.cost_subtotal, 0);
         const nonMaterialBudget = nonMaterialLines.reduce((sum, line) => sum + line.cost_subtotal, 0);
 
-        // Create job
+        // Create job with analytic_account_id
         const { data: job, error: jobError } = await supabase
           .from("jobs")
           .insert([{
@@ -162,6 +162,7 @@ export default function JobCosting() {
             material_actual: 0,
             non_material_actual: 0,
             status: 'active',
+            analytic_account_id: order.analytic_account_id ? order.analytic_account_id[0] : null,
           }])
           .select()
           .single();
