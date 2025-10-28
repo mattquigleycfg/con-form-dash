@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useFilters } from "@/contexts/FilterContext";
-import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from "date-fns";
 
 export interface SankeyNode {
   name: string;
@@ -23,35 +21,23 @@ export const useOdooSankey = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [sankeyData, setSankeyData] = useState<SankeyData>({ nodes: [], links: [] });
   const { toast } = useToast();
-  const { filters } = useFilters();
 
   const fetchSankeyData = async () => {
     setIsLoading(true);
     
     try {
-      // Calculate date filters
-      let dateFilter: string | undefined;
-      let endDateFilter: string | undefined;
+      // Get current month start and end dates
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-      if (filters.dateRange.preset !== 'all') {
-        const today = new Date();
-        if (filters.dateRange.preset === 'month') {
-          dateFilter = startOfMonth(today).toISOString().split('T')[0];
-          endDateFilter = endOfMonth(today).toISOString().split('T')[0];
-        } else if (filters.dateRange.preset === 'quarter') {
-          dateFilter = startOfQuarter(today).toISOString().split('T')[0];
-          endDateFilter = endOfQuarter(today).toISOString().split('T')[0];
-        } else if (filters.dateRange.preset === 'year') {
-          dateFilter = startOfYear(today).toISOString().split('T')[0];
-          endDateFilter = endOfYear(today).toISOString().split('T')[0];
-        } else if (filters.dateRange.preset === 'custom' && filters.dateRange.startDate && filters.dateRange.endDate) {
-          dateFilter = filters.dateRange.startDate.toISOString().split('T')[0];
-          endDateFilter = filters.dateRange.endDate.toISOString().split('T')[0];
-        }
-      }
-
-      // Fetch sales orders with pipeline stage info
-      const orderFilters: any[] = [['state', 'in', ['sale', 'done']]];
+      // Fetch only current month's sales orders
+      const orderFilters: any[] = [
+        ['state', 'in', ['sale', 'done']],
+        ['date_order', '>=', monthStart.toISOString()],
+        ['date_order', '<=', monthEnd.toISOString()]
+      ];
+      
       const { data: orders, error: orderError } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order',
@@ -65,13 +51,8 @@ export const useOdooSankey = () => {
 
       if (orderError) throw orderError;
 
-      // Filter by date
-      let filteredOrders = orders || [];
-      if (dateFilter && filteredOrders.length > 0) {
-        filteredOrders = filteredOrders.filter((order: any) => {
-          return order.date_order >= dateFilter && (!endDateFilter || order.date_order <= endDateFilter);
-        });
-      }
+      // Orders are already filtered to current month
+      const filteredOrders = orders || [];
 
       if (!filteredOrders || filteredOrders.length === 0) {
         setSankeyData({ nodes: [], links: [] });
@@ -96,11 +77,15 @@ export const useOdooSankey = () => {
 
       if (lineError) throw lineError;
 
-      // Aggregate by sales rep
+      // Aggregate by sales rep - filter to only allowed salespeople
+      const allowedSalespeople = ['Joel Boustani', 'Hein Cro', 'Adam Ford', 'Mitch Lavelle', 'Ami Kirk'];
       const repRevenue = new Map<string, number>();
       filteredOrders.forEach((order: any) => {
         const rep = order.user_id ? order.user_id[1] : "Unassigned";
-        repRevenue.set(rep, (repRevenue.get(rep) || 0) + order.amount_total);
+        // Only include allowed salespeople
+        if (allowedSalespeople.includes(rep)) {
+          repRevenue.set(rep, (repRevenue.get(rep) || 0) + order.amount_total);
+        }
       });
 
       // Get top 5 reps
@@ -194,7 +179,7 @@ export const useOdooSankey = () => {
 
   useEffect(() => {
     fetchSankeyData();
-  }, [filters.dateRange]);
+  }, []);
 
   return { sankeyData, isLoading, refetch: fetchSankeyData };
 };
