@@ -50,10 +50,10 @@ export const useOdooSankey = () => {
         }
       }
 
-      // Fetch sales orders
+      // Fetch sales orders - use original confirmation date for filtering
       const orderFilters: any[] = [['state', 'in', ['sale', 'done']]];
-      if (dateFilter) orderFilters.push(['date_order', '>=', dateFilter]);
-      if (endDateFilter) orderFilters.push(['date_order', '<=', endDateFilter]);
+      if (dateFilter) orderFilters.push(['x_original_confirmation_date', '>=', dateFilter]);
+      if (endDateFilter) orderFilters.push(['x_original_confirmation_date', '<=', endDateFilter]);
 
       const { data: orders, error: orderError } = await supabase.functions.invoke('odoo-query', {
         body: {
@@ -61,7 +61,7 @@ export const useOdooSankey = () => {
           method: 'search_read',
           args: [
             orderFilters,
-            ['id', 'name', 'user_id', 'amount_total']
+            ['id', 'name', 'user_id', 'amount_total', 'x_original_confirmation_date', 'date_order']
           ]
         }
       });

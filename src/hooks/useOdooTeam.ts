@@ -31,7 +31,7 @@ export const useOdooTeam = () => {
           method: 'search_read',
           args: [
             [['state', 'in', ['sale', 'done']]], // Only confirmed and done orders
-            ['amount_total', 'user_id', 'date_order']
+            ['amount_total', 'user_id', 'date_order', 'x_original_confirmation_date']
           ]
         }
       });
@@ -61,10 +61,11 @@ export const useOdooTeam = () => {
   useEffect(() => {
     let filteredOrders = [...allOrders];
 
-    // Apply date range filter
+    // Apply date range filter using original confirmation date
     if (filters.dateRange.startDate && filters.dateRange.endDate) {
       filteredOrders = filteredOrders.filter((order) => {
-        const orderDate = new Date(order.date_order);
+        const confirmDate = order.x_original_confirmation_date || order.date_order;
+        const orderDate = new Date(confirmDate);
         return (
           orderDate >= filters.dateRange.startDate! &&
           orderDate <= filters.dateRange.endDate!
