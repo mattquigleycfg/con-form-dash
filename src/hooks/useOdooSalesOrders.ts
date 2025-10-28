@@ -7,8 +7,6 @@ export interface SalesOrder {
   name: string;
   partner_id: [number, string];
   date_order: string;
-  original_confirmation_date?: string;
-  x_original_confirmation_date?: string;
   amount_total: number;
   state: string;
   user_id: [number, string] | false;
@@ -37,14 +35,14 @@ export const useOdooSalesOrders = () => {
         odooFilters.push(['date_order', '<=', filters.dateRange.endDate.toISOString()]);
       }
 
-      // Fetch sales orders with original confirmation date
+      // Fetch sales orders - remove x_original_confirmation_date as it doesn't exist
       const { data: orders, error } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order',
           method: 'search_read',
           args: [
             odooFilters,
-            ['id', 'name', 'partner_id', 'date_order', 'x_original_confirmation_date', 'amount_total', 'state', 'user_id', 'team_id']
+            ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state', 'user_id', 'team_id']
           ]
         }
       });
