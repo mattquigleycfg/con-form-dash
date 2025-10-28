@@ -102,7 +102,7 @@ const Index = () => {
             icon={TrendingUp}
             footer={
               <p className="text-xs text-muted-foreground">
-                Expected revenue / Confirmed sales (3-month period)
+                Opportunities / Confirmed sales (3-month period)
               </p>
             }
           />

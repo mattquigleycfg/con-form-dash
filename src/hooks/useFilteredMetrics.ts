@@ -97,21 +97,15 @@ export const useFilteredMetrics = () => {
       (opp) => !proposalRequiredStage || opp.stage_id[0] !== proposalRequiredStage.id
     );
 
-    // Calculate total expected revenue from filtered opportunities
-    const totalExpectedRevenue = filteredOpportunities.reduce(
-      (sum, opp) => sum + (opp.expected_revenue || 0),
-      0
-    );
+    // Count of opportunities (excluding "Proposal Required")
+    const opportunityCount = filteredOpportunities.length;
 
-    // Calculate total confirmed sales revenue
-    const totalConfirmedSales = salesOrders.reduce(
-      (sum, order) => sum + (order.amount_total || 0),
-      0
-    );
+    // Count of confirmed sales
+    const confirmedSalesCount = salesOrders.length;
 
-    // New conversion rate: (expected revenue / confirmed sales) * 100
-    const conversionRate = totalConfirmedSales > 0
-      ? (totalExpectedRevenue / totalConfirmedSales) * 100
+    // New conversion rate: (count of opportunities / count of confirmed sales) * 100
+    const conversionRate = confirmedSalesCount > 0
+      ? (opportunityCount / confirmedSalesCount) * 100
       : 0;
 
     // Filter to only active/open opportunities (exclude won >= 90% and lost <= 10%)

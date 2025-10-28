@@ -102,24 +102,20 @@ export const useOdooSync = () => {
       const uniqueCustomers = new Set(salesOrders?.map((order: any) => order.partner_id[0]) || []);
       const activeCustomers = uniqueCustomers.size;
 
-      // Calculate conversion rate: (expected revenue excluding "Proposal Required" / confirmed sales) * 100
+      // Calculate conversion rate: (count of opportunities excluding "Proposal Required" / count of confirmed sales) * 100
       const proposalRequiredStage = stages?.find((stage: any) => stage.name === "Proposal Required");
 
       const filteredOpportunities = threeMonthOpps?.filter(
         (opp: any) => !proposalRequiredStage || opp.stage_id[0] !== proposalRequiredStage.id
       ) || [];
 
-      const totalExpectedRevenue = filteredOpportunities.reduce(
-        (sum: number, opp: any) => sum + (opp.expected_revenue || 0),
-        0
-      );
+      // Count of opportunities (excluding "Proposal Required")
+      const opportunityCount = filteredOpportunities.length;
 
-      const totalConfirmedSales = threeMonthOrders?.reduce(
-        (sum: number, order: any) => sum + (order.amount_total || 0),
-        0
-      ) || 1;
+      // Count of confirmed sales
+      const confirmedSalesCount = threeMonthOrders?.length || 1;
 
-      const conversionRate = (totalExpectedRevenue / totalConfirmedSales) * 100;
+      const conversionRate = (opportunityCount / confirmedSalesCount) * 100;
 
       const calculatedMetrics = {
         totalRevenue,
