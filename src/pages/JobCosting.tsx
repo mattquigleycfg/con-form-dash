@@ -1,51 +1,58 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Download, RefreshCw, Search } from "lucide-react";
 import { useJobs } from "@/hooks/useJobs";
 import { useNavigate } from "react-router-dom";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { formatCurrency } from "@/lib/utils";
 import { useOdooSalesOrders } from "@/hooks/useOdooSalesOrders";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { triggerConfetti } from "@/utils/confetti";
 import { logger } from "@/utils/logger";
+import { useOdooProjectStages } from "@/hooks/useOdooProjectStages";
+import { useJobFiltering, ViewMode, BudgetSort, DateRange } from "@/hooks/useJobFilters";
+import { JobFilterBar } from "@/components/job-costing/JobFilterBar";
+import { ListView } from "@/components/job-costing/ListView";
+import { KanbanView } from "@/components/job-costing/KanbanView";
+import { GridView } from "@/components/job-costing/GridView";
 
 export default function JobCosting() {
   const navigate = useNavigate();
   const { jobs, isLoading } = useJobs();
   const { user } = useAuth();
   const { salesOrders, isLoading: loadingSalesOrders } = useOdooSalesOrders();
+  const { stages, isLoading: loadingStages } = useOdooProjectStages();
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // View and filter state with localStorage persistence
+  const [view, setView] = useState<ViewMode>(
+    (localStorage.getItem('job-costing-view-mode') as ViewMode) || 'list'
+  );
+  const [dateRange, setDateRange] = useState<DateRange | null>(() => {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    return { start: threeMonthsAgo, end: new Date() };
+  });
+  const [budgetSort, setBudgetSort] = useState<BudgetSort>('high-low');
+  
+  // Persist view preference
+  useEffect(() => {
+    localStorage.setItem('job-costing-view-mode', view);
+  }, [view]);
   
   // Compute last-month confirmed orders from available sales orders
   const oneMonthAgo = new Date();
   oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
   const recentSalesOrders = (salesOrders || []).filter(order => new Date(order.date_order) >= oneMonthAgo);
 
-  // Filter jobs based on search term
-  const filteredJobs = useMemo(() => {
-    if (!jobs) return [];
-    if (!searchTerm.trim()) return jobs;
-
-    const search = searchTerm.toLowerCase();
-    return jobs.filter(job => 
-      job.sale_order_name?.toLowerCase().includes(search) ||
-      job.customer_name?.toLowerCase().includes(search) ||
-      job.opportunity_name?.toLowerCase().includes(search) ||
-      job.project_manager_name?.toLowerCase().includes(search) ||
-      job.sales_person_name?.toLowerCase().includes(search)
-    );
-  }, [jobs, searchTerm]);
+  // Apply all filters using the filtering hook
+  const filteredJobs = useJobFiltering(jobs, { dateRange, budgetSort, searchTerm });
 
 // Removed INSTALLATION SKU pre-check. We now simply filter by last month's confirmed orders using date_order.
 
@@ -170,7 +177,7 @@ export default function JobCosting() {
           salesPersonName = order.user_id[1];
         }
 
-        // Create job with additional search fields
+        // Create job with additional search fields and date_order
         const { data: job, error: jobError } = await supabase
           .from("jobs")
           .insert([{
@@ -188,6 +195,8 @@ export default function JobCosting() {
             analytic_account_id: order.analytic_account_id ? order.analytic_account_id[0] : null,
             sales_person_name: salesPersonName,
             opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
+            date_order: order.date_order,
+            project_stage_name: 'Unassigned',
           }])
           .select()
           .single();
@@ -231,62 +240,63 @@ export default function JobCosting() {
     }
   };
 
-  const getProgressColor = (percentage: number) => {
-    if (percentage < 70) return "bg-success";
-    if (percentage < 90) return "bg-warning";
-    return "bg-destructive";
-  };
-
   return (
     <DashboardLayout>
-      <div className="space-y-8">
-        <div className="space-y-4">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-foreground">Job Costing</h1>
-              <p className="text-muted-foreground mt-2">
-                Track project budgets and actual costs
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => navigate("/job-costing/reports")}>
-                <Download className="mr-2 h-4 w-4" />
-                Reports
-              </Button>
-              <Button onClick={handleAutoSyncAll} disabled={isSyncing || loadingSalesOrders}>
-                {isSyncing ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Auto-Sync from Odoo
-                  </>
-                )}
-              </Button>
-            </div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Job Costing</h1>
+            <p className="text-muted-foreground mt-2">
+              Track project budgets and actual costs
+            </p>
           </div>
-
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by SO number, customer, opportunity, or sales person..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate("/job-costing/reports")}>
+              <Download className="mr-2 h-4 w-4" />
+              Reports
+            </Button>
+            <Button onClick={handleAutoSyncAll} disabled={isSyncing || loadingSalesOrders}>
+              {isSyncing ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Auto-Sync from Odoo
+                </>
+              )}
+            </Button>
           </div>
         </div>
 
+        {/* Filter Bar */}
+        <JobFilterBar
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          budgetSort={budgetSort}
+          onBudgetSortChange={setBudgetSort}
+          view={view}
+          onViewChange={setView}
+        />
+
+        {/* Search */}
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by SO number, customer, opportunity, or sales person..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        {/* View Rendering */}
         <Card>
-          <CardHeader>
-            <CardTitle>Active Jobs</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {isLoading ? (
-              <div className="space-y-2">
+              <div className="p-6 space-y-2">
                 {[...Array(5)].map((_, i) => (
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
@@ -294,68 +304,36 @@ export default function JobCosting() {
             ) : filteredJobs.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 {jobs && jobs.length > 0 ? (
-                  <>No jobs found matching "{searchTerm}"</>
+                  <>No jobs found matching your filters</>
                 ) : (
                   <>No jobs found. Sync your first job from Odoo to get started.</>
                 )}
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Job Details</TableHead>
-                    <TableHead className="text-right">Budget</TableHead>
-                    <TableHead className="text-right">Actual</TableHead>
-                    <TableHead className="w-80">Progress</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredJobs.map((job) => {
-                    const percentage = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
-                    return (
-                      <TableRow 
-                        key={job.id}
-                        className="cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => navigate(`/job-costing/${job.id}`)}
-                      >
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-medium">{job.sale_order_name}</div>
-                            <div className="text-sm text-muted-foreground">{job.customer_name}</div>
-                            {job.opportunity_name && (
-                              <div className="text-xs text-muted-foreground">Opp: {job.opportunity_name}</div>
-                            )}
-                            {job.sales_person_name && (
-                              <div className="text-xs text-muted-foreground">Sales: {job.sales_person_name}</div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">{formatCurrency(job.total_budget)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(job.total_actual)}</TableCell>
-                        <TableCell>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <Progress 
-                                value={percentage} 
-                                className={`flex-1 h-2 transition-all duration-500 ${getProgressColor(percentage)}`} 
-                              />
-                              <span className="text-sm font-medium min-w-[3rem] text-right">
-                                {percentage.toFixed(1)}%
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-xs text-muted-foreground">
-                              <span>Remaining: {formatCurrency(job.total_budget - job.total_actual)}</span>
-                              <Badge variant={job.status === 'active' ? 'default' : 'secondary'} className="text-xs">
-                                {job.status}
-                              </Badge>
-                            </div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <>
+                {view === 'list' && (
+                  <ListView 
+                    jobs={filteredJobs} 
+                    onJobClick={(jobId) => navigate(`/job-costing/${jobId}`)}
+                  />
+                )}
+                {view === 'kanban' && (
+                  <div className="p-6">
+                    <KanbanView 
+                      jobs={filteredJobs} 
+                      stages={stages}
+                      isLoadingStages={loadingStages}
+                      onJobClick={(jobId) => navigate(`/job-costing/${jobId}`)}
+                    />
+                  </div>
+                )}
+                {view === 'grid' && (
+                  <GridView 
+                    jobs={filteredJobs} 
+                    onJobClick={(jobId) => navigate(`/job-costing/${jobId}`)}
+                  />
+                )}
+              </>
             )}
           </CardContent>
         </Card>

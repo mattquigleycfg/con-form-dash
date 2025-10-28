@@ -208,6 +208,7 @@ export type Database = {
           analytic_account_name: string | null
           created_at: string
           customer_name: string
+          date_order: string | null
           id: string
           material_actual: number
           material_budget: number
@@ -216,6 +217,8 @@ export type Database = {
           odoo_sale_order_id: number
           opportunity_name: string | null
           project_manager_name: string | null
+          project_stage_id: number | null
+          project_stage_name: string | null
           sale_order_name: string
           sales_person_name: string | null
           status: string
@@ -229,6 +232,7 @@ export type Database = {
           analytic_account_name?: string | null
           created_at?: string
           customer_name: string
+          date_order?: string | null
           id?: string
           material_actual?: number
           material_budget?: number
@@ -237,6 +241,8 @@ export type Database = {
           odoo_sale_order_id: number
           opportunity_name?: string | null
           project_manager_name?: string | null
+          project_stage_id?: number | null
+          project_stage_name?: string | null
           sale_order_name: string
           sales_person_name?: string | null
           status?: string
@@ -250,6 +256,7 @@ export type Database = {
           analytic_account_name?: string | null
           created_at?: string
           customer_name?: string
+          date_order?: string | null
           id?: string
           material_actual?: number
           material_budget?: number
@@ -258,6 +265,8 @@ export type Database = {
           odoo_sale_order_id?: number
           opportunity_name?: string | null
           project_manager_name?: string | null
+          project_stage_id?: number | null
+          project_stage_name?: string | null
           sale_order_name?: string
           sales_person_name?: string | null
           status?: string

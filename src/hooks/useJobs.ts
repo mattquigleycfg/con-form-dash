@@ -22,6 +22,9 @@ export interface Job {
   opportunity_name?: string;
   project_manager_name?: string;
   sales_person_name?: string;
+  date_order?: string;
+  project_stage_id?: number | null;
+  project_stage_name?: string | null;
 }
 
 export const useJobs = () => {
