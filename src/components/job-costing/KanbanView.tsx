@@ -11,7 +11,11 @@ interface KanbanViewProps {
 }
 
 export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: KanbanViewProps) {
-  // Expected stage names as fallback
+  console.log('KanbanView render - stages:', stages);
+  console.log('KanbanView render - jobs count:', jobs.length);
+  console.log('KanbanView render - job stages sample:', jobs.slice(0, 5).map(j => ({ so: j.sale_order_name, stage: j.project_stage_name })));
+
+  // Expected stage names as ordered list
   const expectedStageNames = [
     "Operation paperwork",
     "Waiting on Information",
@@ -25,38 +29,40 @@ export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: Kanban
     "Invoice/Completed"
   ];
 
+  // Use fetched stages if available, otherwise use expected names
+  const stageList = stages.length > 0 
+    ? stages.map(s => s.name)
+    : expectedStageNames;
+
+  console.log('Using stage list:', stageList);
+
+  // Create ordered stage list starting with Unassigned
+  const orderedStages = ['Unassigned', ...stageList];
+
   // Group jobs by stage
   const jobsByStage = new Map<string, Job[]>();
   
-  // Use fetched stages or fallback to expected names
-  const activeStages = stages.length > 0 ? stages : expectedStageNames.map((name, index) => ({
-    id: index,
-    name,
-    sequence: index,
-    fold: false
-  }));
-  
-  // Initialize with all stages
-  activeStages.forEach(stage => {
-    const stageName = typeof stage === 'string' ? stage : stage.name;
+  // Initialize map with all ordered stages
+  orderedStages.forEach(stageName => {
     jobsByStage.set(stageName, []);
   });
   
-  // Add unassigned column
-  jobsByStage.set('Unassigned', []);
-  
-  // Distribute jobs
+  // Distribute jobs into stages
   jobs.forEach(job => {
     const stageName = job.project_stage_name || 'Unassigned';
+    
+    // If this stage doesn't exist in our ordered list, add it at the end
     if (!jobsByStage.has(stageName)) {
-      // If job has a stage not in our list, create it
+      console.warn(`Job ${job.sale_order_name} has unexpected stage: ${stageName}`);
+      orderedStages.push(stageName);
       jobsByStage.set(stageName, []);
     }
+    
     jobsByStage.get(stageName)!.push(job);
   });
 
-  console.log('Kanban view - Stages:', activeStages.map(s => typeof s === 'string' ? s : s.name));
-  console.log('Kanban view - Jobs by stage:', Array.from(jobsByStage.entries()).map(([stage, jobs]) => `${stage}: ${jobs.length}`));
+  console.log('Final stages order:', orderedStages);
+  console.log('Jobs distribution:', Array.from(jobsByStage.entries()).map(([stage, jobs]) => `${stage}: ${jobs.length}`));
 
   if (isLoadingStages) {
     return (
@@ -71,11 +77,6 @@ export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: Kanban
   }
 
   // Render columns in sequence order
-  const orderedStages = [
-    'Unassigned',
-    ...activeStages.map(s => typeof s === 'string' ? s : s.name)
-  ];
-
   return (
     <div className="flex gap-4 overflow-x-auto pb-4">
       {orderedStages.map((stageName) => {

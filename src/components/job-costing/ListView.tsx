@@ -16,6 +16,7 @@ export function ListView({ jobs, onJobClick }: ListViewProps) {
         <TableHeader>
           <TableRow>
             <TableHead>Order</TableHead>
+            <TableHead>Opportunity</TableHead>
             <TableHead>Customer</TableHead>
             <TableHead>Stage</TableHead>
             <TableHead>Confirmed Date</TableHead>
@@ -44,6 +45,9 @@ export function ListView({ jobs, onJobClick }: ListViewProps) {
               >
                 <TableCell className="font-medium">
                   {job.sale_order_name}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {job.opportunity_name || '-'}
                 </TableCell>
                 <TableCell>{job.customer_name}</TableCell>
                 <TableCell>
