@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { useOdooSync } from "@/hooks/useOdooSync";
 import { useEffect, useState, useMemo } from "react";
-import { Target, TrendingUp, Users, Award, Plus, Pencil, Trash2, Download, Calendar } from "lucide-react";
+import { Target, TrendingUp, Users, Award, Plus, Pencil, Trash2, RefreshCw, Calendar } from "lucide-react";
+import { triggerConfetti } from "@/utils/confetti";
 import { useTargets } from "@/hooks/useTargets";
 import { TargetDialog } from "@/components/TargetDialog";
 import { Button } from "@/components/ui/button";
@@ -108,9 +109,15 @@ export default function Targets() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={seedFY2526Data}>
-            <Download className="mr-2 h-4 w-4" />
-            Seed FY25-26
+          <Button 
+            variant="outline" 
+            onClick={async () => {
+              await syncOdooData();
+              triggerConfetti();
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Sync Odoo
           </Button>
           <Button onClick={() => { setEditingTarget(null); setDialogOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" />

@@ -50,10 +50,8 @@ export const useOdooSankey = () => {
         }
       }
 
-      // Fetch sales orders - use original confirmation date for filtering
+      // Fetch all sales orders, then filter locally using original confirmation date
       const orderFilters: any[] = [['state', 'in', ['sale', 'done']]];
-      if (dateFilter) orderFilters.push(['x_original_confirmation_date', '>=', dateFilter]);
-      if (endDateFilter) orderFilters.push(['x_original_confirmation_date', '<=', endDateFilter]);
 
       const { data: orders, error: orderError } = await supabase.functions.invoke('odoo-query', {
         body: {
@@ -68,13 +66,22 @@ export const useOdooSankey = () => {
 
       if (orderError) throw orderError;
 
-      if (!orders || orders.length === 0) {
+      // Filter locally by date using original confirmation date or date_order as fallback
+      let filteredOrders = orders || [];
+      if (dateFilter && filteredOrders.length > 0) {
+        filteredOrders = filteredOrders.filter((order: any) => {
+          const confirmDate = order.x_original_confirmation_date || order.date_order;
+          return confirmDate >= dateFilter && (!endDateFilter || confirmDate <= endDateFilter);
+        });
+      }
+
+      if (!filteredOrders || filteredOrders.length === 0) {
         setSankeyData({ nodes: [], links: [] });
         return { nodes: [], links: [] };
       }
 
       // Get order IDs
-      const orderIds = orders.map((o: any) => o.id);
+      const orderIds = filteredOrders.map((o: any) => o.id);
 
       // Fetch order lines for these orders
       const { data: orderLines, error: lineError } = await supabase.functions.invoke('odoo-query', {
@@ -92,7 +99,7 @@ export const useOdooSankey = () => {
 
       // Create order ID to salesperson map
       const orderToSalesperson = new Map<number, string>();
-      orders.forEach((order: any) => {
+      filteredOrders.forEach((order: any) => {
         const salesRep = order.user_id ? order.user_id[1] : "Unassigned";
         orderToSalesperson.set(order.id, salesRep);
       });

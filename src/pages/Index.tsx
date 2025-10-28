@@ -17,6 +17,7 @@ import { useOdooSync } from "@/hooks/useOdooSync";
 import { useOdooTeam } from "@/hooks/useOdooTeam";
 import { useFilteredMetrics } from "@/hooks/useFilteredMetrics";
 import { useEffect } from "react";
+import { triggerConfetti } from "@/utils/confetti";
 
 const Index = () => {
   const { syncOdooData, isLoading, metrics: syncMetrics } = useOdooSync();
@@ -50,11 +51,14 @@ const Index = () => {
           </div>
           <Button 
             className="gap-2" 
-            onClick={syncOdooData}
+            onClick={async () => {
+              await syncOdooData();
+              triggerConfetti();
+            }}
             disabled={isLoading}
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            {isLoading ? 'Syncing...' : 'Sync Odoo Data'}
+            {isLoading ? 'Syncing...' : 'Sync Odoo'}
           </Button>
         </div>
 
