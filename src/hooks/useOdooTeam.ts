@@ -27,13 +27,22 @@ export const useOdooTeam = () => {
     setIsLoading(true);
     
     try {
-      // Fetch all confirmed sales orders
+      // Get current month start and end dates
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      
+      // Fetch only current month's confirmed sales orders
       const { data: salesOrders, error: salesError } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order',
           method: 'search_read',
           args: [
-            [['state', 'in', ['sale', 'done']]], // Only confirmed and done orders
+            [
+              ['state', 'in', ['sale', 'done']], // Only confirmed and done orders
+              ['date_order', '>=', monthStart.toISOString()],
+              ['date_order', '<=', monthEnd.toISOString()]
+            ],
             ['amount_total', 'user_id', 'date_order']
           ]
         }
@@ -57,18 +66,24 @@ export const useOdooTeam = () => {
     if (!user) return;
     
     try {
+      // Get current month's target only
+      const now = new Date();
+      const currentMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      
       const { data, error } = await supabase
         .from('monthly_targets')
         .select('total_sales_target')
-        .order('month_date', { ascending: true });
+        .gte('month_date', currentMonthDate.toISOString())
+        .lt('month_date', new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString())
+        .single();
       
       if (error) throw error;
       
-      // Sum all targets for the year
-      const yearlyTarget = (data || []).reduce((sum, t) => sum + (t.total_sales_target || 0), 0);
-      setTotalTarget(yearlyTarget);
+      // Use current month's target
+      setTotalTarget(data?.total_sales_target || 0);
     } catch (error) {
       console.error('Error fetching targets:', error);
+      setTotalTarget(0);
     }
   };
 
@@ -77,26 +92,17 @@ export const useOdooTeam = () => {
     fetchTotalTarget();
   }, [user]);
 
-  // Apply filters and recalculate sales reps data
+  // Process sales reps data
   useEffect(() => {
     const allowedSalespeople = ['Joel Boustani', 'Hein Cro', 'Adam Ford', 'Mitch Lavelle', 'Ami Kirk'];
-    let filteredOrders = [...allOrders];
-
-    // Apply date range filter using date_order only
-    if (filters.dateRange.startDate && filters.dateRange.endDate) {
-      filteredOrders = filteredOrders.filter((order) => {
-        const orderDate = new Date(order.date_order);
-        return (
-          orderDate >= filters.dateRange.startDate! &&
-          orderDate <= filters.dateRange.endDate!
-        );
-      });
-    }
+    
+    // Note: allOrders already contains only current month's data from the fetch
+    // No additional date filtering needed
 
     // Aggregate data by salesperson
     const salesByUser: Record<number, { name: string; deals: number; revenue: number }> = {};
     
-    filteredOrders.forEach((order: any) => {
+    allOrders.forEach((order: any) => {
       if (order.user_id) {
         const userId = order.user_id[0];
         const userName = order.user_id[1];
@@ -147,7 +153,7 @@ export const useOdooTeam = () => {
       .sort((a, b) => b.revenue - a.revenue);
 
     setSalesReps(repsArray);
-  }, [allOrders, filters.dateRange, totalTarget]);
+  }, [allOrders, totalTarget]);
 
   return { salesReps, isLoading, refetch: fetchTeamData };
 };
