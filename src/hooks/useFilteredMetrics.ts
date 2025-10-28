@@ -87,14 +87,15 @@ export const useFilteredMetrics = () => {
       return createDate >= threeMonthsAgo && createDate <= now;
     });
 
-    // Find "Proposal Required" stage ID
-    const proposalRequiredStage = stages.find(
-      (stage) => stage.name === "Proposal Required"
+    // Find ALL stages that contain "proposal required" (case-insensitive)
+    const proposalRequiredStages = stages.filter(
+      (stage) => stage.name.toLowerCase().includes("proposal required")
     );
+    const proposalRequiredStageIds = proposalRequiredStages.map(s => s.id);
 
-    // Filter out "Proposal Required" opportunities
+    // Filter: Must be active (Open) AND stage doesn't contain "proposal required"
     const filteredOpportunities = last3MonthsOpportunities.filter(
-      (opp) => !proposalRequiredStage || opp.stage_id[0] !== proposalRequiredStage.id
+      (opp) => opp.active === true && !proposalRequiredStageIds.includes(opp.stage_id[0])
     );
 
     // Count of opportunities (excluding "Proposal Required")

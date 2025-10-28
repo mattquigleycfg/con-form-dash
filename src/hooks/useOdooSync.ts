@@ -73,7 +73,7 @@ export const useOdooSync = () => {
               ['create_date', '>=', threeMonthsAgo.toISOString()],
               ['create_date', '<=', now.toISOString()]
             ],
-            ['id', 'stage_id', 'expected_revenue']
+            ['id', 'stage_id', 'expected_revenue', 'active']
           ]
         }
       });
@@ -103,10 +103,15 @@ export const useOdooSync = () => {
       const activeCustomers = uniqueCustomers.size;
 
       // Calculate conversion rate: (count of opportunities excluding "Proposal Required" / count of confirmed sales) * 100
-      const proposalRequiredStage = stages?.find((stage: any) => stage.name === "Proposal Required");
+      // Find ALL stages that contain "proposal required" (case-insensitive)
+      const proposalRequiredStages = stages?.filter((stage: any) => 
+        stage.name.toLowerCase().includes("proposal required")
+      ) || [];
+      const proposalRequiredStageIds = proposalRequiredStages.map((s: any) => s.id);
 
+      // Filter: Must be active (Open) AND stage doesn't contain "proposal required"
       const filteredOpportunities = threeMonthOpps?.filter(
-        (opp: any) => !proposalRequiredStage || opp.stage_id[0] !== proposalRequiredStage.id
+        (opp: any) => opp.active === true && !proposalRequiredStageIds.includes(opp.stage_id[0])
       ) || [];
 
       // Count of opportunities (excluding "Proposal Required")

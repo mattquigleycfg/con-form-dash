@@ -13,6 +13,7 @@ export interface Opportunity {
   probability: number;
   date_deadline: string | false;
   create_date: string;
+  active: boolean;
 }
 
 export const useOdooOpportunities = () => {
@@ -30,7 +31,7 @@ export const useOdooOpportunities = () => {
           method: 'search_read',
           args: [
             [['type', '=', 'opportunity']],
-            ['name', 'partner_id', 'user_id', 'stage_id', 'expected_revenue', 'probability', 'date_deadline', 'create_date']
+            ['name', 'partner_id', 'user_id', 'stage_id', 'expected_revenue', 'probability', 'date_deadline', 'create_date', 'active']
           ]
         }
       });
