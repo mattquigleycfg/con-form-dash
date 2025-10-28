@@ -68,7 +68,7 @@ export const useFilteredMetrics = () => {
   }, []);
 
   const metrics = useMemo<FilteredMetrics>(() => {
-    if (!opportunities.length || isLoading) {
+    if (!allOpportunities?.length || isLoading) {
       return {
         totalRevenue: 0,
         dealsClosed: 0,
@@ -81,24 +81,13 @@ export const useFilteredMetrics = () => {
     const now = new Date();
     const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
 
-    // Filter opportunities from last 3 months
-    const last3MonthsOpportunities = (allOpportunities || opportunities).filter((opp) => {
+    // Use opportunities (already filtered by UI) and apply 3-month date filter
+    const filteredOpportunities = opportunities.filter((opp) => {
       const createDate = new Date(opp.create_date);
       return createDate >= threeMonthsAgo && createDate <= now;
     });
 
-    // Find ALL stages that contain "proposal required" (case-insensitive)
-    const proposalRequiredStages = stages.filter(
-      (stage) => stage.name.toLowerCase().includes("proposal required")
-    );
-    const proposalRequiredStageIds = proposalRequiredStages.map(s => s.id);
-
-    // Filter: Must be active (Open) AND stage doesn't contain "proposal required"
-    const filteredOpportunities = last3MonthsOpportunities.filter(
-      (opp) => opp.active === true && !proposalRequiredStageIds.includes(opp.stage_id[0])
-    );
-
-    // Count of opportunities (excluding "Proposal Required")
+    // Count of opportunities in last 3 months
     const opportunityCount = filteredOpportunities.length;
 
     // Count of confirmed sales
