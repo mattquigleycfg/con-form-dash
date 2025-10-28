@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Upload, Plus, Trash2, RefreshCw } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
@@ -28,6 +28,7 @@ export default function JobCostingDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   const { data: job, isLoading: loadingJob } = useQuery({
     queryKey: ["job", id],
@@ -597,6 +598,28 @@ export default function JobCostingDetail() {
                       }
                       
                       if (expenseLines.length > 0) {
+                        // Wait a moment for mutations to complete
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        // Recalculate job totals
+                        const { data: allCosts } = await supabase
+                          .from("job_non_material_costs")
+                          .select("amount")
+                          .eq("job_id", id);
+
+                        const nonMaterialActual = allCosts?.reduce((sum, cost) => sum + Number(cost.amount), 0) || 0;
+                        
+                        await supabase
+                          .from("jobs")
+                          .update({
+                            non_material_actual: nonMaterialActual,
+                            total_actual: job.material_actual + nonMaterialActual
+                          })
+                          .eq("id", id);
+
+                        queryClient.invalidateQueries({ queryKey: ["jobs"] });
+                        queryClient.invalidateQueries({ queryKey: ["job", id] });
+                        
                         toast.success(`Imported ${expenseLines.length} non-material costs`);
                       } else {
                         toast.info('No new costs to import (all already imported or no cost lines found)');
