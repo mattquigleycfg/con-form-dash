@@ -31,7 +31,7 @@ export const useOdooTeam = () => {
           method: 'search_read',
           args: [
             [['state', 'in', ['sale', 'done']]], // Only confirmed and done orders
-            ['amount_total', 'user_id', 'date_order', 'x_original_confirmation_date']
+            ['amount_total', 'user_id', 'date_order']
           ]
         }
       });
