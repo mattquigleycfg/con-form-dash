@@ -11,12 +11,35 @@ interface KanbanViewProps {
 }
 
 export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: KanbanViewProps) {
+  // Expected stage names as fallback
+  const expectedStageNames = [
+    "Operation paperwork",
+    "Waiting on Information",
+    "Preproduction",
+    "Production",
+    "Ready to Despatch",
+    "Despatched",
+    "Installation",
+    "Rework",
+    "Project Closeout",
+    "Invoice/Completed"
+  ];
+
   // Group jobs by stage
   const jobsByStage = new Map<string, Job[]>();
   
+  // Use fetched stages or fallback to expected names
+  const activeStages = stages.length > 0 ? stages : expectedStageNames.map((name, index) => ({
+    id: index,
+    name,
+    sequence: index,
+    fold: false
+  }));
+  
   // Initialize with all stages
-  stages.forEach(stage => {
-    jobsByStage.set(stage.name, []);
+  activeStages.forEach(stage => {
+    const stageName = typeof stage === 'string' ? stage : stage.name;
+    jobsByStage.set(stageName, []);
   });
   
   // Add unassigned column
@@ -26,10 +49,14 @@ export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: Kanban
   jobs.forEach(job => {
     const stageName = job.project_stage_name || 'Unassigned';
     if (!jobsByStage.has(stageName)) {
+      // If job has a stage not in our list, create it
       jobsByStage.set(stageName, []);
     }
     jobsByStage.get(stageName)!.push(job);
   });
+
+  console.log('Kanban view - Stages:', activeStages.map(s => typeof s === 'string' ? s : s.name));
+  console.log('Kanban view - Jobs by stage:', Array.from(jobsByStage.entries()).map(([stage, jobs]) => `${stage}: ${jobs.length}`));
 
   if (isLoadingStages) {
     return (
@@ -46,7 +73,7 @@ export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: Kanban
   // Render columns in sequence order
   const orderedStages = [
     'Unassigned',
-    ...stages.map(s => s.name)
+    ...activeStages.map(s => typeof s === 'string' ? s : s.name)
   ];
 
   return (

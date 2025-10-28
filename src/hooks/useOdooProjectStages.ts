@@ -41,6 +41,7 @@ export const useOdooProjectStages = () => {
         .filter((stage: OdooProjectStage) => !stage.fold)
         .sort((a: OdooProjectStage, b: OdooProjectStage) => a.sequence - b.sequence);
 
+      console.log(`Fetched ${sortedStages.length} project stages:`, sortedStages.map(s => s.name));
       setStages(sortedStages);
       return sortedStages;
     } catch (error) {
