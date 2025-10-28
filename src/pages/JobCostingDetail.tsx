@@ -72,8 +72,12 @@ export default function JobCostingDetail() {
     notes: "",
   });
 
-  const [newCost, setNewCost] = useState({
-    cost_type: "installation" as const,
+  const [newCost, setNewCost] = useState<{
+    cost_type: "installation" | "freight" | "cranage" | "travel" | "accommodation" | "other";
+    description: string;
+    amount: number;
+  }>({
+    cost_type: "installation",
     description: "",
     amount: 0,
   });
@@ -300,61 +304,21 @@ export default function JobCostingDetail() {
           </Card>
         </div>
 
-        <Tabs defaultValue="budget" className="w-full">
+        <Tabs defaultValue="material" className="w-full">
           <TabsList>
-            <TabsTrigger value="budget">Budget (SO Lines)</TabsTrigger>
-            <TabsTrigger value="bom">BOM (Actual Materials)</TabsTrigger>
-            <TabsTrigger value="costs">Non-Material Costs</TabsTrigger>
+            <TabsTrigger value="material">Material</TabsTrigger>
+            <TabsTrigger value="non-material">Non-Material</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="budget" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Budget Lines from Sales Order</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingBudget ? (
-                  <Skeleton className="h-32 w-full" />
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Product</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead className="text-right">Unit Price</TableHead>
-                        <TableHead className="text-right">Subtotal</TableHead>
-                        <TableHead>Category</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {budgetLines?.map((line) => (
-                        <TableRow key={line.id}>
-                          <TableCell className="font-medium">{line.product_name}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{line.product_type}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right">{line.quantity}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(line.unit_price)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(line.subtotal)}</TableCell>
-                          <TableCell>
-                            <Badge variant={line.cost_category === 'material' ? 'default' : 'secondary'}>
-                              {line.cost_category === 'material' ? 'Material' : 'Non-Material'}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="bom" className="space-y-4">
+          <TabsContent value="material" className="space-y-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Bill of Materials (Actual Costs)</CardTitle>
+                <div>
+                  <CardTitle>Material Budget & BOM</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Budget: {formatCurrency(job.material_budget)} | Actual: {formatCurrency(job.material_actual)}
+                  </p>
+                </div>
                 <div className="flex gap-2">
                   <input
                     ref={fileInputRef}
@@ -369,18 +333,18 @@ export default function JobCostingDetail() {
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <Upload className="mr-2 h-4 w-4" />
-                    Import CSV
+                    Import BOM CSV
                   </Button>
                   <Dialog open={isAddBOMOpen} onOpenChange={setIsAddBOMOpen}>
                     <DialogTrigger asChild>
                       <Button size="sm">
                         <Plus className="mr-2 h-4 w-4" />
-                        Add Line
+                        Add Material
                       </Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle>Add BOM Line</DialogTitle>
+                        <DialogTitle>Add Material Line</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
                         <div className="space-y-2">
@@ -444,68 +408,105 @@ export default function JobCostingDetail() {
                             onChange={(e) => setNewBOM({ ...newBOM, notes: e.target.value })}
                           />
                         </div>
-                        <Button onClick={handleAddBOM} className="w-full">Add BOM Line</Button>
+                        <Button onClick={handleAddBOM} className="w-full">Add Material Line</Button>
                       </div>
                     </DialogContent>
                   </Dialog>
                 </div>
               </CardHeader>
               <CardContent>
-                {loadingBOM ? (
-                  <Skeleton className="h-32 w-full" />
-                ) : !bomLines || bomLines.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No BOM lines yet. Add lines manually or import from CSV.
+                <div className="space-y-6">
+                  {/* Budget Lines */}
+                  <div>
+                    <h3 className="font-semibold mb-3 text-sm">Budget (From Sales Order)</h3>
+                    {loadingBudget ? (
+                      <Skeleton className="h-32 w-full" />
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Product</TableHead>
+                            <TableHead className="text-right">Quantity</TableHead>
+                            <TableHead className="text-right">Unit Price</TableHead>
+                            <TableHead className="text-right">Subtotal</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {budgetLines?.filter(line => line.cost_category === 'material').map((line) => (
+                            <TableRow key={line.id}>
+                              <TableCell className="font-medium">{line.product_name}</TableCell>
+                              <TableCell className="text-right">{line.quantity}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(line.unit_price)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(line.subtotal)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
                   </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Product</TableHead>
-                        <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead className="text-right">Unit Cost</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead>Notes</TableHead>
-                        <TableHead></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {bomLines.map((line) => (
-                        <TableRow key={line.id}>
-                          <TableCell className="font-medium">{line.product_name}</TableCell>
-                          <TableCell className="text-right">{line.quantity}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(line.unit_cost)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(line.total_cost)}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{line.notes}</TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteBOMLine(line.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-right font-bold">Total Material Costs:</TableCell>
-                        <TableCell className="text-right font-bold">
-                          {formatCurrency(bomLines.reduce((sum, line) => sum + line.total_cost, 0))}
-                        </TableCell>
-                        <TableCell colSpan={2}></TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                )}
+
+                  {/* BOM Actuals */}
+                  <div>
+                    <h3 className="font-semibold mb-3 text-sm">Actual Materials (BOM)</h3>
+                    {loadingBOM ? (
+                      <Skeleton className="h-32 w-full" />
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Product</TableHead>
+                            <TableHead className="text-right">Quantity</TableHead>
+                            <TableHead className="text-right">Unit Cost</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="w-[50px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {bomLines?.map((line) => (
+                            <TableRow key={line.id}>
+                              <TableCell>
+                                <div className="font-medium">{line.product_name}</div>
+                                {line.notes && (
+                                  <div className="text-xs text-muted-foreground">{line.notes}</div>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">{line.quantity}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(line.unit_cost)}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency(line.total_cost)}</TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm("Delete this BOM line?")) {
+                                      deleteBOMLine(line.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="costs" className="space-y-4">
+          <TabsContent value="non-material" className="space-y-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Non-Material Costs Breakdown</CardTitle>
+                <div>
+                  <CardTitle>Non-Material Costs</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Budget: {formatCurrency(job.non_material_budget)} | Actual: {formatCurrency(job.non_material_actual)}
+                  </p>
+                </div>
                 <Dialog open={isAddCostOpen} onOpenChange={setIsAddCostOpen}>
                   <DialogTrigger asChild>
                     <Button size="sm">
@@ -522,7 +523,7 @@ export default function JobCostingDetail() {
                         <Label>Cost Type *</Label>
                         <Select
                           value={newCost.cost_type}
-                          onValueChange={(value: any) => setNewCost({ ...newCost, cost_type: value })}
+                          onValueChange={(value: typeof newCost.cost_type) => setNewCost({ ...newCost, cost_type: value })}
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -531,8 +532,8 @@ export default function JobCostingDetail() {
                             <SelectItem value="installation">Installation</SelectItem>
                             <SelectItem value="freight">Freight</SelectItem>
                             <SelectItem value="cranage">Cranage</SelectItem>
-                            <SelectItem value="travel">Travel</SelectItem>
                             <SelectItem value="accommodation">Accommodation</SelectItem>
+                            <SelectItem value="travel">Travel</SelectItem>
                             <SelectItem value="other">Other</SelectItem>
                           </SelectContent>
                         </Select>
@@ -558,61 +559,93 @@ export default function JobCostingDetail() {
                 </Dialog>
               </CardHeader>
               <CardContent>
-                {loadingCosts ? (
-                  <Skeleton className="h-32 w-full" />
-                ) : !costs || costs.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No non-material costs recorded yet.
+                <div className="space-y-6">
+                  {/* Budget Lines */}
+                  <div>
+                    <h3 className="font-semibold mb-3 text-sm">Budget (From Sales Order)</h3>
+                    {loadingBudget ? (
+                      <Skeleton className="h-32 w-full" />
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Service</TableHead>
+                            <TableHead className="text-right">Quantity</TableHead>
+                            <TableHead className="text-right">Unit Price</TableHead>
+                            <TableHead className="text-right">Subtotal</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {budgetLines?.filter(line => line.cost_category === 'non_material').length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center text-muted-foreground">
+                                No non-material budget items
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            budgetLines?.filter(line => line.cost_category === 'non_material').map((line) => (
+                              <TableRow key={line.id}>
+                                <TableCell className="font-medium">{line.product_name}</TableCell>
+                                <TableCell className="text-right">{line.quantity}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(line.unit_price)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(line.subtotal)}</TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    )}
                   </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                        <TableHead>Source</TableHead>
-                        <TableHead></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {costs.map((cost) => (
-                        <TableRow key={cost.id}>
-                          <TableCell>
-                            <Badge variant="outline">{cost.cost_type}</Badge>
-                          </TableCell>
-                          <TableCell>{cost.description}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(cost.amount)}</TableCell>
-                          <TableCell>
-                            {cost.is_from_odoo ? (
-                              <Badge variant="secondary">Odoo</Badge>
-                            ) : (
-                              <Badge>Manual</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {!cost.is_from_odoo && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => deleteCost(cost.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow>
-                        <TableCell colSpan={2} className="text-right font-bold">Total Non-Material Costs:</TableCell>
-                        <TableCell className="text-right font-bold">
-                          {formatCurrency(costs.reduce((sum, cost) => sum + cost.amount, 0))}
-                        </TableCell>
-                        <TableCell colSpan={2}></TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                )}
+
+                  {/* Actual Costs by Category */}
+                  {['installation', 'freight', 'cranage', 'accommodation', 'travel', 'other'].map((type) => {
+                    const typeCosts = costs?.filter(c => c.cost_type === type) || [];
+                    if (typeCosts.length === 0) return null;
+
+                    return (
+                      <div key={type}>
+                        <h3 className="font-semibold mb-3 text-sm capitalize">{type}</h3>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Description</TableHead>
+                              <TableHead className="text-right">Amount</TableHead>
+                              <TableHead className="w-[50px]"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {typeCosts.map((cost) => (
+                              <TableRow key={cost.id}>
+                                <TableCell>{cost.description || "-"}</TableCell>
+                                <TableCell className="text-right font-medium">{formatCurrency(cost.amount)}</TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (confirm("Delete this cost?")) {
+                                        deleteCost(cost.id);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    );
+                  })}
+
+                  {(!costs || costs.length === 0) && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No non-material costs added yet. Click "Add Cost" to start tracking.
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
