@@ -19,6 +19,9 @@ export interface Job {
   status: string;
   created_at: string;
   updated_at: string;
+  opportunity_name?: string;
+  project_manager_name?: string;
+  sales_person_name?: string;
 }
 
 export const useJobs = () => {

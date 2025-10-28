@@ -214,7 +214,10 @@ export type Database = {
           non_material_actual: number
           non_material_budget: number
           odoo_sale_order_id: number
+          opportunity_name: string | null
+          project_manager_name: string | null
           sale_order_name: string
+          sales_person_name: string | null
           status: string
           total_actual: number
           total_budget: number
@@ -232,7 +235,10 @@ export type Database = {
           non_material_actual?: number
           non_material_budget?: number
           odoo_sale_order_id: number
+          opportunity_name?: string | null
+          project_manager_name?: string | null
           sale_order_name: string
+          sales_person_name?: string | null
           status?: string
           total_actual?: number
           total_budget?: number
@@ -250,7 +256,10 @@ export type Database = {
           non_material_actual?: number
           non_material_budget?: number
           odoo_sale_order_id?: number
+          opportunity_name?: string | null
+          project_manager_name?: string | null
           sale_order_name?: string
+          sales_person_name?: string | null
           status?: string
           total_actual?: number
           total_budget?: number

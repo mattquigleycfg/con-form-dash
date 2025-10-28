@@ -13,6 +13,7 @@ export interface SalesOrder {
   user_id: [number, string] | false;
   team_id: [number, string] | false;
   analytic_account_id: [number, string] | false;
+  opportunity_id: [number, string] | false;
 }
 
 export const useOdooSalesOrders = () => {
@@ -37,14 +38,14 @@ export const useOdooSalesOrders = () => {
         odooFilters.push(['date_order', '<=', filters.dateRange.endDate.toISOString()]);
       }
 
-      // Fetch sales orders including analytic_account_id
+      // Fetch sales orders including analytic_account_id and opportunity_id
       const { data: orders, error } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order',
           method: 'search_read',
           args: [
             odooFilters,
-            ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state', 'user_id', 'team_id', 'analytic_account_id']
+            ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state', 'user_id', 'team_id', 'analytic_account_id', 'opportunity_id']
           ]
         }
       });

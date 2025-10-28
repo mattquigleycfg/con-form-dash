@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Download, RefreshCw, Search } from "lucide-react";
 import { useJobs } from "@/hooks/useJobs";
 import { useNavigate } from "react-router-dom";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -24,11 +25,27 @@ export default function JobCosting() {
   const { user } = useAuth();
   const { salesOrders, isLoading: loadingSalesOrders } = useOdooSalesOrders();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   
   // Compute last-month confirmed orders from available sales orders
   const oneMonthAgo = new Date();
   oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
   const recentSalesOrders = (salesOrders || []).filter(order => new Date(order.date_order) >= oneMonthAgo);
+
+  // Filter jobs based on search term
+  const filteredJobs = useMemo(() => {
+    if (!jobs) return [];
+    if (!searchTerm.trim()) return jobs;
+
+    const search = searchTerm.toLowerCase();
+    return jobs.filter(job => 
+      job.sale_order_name?.toLowerCase().includes(search) ||
+      job.customer_name?.toLowerCase().includes(search) ||
+      job.opportunity_name?.toLowerCase().includes(search) ||
+      job.project_manager_name?.toLowerCase().includes(search) ||
+      job.sales_person_name?.toLowerCase().includes(search)
+    );
+  }, [jobs, searchTerm]);
 
 // Removed INSTALLATION SKU pre-check. We now simply filter by last month's confirmed orders using date_order.
 
@@ -147,7 +164,13 @@ export default function JobCosting() {
         const materialBudget = materialLines.reduce((sum, line) => sum + line.cost_subtotal, 0);
         const nonMaterialBudget = nonMaterialLines.reduce((sum, line) => sum + line.cost_subtotal, 0);
 
-        // Create job with analytic_account_id
+        // Fetch sales person name if available
+        let salesPersonName = null;
+        if (order.user_id && order.user_id[0]) {
+          salesPersonName = order.user_id[1];
+        }
+
+        // Create job with additional search fields
         const { data: job, error: jobError } = await supabase
           .from("jobs")
           .insert([{
@@ -163,6 +186,8 @@ export default function JobCosting() {
             non_material_actual: 0,
             status: 'active',
             analytic_account_id: order.analytic_account_id ? order.analytic_account_id[0] : null,
+            sales_person_name: salesPersonName,
+            opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
           }])
           .select()
           .single();
@@ -215,31 +240,43 @@ export default function JobCosting() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Job Costing</h1>
-            <p className="text-muted-foreground mt-2">
-              Track project budgets and actual costs
-            </p>
+        <div className="space-y-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">Job Costing</h1>
+              <p className="text-muted-foreground mt-2">
+                Track project budgets and actual costs
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => navigate("/job-costing/reports")}>
+                <Download className="mr-2 h-4 w-4" />
+                Reports
+              </Button>
+              <Button onClick={handleAutoSyncAll} disabled={isSyncing || loadingSalesOrders}>
+                {isSyncing ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Auto-Sync from Odoo
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate("/job-costing/reports")}>
-              <Download className="mr-2 h-4 w-4" />
-              Reports
-            </Button>
-            <Button onClick={handleAutoSyncAll} disabled={isSyncing || loadingSalesOrders}>
-              {isSyncing ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Auto-Sync from Odoo
-                </>
-              )}
-            </Button>
+
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by SO number, customer, opportunity, or sales person..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
         </div>
 
@@ -254,22 +291,26 @@ export default function JobCosting() {
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
               </div>
-            ) : !jobs || jobs.length === 0 ? (
+            ) : filteredJobs.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
-                No jobs found. Sync your first job from Odoo to get started.
+                {jobs && jobs.length > 0 ? (
+                  <>No jobs found matching "{searchTerm}"</>
+                ) : (
+                  <>No jobs found. Sync your first job from Odoo to get started.</>
+                )}
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Job Name</TableHead>
+                    <TableHead>Job Details</TableHead>
                     <TableHead className="text-right">Budget</TableHead>
                     <TableHead className="text-right">Actual</TableHead>
                     <TableHead className="w-80">Progress</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {jobs.map((job) => {
+                  {filteredJobs.map((job) => {
                     const percentage = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
                     return (
                       <TableRow 
@@ -278,8 +319,16 @@ export default function JobCosting() {
                         onClick={() => navigate(`/job-costing/${job.id}`)}
                       >
                         <TableCell>
-                          <div className="font-medium">{job.sale_order_name}</div>
-                          <div className="text-sm text-muted-foreground">{job.customer_name}</div>
+                          <div className="space-y-1">
+                            <div className="font-medium">{job.sale_order_name}</div>
+                            <div className="text-sm text-muted-foreground">{job.customer_name}</div>
+                            {job.opportunity_name && (
+                              <div className="text-xs text-muted-foreground">Opp: {job.opportunity_name}</div>
+                            )}
+                            {job.sales_person_name && (
+                              <div className="text-xs text-muted-foreground">Sales: {job.sales_person_name}</div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right font-medium">{formatCurrency(job.total_budget)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(job.total_actual)}</TableCell>
