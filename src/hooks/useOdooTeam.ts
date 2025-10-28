@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useFilters } from "@/contexts/FilterContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface SalesRep {
   id: number;
@@ -17,8 +18,10 @@ export const useOdooTeam = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
+  const [totalTarget, setTotalTarget] = useState<number>(0);
   const { toast } = useToast();
   const { filters } = useFilters();
+  const { user } = useAuth();
 
   const fetchTeamData = async () => {
     setIsLoading(true);
@@ -50,9 +53,29 @@ export const useOdooTeam = () => {
     }
   };
 
+  const fetchTotalTarget = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('monthly_targets')
+        .select('total_sales_target')
+        .order('month_date', { ascending: true });
+      
+      if (error) throw error;
+      
+      // Sum all targets for the year
+      const yearlyTarget = (data || []).reduce((sum, t) => sum + (t.total_sales_target || 0), 0);
+      setTotalTarget(yearlyTarget);
+    } catch (error) {
+      console.error('Error fetching targets:', error);
+    }
+  };
+
   useEffect(() => {
     fetchTeamData();
-  }, []);
+    fetchTotalTarget();
+  }, [user]);
 
   // Apply filters and recalculate sales reps data
   useEffect(() => {
@@ -101,8 +124,9 @@ export const useOdooTeam = () => {
           .toUpperCase()
           .slice(0, 2);
         
-        // Set a default target (can be customized later)
-        const target = 150000;
+        // Calculate individual target based on total target divided by number of reps
+        const numReps = Object.keys(salesByUser).length;
+        const target = totalTarget > 0 && numReps > 0 ? Math.round(totalTarget / numReps) : 0;
         const trend: "up" | "down" = data.revenue >= target ? "up" : "down";
         
         return {
@@ -118,7 +142,7 @@ export const useOdooTeam = () => {
       .sort((a, b) => b.revenue - a.revenue);
 
     setSalesReps(repsArray);
-  }, [allOrders, filters.dateRange]);
+  }, [allOrders, filters.dateRange, totalTarget]);
 
   return { salesReps, isLoading, refetch: fetchTeamData };
 };

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useFilters } from "@/contexts/FilterContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface MonthlyRevenue {
   month: string;
@@ -13,8 +14,10 @@ export const useOdooRevenue = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [revenueData, setRevenueData] = useState<MonthlyRevenue[]>([]);
+  const [monthlyTargets, setMonthlyTargets] = useState<any[]>([]);
   const { toast } = useToast();
   const { filters } = useFilters();
+  const { user } = useAuth();
 
   const fetchRevenueData = async () => {
     setIsLoading(true);
@@ -52,9 +55,26 @@ export const useOdooRevenue = () => {
     }
   };
 
+  const fetchMonthlyTargets = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('monthly_targets')
+        .select('*')
+        .order('month_date', { ascending: true });
+      
+      if (error) throw error;
+      setMonthlyTargets(data || []);
+    } catch (error) {
+      console.error('Error fetching monthly targets:', error);
+    }
+  };
+
   useEffect(() => {
     fetchRevenueData();
-  }, []);
+    fetchMonthlyTargets();
+  }, [user]);
 
   // Apply date filters and aggregate
   useEffect(() => {
@@ -83,18 +103,26 @@ export const useOdooRevenue = () => {
       monthlyData[monthKey] = (monthlyData[monthKey] || 0) + order.amount_total;
     });
 
-    // Create array with all months
+    // Create array with all months, matching with targets from database
     const currentMonth = new Date().getMonth();
     const data: MonthlyRevenue[] = monthNames
       .slice(0, currentMonth + 1)
-      .map((month, index) => ({
-        month,
-        actual: Math.round(monthlyData[month] || 0),
-        target: 50000 + (index * 5000) // Progressive target
-      }));
+      .map((month) => {
+        // Find matching target from monthly_targets table
+        const targetRecord = monthlyTargets.find(t => {
+          const targetMonth = t.month.split('-')[0]; // Extract month part from "Jul-25"
+          return targetMonth === month;
+        });
+        
+        return {
+          month,
+          actual: Math.round(monthlyData[month] || 0),
+          target: targetRecord ? targetRecord.total_sales_target : 0
+        };
+      });
 
     setRevenueData(data);
-  }, [allOrders, filters.dateRange]);
+  }, [allOrders, filters.dateRange, monthlyTargets]);
 
   return { revenueData, isLoading, refetch: fetchRevenueData };
 };
