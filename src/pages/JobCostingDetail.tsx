@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useJobBOM } from "@/hooks/useJobBOM";
 import { useJobNonMaterialCosts } from "@/hooks/useJobNonMaterialCosts";
+import { useOdooAnalyticLines } from "@/hooks/useOdooAnalyticLines";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,6 +59,7 @@ export default function JobCostingDetail() {
 
   const { bomLines, isLoading: loadingBOM, createBOMLine, updateBOMLine, deleteBOMLine, importBOMFromCSV } = useJobBOM(id);
   const { costs, isLoading: loadingCosts, createCost, updateCost, deleteCost } = useJobNonMaterialCosts(id);
+  const { data: analyticLines } = useOdooAnalyticLines(job?.analytic_account_id || undefined);
 
   const [isAddBOMOpen, setIsAddBOMOpen] = useState(false);
   const [isAddCostOpen, setIsAddCostOpen] = useState(false);
@@ -253,6 +255,19 @@ export default function JobCostingDetail() {
 
   const percentage = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
   const remaining = job.total_budget - job.total_actual;
+  const isOverBudget = remaining < 0;
+
+  // Calculate material totals
+  const materialBudgetTotal = budgetLines?.filter(line => line.cost_category === 'material').reduce((sum, line) => sum + line.subtotal, 0) || 0;
+  const materialActualTotal = bomLines?.reduce((sum, line) => sum + line.total_cost, 0) || 0;
+  const materialRemaining = materialBudgetTotal - materialActualTotal;
+  const materialOverBudget = materialRemaining < 0;
+
+  // Calculate non-material totals
+  const nonMaterialBudgetTotal = budgetLines?.filter(line => line.cost_category !== 'material').reduce((sum, line) => sum + line.subtotal, 0) || 0;
+  const nonMaterialActualTotal = costs?.reduce((sum, cost) => sum + cost.amount, 0) || 0;
+  const nonMaterialRemaining = nonMaterialBudgetTotal - nonMaterialActualTotal;
+  const nonMaterialOverBudget = nonMaterialRemaining < 0;
 
   return (
     <DashboardLayout>
@@ -297,8 +312,18 @@ export default function JobCostingDetail() {
               <CardTitle className="text-sm font-medium">Remaining</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(remaining)}</div>
-              <Progress value={percentage} className="mt-2" />
+              <div className={`text-2xl font-bold ${isOverBudget ? 'text-destructive' : 'text-primary'}`}>
+                {formatCurrency(remaining)}
+              </div>
+              <Progress 
+                value={percentage} 
+                className="mt-2"
+                style={{
+                  ['--progress-background' as any]: isOverBudget 
+                    ? 'hsl(var(--destructive))' 
+                    : 'hsl(var(--primary))'
+                }}
+              />
               <div className="text-xs text-muted-foreground mt-1">{percentage.toFixed(1)}% spent</div>
             </CardContent>
           </Card>
@@ -418,7 +443,7 @@ export default function JobCostingDetail() {
                 <div className="space-y-6">
                   {/* Budget Lines */}
                   <div>
-                    <h3 className="font-semibold mb-3 text-sm">Budget (From Sales Order)</h3>
+                    <h3 className="font-semibold mb-3 text-sm">Material Budget (From Sales Order)</h3>
                     {loadingBudget ? (
                       <Skeleton className="h-32 w-full" />
                     ) : (
@@ -427,8 +452,8 @@ export default function JobCostingDetail() {
                           <TableRow>
                             <TableHead>Product</TableHead>
                             <TableHead className="text-right">Quantity</TableHead>
-                            <TableHead className="text-right">Unit Price</TableHead>
-                            <TableHead className="text-right">Subtotal</TableHead>
+                            <TableHead className="text-right">Unit Cost</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -440,6 +465,12 @@ export default function JobCostingDetail() {
                               <TableCell className="text-right">{formatCurrency(line.subtotal)}</TableCell>
                             </TableRow>
                           ))}
+                          <TableRow className={`font-semibold ${materialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
+                            <TableCell colSpan={3}>Remaining</TableCell>
+                            <TableCell className={`text-right ${materialOverBudget ? 'text-destructive' : 'text-primary'}`}>
+                              {formatCurrency(materialRemaining)}
+                            </TableCell>
+                          </TableRow>
                         </TableBody>
                       </Table>
                     )}
@@ -447,7 +478,7 @@ export default function JobCostingDetail() {
 
                   {/* BOM Actuals */}
                   <div>
-                    <h3 className="font-semibold mb-3 text-sm">Actual Materials (BOM)</h3>
+                    <h3 className="font-semibold mb-3 text-sm">BOM</h3>
                     {loadingBOM ? (
                       <Skeleton className="h-32 w-full" />
                     ) : (
@@ -489,6 +520,13 @@ export default function JobCostingDetail() {
                               </TableCell>
                             </TableRow>
                           ))}
+                          <TableRow className={`font-semibold ${materialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
+                            <TableCell colSpan={3}>Remaining</TableCell>
+                            <TableCell className={`text-right ${materialOverBudget ? 'text-destructive' : 'text-primary'}`}>
+                              {formatCurrency(materialRemaining)}
+                            </TableCell>
+                            <TableCell></TableCell>
+                          </TableRow>
                         </TableBody>
                       </Table>
                     )}
@@ -507,8 +545,52 @@ export default function JobCostingDetail() {
                     Budget: {formatCurrency(job.non_material_budget)} | Actual: {formatCurrency(job.non_material_actual)}
                   </p>
                 </div>
-                <Dialog open={isAddCostOpen} onOpenChange={setIsAddCostOpen}>
-                  <DialogTrigger asChild>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (!analyticLines || !id) return;
+                      
+                      toast.info("Importing non-material costs from analytic account...");
+                      
+                      // Filter for expense-type analytic lines (negative amounts are costs)
+                      const expenseLines = analyticLines.filter(line => 
+                        line.amount < 0 && line.product_id && line.product_id[0]
+                      );
+                      
+                      for (const line of expenseLines) {
+                        const productName = line.product_id ? line.product_id[1] : '';
+                        const amount = Math.abs(line.amount);
+                        
+                        // Determine cost type based on product name
+                        let costType: "installation" | "freight" | "cranage" | "travel" | "accommodation" | "other" = "other";
+                        const nameUpper = productName.toUpperCase();
+                        
+                        if (nameUpper.includes('INSTALLATION')) costType = 'installation';
+                        else if (nameUpper.includes('FREIGHT')) costType = 'freight';
+                        else if (nameUpper.includes('CRANAGE')) costType = 'cranage';
+                        else if (nameUpper.includes('ACCOMMODATION')) costType = 'accommodation';
+                        else if (nameUpper.includes('TRAVEL')) costType = 'travel';
+                        
+                        createCost({
+                          job_id: id,
+                          cost_type: costType,
+                          description: line.name || productName,
+                          amount: amount,
+                          is_from_odoo: true,
+                        });
+                      }
+                      
+                      toast.success(`Imported ${expenseLines.length} non-material costs`);
+                    }}
+                    disabled={!analyticLines || analyticLines.length === 0}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Import from Analytic
+                  </Button>
+                  <Dialog open={isAddCostOpen} onOpenChange={setIsAddCostOpen}>
+                    <DialogTrigger asChild>
                     <Button size="sm">
                       <Plus className="mr-2 h-4 w-4" />
                       Add Cost
@@ -556,7 +638,8 @@ export default function JobCostingDetail() {
                       <Button onClick={handleAddCost} className="w-full">Add Cost</Button>
                     </div>
                   </DialogContent>
-                </Dialog>
+                  </Dialog>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
@@ -571,19 +654,19 @@ export default function JobCostingDetail() {
                           <TableRow>
                             <TableHead>Service</TableHead>
                             <TableHead className="text-right">Quantity</TableHead>
-                            <TableHead className="text-right">Unit Price</TableHead>
-                            <TableHead className="text-right">Subtotal</TableHead>
+                            <TableHead className="text-right">Unit Cost</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {budgetLines?.filter(line => line.cost_category === 'non_material').length === 0 ? (
+                          {budgetLines?.filter(line => line.cost_category !== 'material').length === 0 ? (
                             <TableRow>
                               <TableCell colSpan={4} className="text-center text-muted-foreground">
                                 No non-material budget items
                               </TableCell>
                             </TableRow>
                           ) : (
-                            budgetLines?.filter(line => line.cost_category === 'non_material').map((line) => (
+                            budgetLines?.filter(line => line.cost_category !== 'material').map((line) => (
                               <TableRow key={line.id}>
                                 <TableCell className="font-medium">{line.product_name}</TableCell>
                                 <TableCell className="text-right">{line.quantity}</TableCell>
@@ -592,19 +675,26 @@ export default function JobCostingDetail() {
                               </TableRow>
                             ))
                           )}
+                          <TableRow className={`font-semibold ${nonMaterialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
+                            <TableCell colSpan={3}>Remaining</TableCell>
+                            <TableCell className={`text-right ${nonMaterialOverBudget ? 'text-destructive' : 'text-primary'}`}>
+                              {formatCurrency(nonMaterialRemaining)}
+                            </TableCell>
+                          </TableRow>
                         </TableBody>
                       </Table>
                     )}
                   </div>
 
                   {/* Actual Costs by Category */}
+                  <h3 className="font-semibold text-sm">Actual</h3>
                   {['installation', 'freight', 'cranage', 'accommodation', 'travel', 'other'].map((type) => {
                     const typeCosts = costs?.filter(c => c.cost_type === type) || [];
                     if (typeCosts.length === 0) return null;
 
                     return (
                       <div key={type}>
-                        <h3 className="font-semibold mb-3 text-sm capitalize">{type}</h3>
+                        <h4 className="font-medium mb-2 text-sm capitalize text-muted-foreground">{type}</h4>
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -616,21 +706,28 @@ export default function JobCostingDetail() {
                           <TableBody>
                             {typeCosts.map((cost) => (
                               <TableRow key={cost.id}>
-                                <TableCell>{cost.description || "-"}</TableCell>
+                                <TableCell>
+                                  {cost.description || "-"}
+                                  {cost.is_from_odoo && (
+                                    <Badge variant="outline" className="ml-2 text-xs">Odoo</Badge>
+                                  )}
+                                </TableCell>
                                 <TableCell className="text-right font-medium">{formatCurrency(cost.amount)}</TableCell>
                                 <TableCell>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (confirm("Delete this cost?")) {
-                                        deleteCost(cost.id);
-                                      }
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  {!cost.is_from_odoo && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirm("Delete this cost?")) {
+                                          deleteCost(cost.id);
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             ))}
