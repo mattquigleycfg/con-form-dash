@@ -554,14 +554,28 @@ export default function JobCostingDetail() {
                       
                       toast.info("Importing non-material costs from analytic account...");
                       
-                      // Filter for expense-type analytic lines (negative amounts are costs)
-                      const expenseLines = analyticLines.filter(line => 
-                        line.amount < 0 && line.product_id && line.product_id[0]
-                      );
+                      console.log('Analytic lines:', analyticLines);
+                      
+                      // Check existing costs to avoid duplicates
+                      const { data: existingCosts } = await supabase
+                        .from('job_non_material_costs')
+                        .select('description')
+                        .eq('job_id', id)
+                        .eq('is_from_odoo', true);
+                      
+                      const existingDescriptions = new Set(existingCosts?.map(c => c.description) || []);
+                      
+                      // Filter for lines with costs (checking both negative and positive amounts)
+                      const expenseLines = analyticLines.filter(line => {
+                        const lineDescription = `${line.name} (${line.date})`;
+                        return line.amount !== 0 && !existingDescriptions.has(lineDescription);
+                      });
+                      
+                      console.log(`Found ${expenseLines.length} new expense lines to import`);
                       
                       for (const line of expenseLines) {
                         const productName = line.product_id ? line.product_id[1] : '';
-                        const amount = Math.abs(line.amount);
+                        const amount = Math.abs(line.amount); // Always use absolute value
                         
                         // Determine cost type based on product name
                         let costType: "installation" | "freight" | "cranage" | "travel" | "accommodation" | "other" = "other";
@@ -576,13 +590,17 @@ export default function JobCostingDetail() {
                         createCost({
                           job_id: id,
                           cost_type: costType,
-                          description: line.name || productName,
+                          description: `${line.name} (${line.date})`,
                           amount: amount,
                           is_from_odoo: true,
                         });
                       }
                       
-                      toast.success(`Imported ${expenseLines.length} non-material costs`);
+                      if (expenseLines.length > 0) {
+                        toast.success(`Imported ${expenseLines.length} non-material costs`);
+                      } else {
+                        toast.info('No new costs to import (all already imported or no cost lines found)');
+                      }
                     }}
                     disabled={!analyticLines || analyticLines.length === 0}
                   >
