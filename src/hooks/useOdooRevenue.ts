@@ -80,11 +80,10 @@ export const useOdooRevenue = () => {
   useEffect(() => {
     let filteredOrders = [...allOrders];
 
-    // Apply date range filter using original confirmation date (try both field names)
+    // Apply date range filter using date_order only
     if (filters.dateRange.startDate && filters.dateRange.endDate) {
       filteredOrders = filteredOrders.filter((order) => {
-        const confirmDate = order.original_confirmation_date || order.x_original_confirmation_date || order.date_order;
-        const orderDate = new Date(confirmDate);
+        const orderDate = new Date(order.date_order);
         return (
           orderDate >= filters.dateRange.startDate! &&
           orderDate <= filters.dateRange.endDate!
@@ -92,13 +91,12 @@ export const useOdooRevenue = () => {
       });
     }
 
-    // Aggregate by month using original confirmation date (try both field names)
+    // Aggregate by month using date_order only
     const monthlyData: Record<string, number> = {};
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     filteredOrders.forEach((order: any) => {
-      const confirmDate = order.original_confirmation_date || order.x_original_confirmation_date || order.date_order;
-      const date = new Date(confirmDate);
+      const date = new Date(order.date_order);
       const monthKey = monthNames[date.getMonth()];
       monthlyData[monthKey] = (monthlyData[monthKey] || 0) + order.amount_total;
     });

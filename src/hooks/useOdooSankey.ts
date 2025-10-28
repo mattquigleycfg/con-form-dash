@@ -69,8 +69,7 @@ export const useOdooSankey = () => {
       let filteredOrders = orders || [];
       if (dateFilter && filteredOrders.length > 0) {
         filteredOrders = filteredOrders.filter((order: any) => {
-          const confirmDate = order.original_confirmation_date || order.x_original_confirmation_date || order.date_order;
-          return confirmDate >= dateFilter && (!endDateFilter || confirmDate <= endDateFilter);
+          return order.date_order >= dateFilter && (!endDateFilter || order.date_order <= endDateFilter);
         });
       }
 

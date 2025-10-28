@@ -96,11 +96,10 @@ export const useOdooSalesByRegion = () => {
   useEffect(() => {
     let filteredOrders = [...allOrders];
 
-    // Apply date range filter using original confirmation date (try both field names)
+    // Apply date range filter using date_order only
     if (filters.dateRange.startDate && filters.dateRange.endDate) {
       filteredOrders = filteredOrders.filter((order) => {
-        const confirmDate = order.original_confirmation_date || order.x_original_confirmation_date || order.date_order;
-        const orderDate = new Date(confirmDate);
+        const orderDate = new Date(order.date_order);
         return (
           orderDate >= filters.dateRange.startDate! &&
           orderDate <= filters.dateRange.endDate!
