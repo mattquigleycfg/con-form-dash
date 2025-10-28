@@ -68,12 +68,12 @@ export function YTDPerformanceChart() {
           >
             <defs>
               <linearGradient id="colorTarget" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                <stop offset="5%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.6}/>
+                <stop offset="95%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.2}/>
               </linearGradient>
               <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0.3}/>
+                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted/20" />

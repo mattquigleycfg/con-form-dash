@@ -14,6 +14,13 @@ const COLORS = [
 export function PipelineChart() {
   const { pipelineData, isLoading } = useOdooPipeline();
 
+  // Cap values at 500 for display while preserving original for tooltip
+  const cappedData = pipelineData.map(item => ({
+    ...item,
+    displayCount: Math.min(item.count, 500),
+    actualCount: item.count
+  }));
+
   if (isLoading) {
     return (
       <Card className="shadow-card h-full flex flex-col">
@@ -47,13 +54,14 @@ export function PipelineChart() {
     </CardHeader>
     <CardContent className="flex-1 min-h-0">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={pipelineData} layout="vertical">
+        <BarChart data={cappedData} layout="vertical">
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis
             type="number"
             stroke="hsl(var(--muted-foreground))"
             fontSize={12}
             tickLine={false}
+            domain={[0, 500]}
           />
           <YAxis
             type="category"
@@ -69,15 +77,18 @@ export function PipelineChart() {
               border: "1px solid hsl(var(--border))",
               borderRadius: "8px",
             }}
-            formatter={(value: number, name: string) => {
+            formatter={(value: number, name: string, props: any) => {
+              if (name === "displayCount") {
+                return [props.payload.actualCount, "Count"];
+              }
               if (name === "value") {
                 return [`$${value.toLocaleString()}`, "Total Value"];
               }
               return [value, "Count"];
             }}
           />
-          <Bar dataKey="count" radius={[0, 8, 8, 0]}>
-            {pipelineData.map((entry, index) => (
+          <Bar dataKey="displayCount" radius={[0, 8, 8, 0]}>
+            {cappedData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Bar>
