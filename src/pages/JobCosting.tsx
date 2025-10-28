@@ -194,22 +194,49 @@ export default function JobCosting() {
                 method: "search_read",
                 args: [
                   [["analytic_account_id", "=", order.analytic_account_id[0]]],
-                  ["id", "name", "stage_id"],
-                  0,
-                  1,
+                  ["id", "name"],
                 ],
               },
             });
 
-            if (projects && projects.length > 0 && projects[0].stage_id) {
-              projectStageId = projects[0].stage_id[0];
-              projectStageName = projects[0].stage_id[1];
-              logger.info(`Found project stage for SO ${order.name}: ${projectStageName}`);
+            if (projects && projects.length > 0) {
+              const projectId = projects[0].id;
+              
+              // Find tasks for this project to get the actual task stage
+              const { data: tasks } = await supabase.functions.invoke("odoo-query", {
+                body: {
+                  model: "project.task",
+                  method: "search_read",
+                  args: [
+                    [
+                      ["project_id", "=", projectId],
+                      ["active", "=", true],
+                    ],
+                    ["id", "name", "stage_id", "priority"],
+                  ],
+                },
+              });
+
+              if (tasks && tasks.length > 0) {
+                // Get primary task (highest priority, most recent)
+                const mainTask = tasks.sort((a: any, b: any) => {
+                  if (a.priority !== b.priority) return b.priority - a.priority;
+                  return b.id - a.id;
+                })[0];
+
+                if (mainTask.stage_id && mainTask.stage_id[0]) {
+                  projectStageId = mainTask.stage_id[0];
+                  projectStageName = mainTask.stage_id[1];
+                  logger.info(`Found task stage for SO ${order.name}: ${projectStageName}`);
+                }
+              } else {
+                logger.info(`No tasks found for project ${projectId}, using Unassigned`);
+              }
             } else {
-              logger.info(`No project stage found for SO ${order.name}, using Unassigned`);
+              logger.info(`No project found for SO ${order.name}, using Unassigned`);
             }
           } catch (error) {
-            logger.error(`Error fetching project stage for SO ${order.name}:`, error);
+            logger.error(`Error fetching task stage for SO ${order.name}:`, error);
           }
         }
 
@@ -301,28 +328,58 @@ export default function JobCosting() {
               method: "search_read",
               args: [
                 [["analytic_account_id", "=", job.analytic_account_id]],
-                ["id", "name", "stage_id"],
-                0,
-                1,
+                ["id", "name"],
               ],
             },
           });
 
-          if (projects && projects.length > 0 && projects[0].stage_id) {
-            const projectStageId = projects[0].stage_id[0];
-            const projectStageName = projects[0].stage_id[1];
+          if (!projects || projects.length === 0) {
+            logger.info(`No project found for ${job.sale_order_name}`);
+            continue;
+          }
 
-            // Update job stage
-            await supabase
-              .from("jobs")
-              .update({
-                project_stage_id: projectStageId,
-                project_stage_name: projectStageName,
-              })
-              .eq("id", job.id);
+          const projectId = projects[0].id;
 
-            logger.info(`Updated stage for ${job.sale_order_name}: ${projectStageName}`);
-            updatedCount++;
+          // Find tasks for this project
+          const { data: tasks } = await supabase.functions.invoke("odoo-query", {
+            body: {
+              model: "project.task",
+              method: "search_read",
+              args: [
+                [
+                  ["project_id", "=", projectId],
+                  ["active", "=", true],
+                ],
+                ["id", "name", "stage_id", "priority", "kanban_state"],
+              ],
+            },
+          });
+
+          if (tasks && tasks.length > 0) {
+            // Get the primary task (highest priority, most recent)
+            const mainTask = tasks.sort((a: any, b: any) => {
+              if (a.priority !== b.priority) {
+                return b.priority - a.priority;
+              }
+              return b.id - a.id;
+            })[0];
+
+            if (mainTask.stage_id && mainTask.stage_id[0]) {
+              const taskStageId = mainTask.stage_id[0];
+              const taskStageName = mainTask.stage_id[1];
+
+              // Update job with task stage
+              await supabase
+                .from("jobs")
+                .update({
+                  project_stage_id: taskStageId,
+                  project_stage_name: taskStageName,
+                })
+                .eq("id", job.id);
+
+              logger.info(`Updated stage for ${job.sale_order_name}: ${taskStageName}`);
+              updatedCount++;
+            }
           }
         } catch (error) {
           logger.error(`Error refreshing stage for job ${job.sale_order_name}:`, error);
@@ -331,7 +388,6 @@ export default function JobCosting() {
 
       if (updatedCount > 0) {
         toast.success(`Updated stages for ${updatedCount} job(s)!`);
-        // Refresh jobs data
         queryClient.invalidateQueries({ queryKey: ["jobs"] });
       } else {
         toast.info("No stage updates needed");
