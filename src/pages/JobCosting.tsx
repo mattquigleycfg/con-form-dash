@@ -46,10 +46,12 @@ export default function JobCosting() {
     localStorage.setItem('job-costing-view-mode', view);
   }, [view]);
   
-  // Compute last-month confirmed orders from available sales orders
-  const oneMonthAgo = new Date();
-  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-  const recentSalesOrders = (salesOrders || []).filter(order => new Date(order.date_order) >= oneMonthAgo);
+  // Compute confirmed orders from date range period (default: last 3 months)
+  const relevantSalesOrders = (salesOrders || []).filter(order => {
+    if (!dateRange) return true;
+    const orderDate = new Date(order.date_order);
+    return orderDate >= dateRange.start && orderDate <= dateRange.end;
+  });
 
   // Apply all filters using the filtering hook
   const filteredJobs = useJobFiltering(jobs, { dateRange, budgetSort, searchTerm });
@@ -57,8 +59,8 @@ export default function JobCosting() {
 // Removed INSTALLATION SKU pre-check. We now simply filter by last month's confirmed orders using date_order.
 
   const handleAutoSyncAll = async () => {
-    if (!recentSalesOrders.length || !user) {
-      toast.error("No recent sales orders to sync");
+    if (!relevantSalesOrders.length || !user) {
+      toast.error("No sales orders in selected date range to sync");
       return;
     }
 
@@ -66,7 +68,7 @@ export default function JobCosting() {
     try {
       let syncedCount = 0;
       
-      for (const order of recentSalesOrders) {
+      for (const order of relevantSalesOrders) {
         // Check if already synced
         const { data: existingJob } = await supabase
           .from("jobs")
