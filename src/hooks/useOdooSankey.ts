@@ -59,18 +59,18 @@ export const useOdooSankey = () => {
           method: 'search_read',
           args: [
             orderFilters,
-            ['id', 'name', 'user_id', 'amount_total', 'x_original_confirmation_date', 'date_order']
+            ['id', 'name', 'user_id', 'amount_total', 'original_confirmation_date', 'x_original_confirmation_date', 'date_order']
           ]
         }
       });
 
       if (orderError) throw orderError;
 
-      // Filter locally by date using original confirmation date or date_order as fallback
+      // Filter locally by date using original confirmation date (try both field names) or date_order as fallback
       let filteredOrders = orders || [];
       if (dateFilter && filteredOrders.length > 0) {
         filteredOrders = filteredOrders.filter((order: any) => {
-          const confirmDate = order.x_original_confirmation_date || order.date_order;
+          const confirmDate = order.original_confirmation_date || order.x_original_confirmation_date || order.date_order;
           return confirmDate >= dateFilter && (!endDateFilter || confirmDate <= endDateFilter);
         });
       }

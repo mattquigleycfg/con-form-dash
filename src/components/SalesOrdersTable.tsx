@@ -85,9 +85,9 @@ export function SalesOrdersTable({ orders, isLoading }: SalesOrdersTableProps) {
                     </TableCell>
                     <TableCell>{formatDate(order.date_order)}</TableCell>
                     <TableCell>
-                      {order.x_original_confirmation_date ? (
+                      {(order.original_confirmation_date || order.x_original_confirmation_date) ? (
                         <span className="text-primary font-medium">
-                          {formatDate(order.x_original_confirmation_date)}
+                          {formatDate(order.original_confirmation_date || order.x_original_confirmation_date || order.date_order)}
                         </span>
                       ) : (
                         <span className="text-muted-foreground italic">

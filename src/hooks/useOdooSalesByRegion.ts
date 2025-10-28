@@ -39,7 +39,7 @@ export const useOdooSalesByRegion = () => {
           method: 'search_read',
           args: [
             [['state', 'in', ['sale', 'done']]],
-            ['amount_total', 'date_order', 'x_original_confirmation_date', 'partner_id']
+            ['amount_total', 'date_order', 'original_confirmation_date', 'x_original_confirmation_date', 'partner_id']
           ]
         }
       });
@@ -99,10 +99,10 @@ export const useOdooSalesByRegion = () => {
   useEffect(() => {
     let filteredOrders = [...allOrders];
 
-    // Apply date range filter using original confirmation date
+    // Apply date range filter using original confirmation date (try both field names)
     if (filters.dateRange.startDate && filters.dateRange.endDate) {
       filteredOrders = filteredOrders.filter((order) => {
-        const confirmDate = order.x_original_confirmation_date || order.date_order;
+        const confirmDate = order.original_confirmation_date || order.x_original_confirmation_date || order.date_order;
         const orderDate = new Date(confirmDate);
         return (
           orderDate >= filters.dateRange.startDate! &&
