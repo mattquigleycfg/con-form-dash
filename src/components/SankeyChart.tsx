@@ -35,22 +35,37 @@ export function SankeyChart() {
     <Card className="shadow-card h-full flex flex-col">
       <CardHeader>
         <CardTitle>Sales Performance Flow</CardTitle>
-        <p className="text-sm text-muted-foreground">Sales Reps → Products Sold</p>
+        <p className="text-sm text-muted-foreground">Revenue breakdown by sales team and products</p>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
           <Sankey
             data={sankeyData}
-            node={{ fill: "hsl(var(--primary))", fillOpacity: 0.8 }}
-            link={{ stroke: "hsl(var(--muted-foreground))", strokeOpacity: 0.3 }}
-            nodePadding={24}
-            margin={{ top: 8, right: 16, bottom: 8, left: 16 }}
+            node={{ 
+              fill: "hsl(142, 76%, 36%)", 
+              fillOpacity: 0.9,
+              stroke: "hsl(142, 76%, 26%)",
+              strokeWidth: 2
+            }}
+            link={{ 
+              stroke: "hsl(142, 76%, 36%)", 
+              strokeOpacity: 0.4,
+              fill: "none"
+            }}
+            nodePadding={32}
+            nodeWidth={20}
+            margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
           >
             <Tooltip
               contentStyle={{
                 backgroundColor: "hsl(var(--card))",
                 border: "1px solid hsl(var(--border))",
                 borderRadius: "8px",
+                padding: "12px",
+              }}
+              itemStyle={{
+                color: "hsl(var(--foreground))",
+                fontSize: "14px"
               }}
             />
           </Sankey>

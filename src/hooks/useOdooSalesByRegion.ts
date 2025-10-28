@@ -80,12 +80,9 @@ export const useOdooSalesByRegion = () => {
       return enrichedOrders;
     } catch (error) {
       console.error('Regional sales sync error:', error);
-      toast({
-        title: "Regional sales sync failed",
-        description: error instanceof Error ? error.message : "Failed to sync regional sales data",
-        variant: "destructive",
-      });
-      throw error;
+      // Don't show toast on every error - user may not have Odoo configured yet
+      setAllOrders([]);
+      return [];
     } finally {
       setIsLoading(false);
     }

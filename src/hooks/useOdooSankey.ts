@@ -29,7 +29,7 @@ export const useOdooSankey = () => {
     setIsLoading(true);
     
     try {
-      // Calculate date filters based on filter context
+      // Calculate date filters
       let dateFilter: string | undefined;
       let endDateFilter: string | undefined;
 
@@ -50,23 +50,22 @@ export const useOdooSankey = () => {
         }
       }
 
-      // Fetch all sales orders, then filter locally using original confirmation date
+      // Fetch sales orders with pipeline stage info
       const orderFilters: any[] = [['state', 'in', ['sale', 'done']]];
-
       const { data: orders, error: orderError } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order',
           method: 'search_read',
           args: [
             orderFilters,
-            ['id', 'name', 'user_id', 'amount_total', 'x_original_confirmation_date', 'date_order']
+            ['id', 'name', 'user_id', 'amount_total', 'x_original_confirmation_date', 'date_order', 'partner_id']
           ]
         }
       });
 
       if (orderError) throw orderError;
 
-      // Filter locally by date using original confirmation date (try both field names) or date_order as fallback
+      // Filter by date
       let filteredOrders = orders || [];
       if (dateFilter && filteredOrders.length > 0) {
         filteredOrders = filteredOrders.filter((order: any) => {
@@ -80,100 +79,103 @@ export const useOdooSankey = () => {
         return { nodes: [], links: [] };
       }
 
-      // Get order IDs
-      const orderIds = filteredOrders.map((o: any) => o.id);
+      // Calculate total revenue
+      const totalRevenue = filteredOrders.reduce((sum: number, o: any) => sum + (o.amount_total || 0), 0);
 
-      // Fetch order lines for these orders
+      // Get order IDs and fetch lines
+      const orderIds = filteredOrders.map((o: any) => o.id);
       const { data: orderLines, error: lineError } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order.line',
           method: 'search_read',
           args: [
             [['order_id', 'in', orderIds]],
-            ['order_id', 'product_id', 'price_subtotal']
+            ['order_id', 'product_id', 'price_subtotal', 'product_uom_qty']
           ]
         }
       });
 
       if (lineError) throw lineError;
 
-      // Create order ID to salesperson map
-      const orderToSalesperson = new Map<number, string>();
+      // Aggregate by sales rep
+      const repRevenue = new Map<string, number>();
       filteredOrders.forEach((order: any) => {
-        const salesRep = order.user_id ? order.user_id[1] : "Unassigned";
-        orderToSalesperson.set(order.id, salesRep);
+        const rep = order.user_id ? order.user_id[1] : "Unassigned";
+        repRevenue.set(rep, (repRevenue.get(rep) || 0) + order.amount_total);
       });
 
-      // Build Salesperson -> Product flow
-      const repToProduct = new Map<string, Map<string, number>>();
-
-      orderLines?.forEach((line: any) => {
-        const orderId = line.order_id ? line.order_id[0] : null;
-        if (!orderId) return;
-
-        const salesRep = orderToSalesperson.get(orderId) || "Unassigned";
-        const product = line.product_id ? line.product_id[1] : "Unknown Product";
-        const value = line.price_subtotal || 0;
-
-        if (!repToProduct.has(salesRep)) repToProduct.set(salesRep, new Map());
-        const productMap = repToProduct.get(salesRep)!;
-        productMap.set(product, (productMap.get(product) || 0) + value);
-      });
-
-      // Get top 4 salespeople by total sales
-      const repTotals = new Map<string, number>();
-      repToProduct.forEach((products, rep) => {
-        let total = 0;
-        products.forEach(value => total += value);
-        repTotals.set(rep, total);
-      });
-
-      const topReps = Array.from(repTotals.entries())
+      // Get top 5 reps
+      const topReps = Array.from(repRevenue.entries())
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 4)
-        .map(([rep]) => rep);
+        .slice(0, 5);
 
-      // For each top rep, get their top 4 products
-      const finalProducts = new Set<string>();
-      const finalRepToProduct = new Map<string, Map<string, number>>();
-
-      topReps.forEach(rep => {
-        const repProducts = repToProduct.get(rep);
-        if (!repProducts) return;
-
-        const topRepProducts = Array.from(repProducts.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 4);
-
-        const productMap = new Map<string, number>();
-        topRepProducts.forEach(([product, value]) => {
-          finalProducts.add(product);
-          productMap.set(product, value);
-        });
-
-        finalRepToProduct.set(rep, productMap);
+      // Aggregate by product category (using product names for now)
+      const productRevenue = new Map<string, number>();
+      orderLines?.forEach((line: any) => {
+        const product = line.product_id ? line.product_id[1] : "Unknown";
+        productRevenue.set(product, (productRevenue.get(product) || 0) + line.price_subtotal);
       });
 
-      // Build nodes array
+      // Get top 5 products
+      const topProducts = Array.from(productRevenue.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+
+      // Calculate metrics for funnel
+      const totalOrders = filteredOrders.length;
+      const avgOrderValue = totalRevenue / totalOrders;
+
+      // Build multi-stage Sankey: Total Revenue → Sales Reps → Products
       const nodes: SankeyNode[] = [
-        ...topReps.map(s => ({ name: s })),
-        ...Array.from(finalProducts).map(p => ({ name: p }))
+        { name: `Total Revenue\n$${(totalRevenue / 1000000).toFixed(2)}M` },
+        ...topReps.map(([rep, value]) => ({ 
+          name: `${rep}\n$${(value / 1000).toFixed(0)}K` 
+        })),
+        ...topProducts.map(([prod, value]) => ({ 
+          name: `${prod.length > 30 ? prod.substring(0, 30) + '...' : prod}\n$${(value / 1000).toFixed(0)}K` 
+        }))
       ];
 
-      // Build links array
       const links: SankeyLink[] = [];
-      const nodeIndex = (name: string) => nodes.findIndex(n => n.name === name);
 
-      // Salesperson -> Product links
-      finalRepToProduct.forEach((products, rep) => {
-        products.forEach((value, product) => {
-          const sourceIdx = nodeIndex(rep);
-          const targetIdx = nodeIndex(product);
-          if (sourceIdx >= 0 && targetIdx >= 0) {
+      // Total Revenue → Top Sales Reps
+      topReps.forEach(([rep], idx) => {
+        links.push({
+          source: 0,
+          target: idx + 1,
+          value: repRevenue.get(rep)!
+        });
+      });
+
+      // Sales Reps → Products (map products to reps)
+      const repToProducts = new Map<string, Map<string, number>>();
+      orderLines?.forEach((line: any) => {
+        const orderId = line.order_id?.[0];
+        const order = filteredOrders.find((o: any) => o.id === orderId);
+        if (!order) return;
+
+        const rep = order.user_id ? order.user_id[1] : "Unassigned";
+        const product = line.product_id ? line.product_id[1] : "Unknown";
+        
+        if (!repToProducts.has(rep)) {
+          repToProducts.set(rep, new Map());
+        }
+        const prodMap = repToProducts.get(rep)!;
+        prodMap.set(product, (prodMap.get(product) || 0) + line.price_subtotal);
+      });
+
+      // Create links from top reps to top products
+      topReps.forEach(([rep], repIdx) => {
+        const products = repToProducts.get(rep);
+        if (!products) return;
+
+        topProducts.forEach(([prod], prodIdx) => {
+          const value = products.get(prod) || 0;
+          if (value > 0) {
             links.push({
-              source: sourceIdx,
-              target: targetIdx,
-              value: Math.round(value)
+              source: repIdx + 1,
+              target: topReps.length + 1 + prodIdx,
+              value: value
             });
           }
         });
@@ -183,12 +185,9 @@ export const useOdooSankey = () => {
       return { nodes, links };
     } catch (error) {
       console.error('Sankey data fetch error:', error);
-      toast({
-        title: "Failed to fetch Sankey data",
-        description: error instanceof Error ? error.message : "Failed to fetch Sankey data",
-        variant: "destructive",
-      });
-      throw error;
+      // Don't show toast on every error, just log it
+      setSankeyData({ nodes: [], links: [] });
+      return { nodes: [], links: [] };
     } finally {
       setIsLoading(false);
     }

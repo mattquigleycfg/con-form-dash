@@ -42,12 +42,9 @@ export const useOdooTeam = () => {
       return salesOrders || [];
     } catch (error) {
       console.error('Odoo team sync error:', error);
-      toast({
-        title: "Team sync failed",
-        description: error instanceof Error ? error.message : "Failed to sync team data",
-        variant: "destructive",
-      });
-      throw error;
+      // Don't show toast on every error - user may not have Odoo configured yet
+      setAllOrders([]);
+      return [];
     } finally {
       setIsLoading(false);
     }

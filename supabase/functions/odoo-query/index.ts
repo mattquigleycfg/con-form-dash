@@ -20,7 +20,18 @@ serve(async (req) => {
     const ODOO_API_KEY = Deno.env.get('ODOO_API_KEY');
 
     if (!ODOO_URL || !ODOO_USERNAME || !ODOO_PASSWORD) {
-      throw new Error('Odoo credentials not configured');
+      console.error('Missing Odoo credentials:', {
+        hasUrl: !!ODOO_URL,
+        hasUsername: !!ODOO_USERNAME,
+        hasPassword: !!ODOO_PASSWORD
+      });
+      return new Response(
+        JSON.stringify({ error: 'Odoo credentials not configured. Please check your environment variables.' }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     // Remove trailing slash from URL if present
