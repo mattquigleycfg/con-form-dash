@@ -20,19 +20,20 @@ export const useOdooSync = () => {
     setIsLoading(true);
     
     try {
-      // Get current month start and end dates
+      // Get current month and 3-month date ranges
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
       
-      // Fetch only current month's sales orders
+      // Fetch only current month's sales orders for totalRevenue and dealsClosed
       const { data: salesOrders, error: salesError } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order',
           method: 'search_read',
           args: [
             [
-              ['state', 'in', ['sale', 'done']], // Only confirmed and done orders
+              ['state', 'in', ['sale', 'done']],
               ['date_order', '>=', monthStart.toISOString()],
               ['date_order', '<=', monthEnd.toISOString()]
             ],
@@ -43,16 +44,82 @@ export const useOdooSync = () => {
 
       if (salesError) throw salesError;
 
-      // Calculate metrics using filtered opportunities
+      // Fetch 3-month sales orders for conversion rate
+      const { data: threeMonthOrders, error: threeMonthError } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'sale.order',
+          method: 'search_read',
+          args: [
+            [
+              ['state', 'in', ['sale', 'done']],
+              ['date_order', '>=', threeMonthsAgo.toISOString()],
+              ['date_order', '<=', now.toISOString()]
+            ],
+            ['amount_total']
+          ]
+        }
+      });
+
+      if (threeMonthError) throw threeMonthError;
+
+      // Fetch opportunities from last 3 months
+      const { data: threeMonthOpps, error: oppError } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'crm.lead',
+          method: 'search_read',
+          args: [
+            [
+              ['type', '=', 'opportunity'],
+              ['create_date', '>=', threeMonthsAgo.toISOString()],
+              ['create_date', '<=', now.toISOString()]
+            ],
+            ['id', 'stage_id', 'expected_revenue']
+          ]
+        }
+      });
+
+      if (oppError) throw oppError;
+
+      // Fetch stages to filter out "Proposal Required"
+      const { data: stages, error: stagesError } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'crm.stage',
+          method: 'search_read',
+          args: [
+            [],
+            ['id', 'name']
+          ]
+        }
+      });
+
+      if (stagesError) throw stagesError;
+
+      // Calculate metrics from current month
       const totalRevenue = salesOrders?.reduce((sum: number, order: any) => sum + order.amount_total, 0) || 0;
       const dealsClosed = salesOrders?.length || 0;
-      const wonOpportunities = opportunities.filter((opp) => opp.probability === 100).length || 0;
-      const totalOpportunities = opportunities.length || 1;
-      const conversionRate = (wonOpportunities / totalOpportunities) * 100;
       
-      // Get unique customers
+      // Get unique customers from current month
       const uniqueCustomers = new Set(salesOrders?.map((order: any) => order.partner_id[0]) || []);
       const activeCustomers = uniqueCustomers.size;
+
+      // Calculate conversion rate: (expected revenue excluding "Proposal Required" / confirmed sales) * 100
+      const proposalRequiredStage = stages?.find((stage: any) => stage.name === "Proposal Required");
+
+      const filteredOpportunities = threeMonthOpps?.filter(
+        (opp: any) => !proposalRequiredStage || opp.stage_id[0] !== proposalRequiredStage.id
+      ) || [];
+
+      const totalExpectedRevenue = filteredOpportunities.reduce(
+        (sum: number, opp: any) => sum + (opp.expected_revenue || 0),
+        0
+      );
+
+      const totalConfirmedSales = threeMonthOrders?.reduce(
+        (sum: number, order: any) => sum + (order.amount_total || 0),
+        0
+      ) || 1;
+
+      const conversionRate = (totalExpectedRevenue / totalConfirmedSales) * 100;
 
       const calculatedMetrics = {
         totalRevenue,

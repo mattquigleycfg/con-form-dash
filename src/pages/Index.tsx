@@ -102,7 +102,7 @@ const Index = () => {
             icon={TrendingUp}
             footer={
               <p className="text-xs text-muted-foreground">
-                Won deals / Total opportunities
+                Expected revenue / Confirmed sales (3-month period)
               </p>
             }
           />
@@ -157,7 +157,7 @@ const Index = () => {
                 <p className="mt-2 text-2xl font-bold text-foreground">
                   {syncMetrics?.conversionRate ? `${syncMetrics.conversionRate.toFixed(1)}%` : 'N/A'}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">Opportunity to closed</p>
+                <p className="mt-1 text-xs text-muted-foreground">3-month period</p>
               </div>
             </div>
           </CardContent>
