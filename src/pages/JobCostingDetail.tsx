@@ -128,31 +128,86 @@ export default function JobCostingDetail() {
     toast.success("Cost added successfully");
   };
 
-  const handleCSVUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCSVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !id) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = e.target?.result as string;
-      const lines = text.split("\n").slice(1); // Skip header
+      const lines = text.split("\n").filter(line => line.trim());
       
-      const bomData = lines
-        .filter(line => line.trim())
-        .map(line => {
-          const [product_name, quantity, unit_cost, notes] = line.split(",").map(s => s.trim());
-          return {
-            product_name,
-            quantity: parseFloat(quantity) || 0,
-            unit_cost: parseFloat(unit_cost) || 0,
-            total_cost: (parseFloat(quantity) || 0) * (parseFloat(unit_cost) || 0),
-            notes: notes || "",
-          };
-        });
+      if (lines.length < 2) {
+        toast.error("CSV file is empty or invalid");
+        return;
+      }
 
-      if (bomData.length > 0) {
-        importBOMFromCSV({ jobId: id, lines: bomData });
-        toast.success(`Imported ${bomData.length} BOM lines`);
+      // Parse header to find column indices
+      const header = lines[0].split(',').map(h => h.trim());
+      const productIndex = header.indexOf('Product');
+      const quantityIndex = header.indexOf('To Consume');
+      const internalRefIndex = header.indexOf('Internal Reference');
+
+      if (productIndex === -1 || quantityIndex === -1) {
+        toast.error("CSV must have 'Product' and 'To Consume' columns");
+        return;
+      }
+      
+      // Skip header row
+      const dataLines = lines.slice(1);
+      
+      toast.info("Looking up product costs from Odoo...");
+      
+      const bomData = await Promise.all(dataLines.map(async (line) => {
+        const cols = line.split(',').map(s => s.trim());
+        const productName = cols[productIndex];
+        const quantity = parseFloat(cols[quantityIndex]) || 0;
+        const internalRef = internalRefIndex !== -1 ? cols[internalRefIndex] : '';
+        
+        // Try to look up product in Odoo by internal reference
+        let unitCost = 0;
+        let odooProductId: number | undefined;
+        
+        if (internalRef) {
+          try {
+            const { data } = await supabase.functions.invoke("odoo-query", {
+              body: {
+                model: "product.product",
+                method: "search_read",
+                args: [
+                  [["default_code", "=", internalRef]],
+                  ["id", "standard_price"],
+                  0,
+                  1,
+                ],
+              },
+            });
+            
+            if (data && data.length > 0) {
+              odooProductId = data[0].id;
+              unitCost = data[0].standard_price || 0;
+            }
+          } catch (error) {
+            console.error(`Failed to lookup product ${internalRef}:`, error);
+          }
+        }
+
+        return {
+          product_name: productName,
+          quantity,
+          unit_cost: unitCost,
+          total_cost: quantity * unitCost,
+          odoo_product_id: odooProductId,
+        };
+      }));
+
+      const validLines = bomData.filter(line => line.product_name && line.quantity > 0);
+
+      if (validLines.length > 0) {
+        importBOMFromCSV({ jobId: id, lines: validLines });
+        toast.success(`Imported ${validLines.length} BOM lines with costs from Odoo`);
+      } else {
+        toast.error("No valid lines found in CSV");
       }
     };
     reader.readAsText(file);
@@ -331,7 +386,7 @@ export default function JobCostingDetail() {
                         <div className="space-y-2">
                           <Label>Search Odoo Product (Optional)</Label>
                           <Input
-                            placeholder="Type to search..."
+                            placeholder="Search by product name or internal reference..."
                             value={productSearch}
                             onChange={(e) => setProductSearch(e.target.value)}
                           />
@@ -344,6 +399,11 @@ export default function JobCostingDetail() {
                                   onClick={() => selectProduct(product.id, product.name, product.standard_price)}
                                 >
                                   <div className="font-medium">{product.name}</div>
+                                  {product.default_code && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Ref: {product.default_code}
+                                    </div>
+                                  )}
                                   <div className="text-sm text-muted-foreground">
                                     Cost: {formatCurrency(product.standard_price)}
                                   </div>
