@@ -68,7 +68,7 @@ export function SalesOrdersTable({ orders, isLoading }: SalesOrdersTableProps) {
                   <TableHead className="font-semibold">Customer</TableHead>
                   <TableHead className="font-semibold">Sales Rep</TableHead>
                   <TableHead className="font-semibold">Order Date</TableHead>
-                  <TableHead className="font-semibold">Confirmation Date</TableHead>
+                  <TableHead className="font-semibold">Original Confirmation</TableHead>
                   <TableHead className="font-semibold text-right">Amount</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
                 </TableRow>
@@ -85,9 +85,9 @@ export function SalesOrdersTable({ orders, isLoading }: SalesOrdersTableProps) {
                     </TableCell>
                     <TableCell>{formatDate(order.date_order)}</TableCell>
                     <TableCell>
-                      {order.confirmation_date ? (
+                      {order.x_original_confirmation_date ? (
                         <span className="text-primary font-medium">
-                          {formatDate(order.confirmation_date)}
+                          {formatDate(order.x_original_confirmation_date)}
                         </span>
                       ) : (
                         <span className="text-muted-foreground italic">
