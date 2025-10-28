@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useFilters } from "@/contexts/FilterContext";
+import { logger } from "@/utils/logger";
 
 export interface SalesOrder {
   id: number;
@@ -51,7 +52,7 @@ export const useOdooSalesOrders = () => {
 
       setSalesOrders(orders || []);
     } catch (error) {
-      console.error('Error fetching sales orders:', error);
+      logger.error('Error fetching sales orders', error);
       setSalesOrders([]);
     } finally {
       setIsLoading(false);

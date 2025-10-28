@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { triggerConfetti } from "@/utils/confetti";
+import { logger } from "@/utils/logger";
 
 export default function JobCosting() {
   const navigate = useNavigate();
@@ -30,90 +31,14 @@ export default function JobCosting() {
   const [selectedSaleOrderId, setSelectedSaleOrderId] = useState<number | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [allOrdersWithLines, setAllOrdersWithLines] = useState<Array<{ order: any; hasInstallation: boolean }>>([]);
-  const [loadingOrdersWithLines, setLoadingOrdersWithLines] = useState(false);
-
   const { data: saleOrderLines, isLoading: loadingLines } = useOdooSaleOrderLines(selectedSaleOrderId || undefined);
+  
+  // Compute last-month confirmed orders from available sales orders
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+  const recentSalesOrders = (salesOrders || []).filter(order => new Date(order.date_order) >= oneMonthAgo);
 
-  // Fetch all orders and check for INSTALLATION lines when dialog opens
-  useEffect(() => {
-    if (isCreateDialogOpen && salesOrders && salesOrders.length > 0) {
-      const checkOrdersForInstallation = async () => {
-        setLoadingOrdersWithLines(true);
-        try {
-          const oneMonthAgo = new Date();
-          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-          
-          // Filter orders from last month by date_order
-          const recentOrders = salesOrders.filter(order => {
-            const orderDate = new Date(order.date_order);
-            return orderDate >= oneMonthAgo;
-          });
-
-          console.log(`Found ${recentOrders.length} recent orders from last month`);
-
-          const ordersWithInstallationStatus = await Promise.all(
-            recentOrders.map(async (order) => {
-              try {
-                // Fetch lines for this order
-                const { data: lines, error: linesError } = await supabase.functions.invoke("odoo-query", {
-                  body: {
-                    model: "sale.order.line",
-                    method: "search_read",
-                    args: [
-                      [["order_id", "=", order.id]],
-                      ["id", "product_id"],
-                    ],
-                  },
-                });
-
-                if (linesError || !lines || lines.length === 0) {
-                  return { order, hasInstallation: false };
-                }
-
-                const productIds = lines.map((l: any) => l.product_id[0]);
-                
-                // Fetch product details to check for INS001 SKU
-                const { data: products, error: productsError } = await supabase.functions.invoke("odoo-query", {
-                  body: {
-                    model: "product.product",
-                    method: "search_read",
-                    args: [
-                      [["id", "in", productIds], ["default_code", "=", "INS001"]],
-                      ["id", "default_code", "name"],
-                    ],
-                  },
-                });
-
-                const hasInstallation = !productsError && products && products.length > 0;
-                console.log(`Order ${order.name}: ${hasInstallation ? 'HAS' : 'NO'} INSTALLATION`);
-                
-                return { 
-                  order, 
-                  hasInstallation
-                };
-              } catch (error) {
-                console.error(`Error checking order ${order.id}:`, error);
-                return { order, hasInstallation: false };
-              }
-            })
-          );
-
-          // Filter to only show orders with INSTALLATION line
-          const ordersWithInstallation = ordersWithInstallationStatus.filter(o => o.hasInstallation);
-          console.log(`${ordersWithInstallation.length} orders have INSTALLATION line`);
-          setAllOrdersWithLines(ordersWithInstallation);
-        } catch (error) {
-          console.error("Error fetching orders with INSTALLATION:", error);
-          toast.error("Failed to load orders");
-        } finally {
-          setLoadingOrdersWithLines(false);
-        }
-      };
-
-      checkOrdersForInstallation();
-    }
-  }, [isCreateDialogOpen, salesOrders]);
+// Removed INSTALLATION SKU pre-check. We now simply filter by last month's confirmed orders using date_order.
 
   const handleSyncFromOdoo = async () => {
     if (!selectedSaleOrderId || !saleOrderLines || !user) return;
@@ -180,7 +105,7 @@ export default function JobCosting() {
       setSelectedSaleOrderId(null);
       navigate(`/job-costing/${job.id}`);
     } catch (error) {
-      console.error("Error syncing job:", error);
+      logger.error("Error syncing job", error);
       toast.error("Failed to sync job from Odoo");
     } finally {
       setIsSyncing(false);
@@ -221,35 +146,29 @@ export default function JobCosting() {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>Select Sales Order (with INSTALLATION - Last Month)</Label>
-                    {loadingOrdersWithLines ? (
-                      <div className="text-sm text-muted-foreground">
-                        Checking orders for INSTALLATION line items...
-                      </div>
-                    ) : (
-                      <Select
-                        value={selectedSaleOrderId?.toString()}
-                        onValueChange={(value) => setSelectedSaleOrderId(parseInt(value))}
-                        disabled={loadingSalesOrders || loadingOrdersWithLines}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a sales order..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allOrdersWithLines.length === 0 ? (
-                            <div className="p-2 text-sm text-muted-foreground">
-                              No orders with INSTALLATION (INS001) found in the last month
-                            </div>
-                          ) : (
-                            allOrdersWithLines.map(({ order }) => (
-                              <SelectItem key={order.id} value={order.id.toString()}>
-                                {order.name} - {order.partner_id[1]} ({formatCurrency(order.amount_total)})
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    )}
+                    <Label>Select Sales Order (Confirmed - Last Month)</Label>
+                    <Select
+                      value={selectedSaleOrderId?.toString()}
+                      onValueChange={(value) => setSelectedSaleOrderId(parseInt(value))}
+                      disabled={loadingSalesOrders}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a sales order..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {recentSalesOrders.length === 0 ? (
+                          <div className="p-2 text-sm text-muted-foreground">
+                            No confirmed sales orders found in the last month
+                          </div>
+                        ) : (
+                          recentSalesOrders.map((order) => (
+                            <SelectItem key={order.id} value={order.id.toString()}>
+                              {order.name} - {order.partner_id[1]} ({formatCurrency(order.amount_total)})
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {selectedSaleOrderId && loadingLines && (
