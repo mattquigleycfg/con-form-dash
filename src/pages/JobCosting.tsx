@@ -70,7 +70,17 @@ export default function JobCosting() {
 
         if (linesError) throw linesError;
 
-        const lines = (orderLines as any[]).filter(line => line.product_id && line.product_id[0]);
+        // Filter out lines with no product_id, zero sale price, or "DESCRIPTION OF WORKS"
+        const lines = (orderLines as any[]).filter(line => {
+          if (!line.product_id || !line.product_id[0]) return false;
+          if (!line.price_subtotal || line.price_subtotal === 0) return false;
+          
+          const productName = line.product_id[1] || '';
+          if (productName.toLowerCase().includes('description of works')) return false;
+          
+          return true;
+        });
+        
         const productIds = lines.map(line => line.product_id[0]);
 
         const { data: products } = await supabase.functions.invoke("odoo-query", {
@@ -86,24 +96,56 @@ export default function JobCosting() {
 
         const productMap = new Map((products as any[]).map(p => [p.id, p]));
 
-        const saleOrderLines = lines.map(line => {
+        // Helper function to determine non-material sub-category
+        const getNonMaterialCategory = (product: any, productName: string): string => {
+          const sku = product?.default_code || '';
+          const name = productName.toUpperCase();
+          
+          // Check specific SKUs first
+          if (sku === 'CF000412') return 'Freight';
+          if (sku === 'CFGCRAN001') return 'Cranage';
+          
+          // Check product name patterns
+          if (name.includes('INSTALLATION')) return 'Installation';
+          if (name.includes('FREIGHT')) return 'Freight';
+          if (name.includes('CRANAGE')) return 'Cranage';
+          if (name.includes('ACCOMMODATION')) return 'Accommodation';
+          if (name.includes('TRAVEL')) return 'Travel';
+          
+          return 'Other';
+        };
+
+        // Categorize lines and calculate using COST prices
+        const materialLines: any[] = [];
+        const nonMaterialLines: any[] = [];
+
+        lines.forEach(line => {
           const product = productMap.get(line.product_id[0]);
-          return {
-            ...line,
-            detailed_type: product?.detailed_type || 'product',
-          };
+          const productType = product?.detailed_type || 'product';
+          const costPrice = product?.standard_price || 0;
+          const quantity = line.product_uom_qty;
+          const costSubtotal = costPrice * quantity;
+          
+          if (productType === 'service') {
+            nonMaterialLines.push({
+              ...line,
+              detailed_type: productType,
+              cost_price: costPrice,
+              cost_subtotal: costSubtotal,
+              cost_category: getNonMaterialCategory(product, line.product_id[1]),
+            });
+          } else {
+            materialLines.push({
+              ...line,
+              detailed_type: productType,
+              cost_price: costPrice,
+              cost_subtotal: costSubtotal,
+            });
+          }
         });
 
-        // Categorize lines
-        const materialLines = saleOrderLines.filter(line => 
-          line.detailed_type === 'product' || line.detailed_type === 'consu'
-        );
-        const nonMaterialLines = saleOrderLines.filter(line => 
-          line.detailed_type === 'service'
-        );
-
-        const materialBudget = materialLines.reduce((sum, line) => sum + line.price_subtotal, 0);
-        const nonMaterialBudget = nonMaterialLines.reduce((sum, line) => sum + line.price_subtotal, 0);
+        const materialBudget = materialLines.reduce((sum, line) => sum + line.cost_subtotal, 0);
+        const nonMaterialBudget = nonMaterialLines.reduce((sum, line) => sum + line.cost_subtotal, 0);
 
         // Create job
         const { data: job, error: jobError } = await supabase
@@ -126,17 +168,18 @@ export default function JobCosting() {
 
         if (jobError) throw jobError;
 
-        // Create budget lines
-        const budgetLines = saleOrderLines.map(line => ({
+        // Create budget lines using COST prices
+        const allLines = [...materialLines, ...nonMaterialLines];
+        const budgetLines = allLines.map(line => ({
           job_id: job.id,
           odoo_line_id: line.id,
           product_id: line.product_id[0],
           product_name: line.product_id[1],
           product_type: line.detailed_type,
           quantity: line.product_uom_qty,
-          unit_price: line.price_unit,
-          subtotal: line.price_subtotal,
-          cost_category: (line.detailed_type === 'product' || line.detailed_type === 'consu') ? 'material' : 'non_material',
+          unit_price: line.cost_price, // Use cost price
+          subtotal: line.cost_subtotal, // Use cost-based subtotal
+          cost_category: line.cost_category || 'material',
         }));
 
         const { error: linesError2 } = await supabase
