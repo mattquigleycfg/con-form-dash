@@ -18,6 +18,7 @@ import { useOdooProjectStages } from "@/hooks/useOdooProjectStages";
 import { useJobFiltering, ViewMode, BudgetSort, DateRange } from "@/hooks/useJobFilters";
 import { JobFilterBar } from "@/components/job-costing/JobFilterBar";
 import { ListView } from "@/components/job-costing/ListView";
+import { useQueryClient } from "@tanstack/react-query";
 import { KanbanView } from "@/components/job-costing/KanbanView";
 import { GridView } from "@/components/job-costing/GridView";
 
@@ -27,6 +28,7 @@ export default function JobCosting() {
   const { user } = useAuth();
   const { salesOrders, isLoading: loadingSalesOrders } = useOdooSalesOrders();
   const { stages, isLoading: loadingStages } = useOdooProjectStages();
+  const queryClient = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   
@@ -179,6 +181,38 @@ export default function JobCosting() {
           salesPersonName = order.user_id[1];
         }
 
+        // Fetch project stage from Odoo if analytic account exists
+        let projectStageId = null;
+        let projectStageName = 'Unassigned';
+        
+        if (order.analytic_account_id) {
+          try {
+            // Find project linked to this analytic account
+            const { data: projects } = await supabase.functions.invoke("odoo-query", {
+              body: {
+                model: "project.project",
+                method: "search_read",
+                args: [
+                  [["analytic_account_id", "=", order.analytic_account_id[0]]],
+                  ["id", "name", "stage_id"],
+                  0,
+                  1,
+                ],
+              },
+            });
+
+            if (projects && projects.length > 0 && projects[0].stage_id) {
+              projectStageId = projects[0].stage_id[0];
+              projectStageName = projects[0].stage_id[1];
+              logger.info(`Found project stage for SO ${order.name}: ${projectStageName}`);
+            } else {
+              logger.info(`No project stage found for SO ${order.name}, using Unassigned`);
+            }
+          } catch (error) {
+            logger.error(`Error fetching project stage for SO ${order.name}:`, error);
+          }
+        }
+
         // Create job with additional search fields and date_order
         const { data: job, error: jobError } = await supabase
           .from("jobs")
@@ -198,7 +232,8 @@ export default function JobCosting() {
             sales_person_name: salesPersonName,
             opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
             date_order: order.date_order,
-            project_stage_name: 'Unassigned',
+            project_stage_id: projectStageId,
+            project_stage_name: projectStageName,
           }])
           .select()
           .single();
@@ -242,6 +277,73 @@ export default function JobCosting() {
     }
   };
 
+  const handleRefreshStages = async () => {
+    if (!jobs || jobs.length === 0 || !user) {
+      toast.error("No jobs to refresh");
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      let updatedCount = 0;
+      
+      for (const job of jobs) {
+        if (!job.analytic_account_id) {
+          logger.info(`Job ${job.sale_order_name} has no analytic account, skipping`);
+          continue;
+        }
+
+        try {
+          // Find project linked to this analytic account
+          const { data: projects } = await supabase.functions.invoke("odoo-query", {
+            body: {
+              model: "project.project",
+              method: "search_read",
+              args: [
+                [["analytic_account_id", "=", job.analytic_account_id]],
+                ["id", "name", "stage_id"],
+                0,
+                1,
+              ],
+            },
+          });
+
+          if (projects && projects.length > 0 && projects[0].stage_id) {
+            const projectStageId = projects[0].stage_id[0];
+            const projectStageName = projects[0].stage_id[1];
+
+            // Update job stage
+            await supabase
+              .from("jobs")
+              .update({
+                project_stage_id: projectStageId,
+                project_stage_name: projectStageName,
+              })
+              .eq("id", job.id);
+
+            logger.info(`Updated stage for ${job.sale_order_name}: ${projectStageName}`);
+            updatedCount++;
+          }
+        } catch (error) {
+          logger.error(`Error refreshing stage for job ${job.sale_order_name}:`, error);
+        }
+      }
+
+      if (updatedCount > 0) {
+        toast.success(`Updated stages for ${updatedCount} job(s)!`);
+        // Refresh jobs data
+        queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      } else {
+        toast.info("No stage updates needed");
+      }
+    } catch (error) {
+      logger.error("Error refreshing stages", error);
+      toast.error("Failed to refresh stages from Odoo");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -256,6 +358,23 @@ export default function JobCosting() {
             <Button variant="outline" onClick={() => navigate("/job-costing/reports")}>
               <Download className="mr-2 h-4 w-4" />
               Reports
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleRefreshStages} 
+              disabled={isSyncing || isLoading || !jobs || jobs.length === 0}
+            >
+              {isSyncing ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh Stages
+                </>
+              )}
             </Button>
             <Button onClick={handleAutoSyncAll} disabled={isSyncing || loadingSalesOrders}>
               {isSyncing ? (
