@@ -281,9 +281,15 @@ export default function JobCostingDetail() {
   const remaining = job.total_budget - job.total_actual;
   const isOverBudget = remaining < 0;
 
-  // Calculate material totals
-  const materialBudgetTotal = budgetLines?.filter(line => line.cost_category === 'material').reduce((sum, line) => sum + line.subtotal, 0) || 0;
-  const materialActualTotal = bomLines?.reduce((sum, line) => sum + line.total_cost, 0) || 0;
+  // Calculate material totals using purchase_price from SO lines
+  const materialBudgetTotal = budgetLines?.filter(line => line.cost_category === 'material').reduce((sum, line) => {
+    const purchasePrice = materialPurchasePriceMap.get(line.product_id) ?? 0;
+    return sum + (purchasePrice * (line.quantity || 0));
+  }, 0) || 0;
+  const materialActualTotal = bomLines?.reduce((sum, line) => {
+    const purchasePrice = materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? 0;
+    return sum + (purchasePrice * (line.quantity || 0));
+  }, 0) || 0;
   const materialRemaining = materialBudgetTotal - materialActualTotal;
   const materialOverBudget = materialRemaining < 0;
 
@@ -520,8 +526,8 @@ export default function JobCostingDetail() {
                             <TableRow key={line.id}>
                               <TableCell className="font-medium">{line.product_name}</TableCell>
                               <TableCell className="text-right">{line.quantity}</TableCell>
-                              <TableCell className="text-right">{formatCurrency((materialPurchasePriceMap.get(line.product_id) ?? line.unit_price ?? 0))}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(((materialPurchasePriceMap.get(line.product_id) ?? line.unit_price ?? 0) * (line.quantity || 0)))}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(materialPurchasePriceMap.get(line.product_id) ?? 0)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency((materialPurchasePriceMap.get(line.product_id) ?? 0) * (line.quantity || 0))}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -555,8 +561,8 @@ export default function JobCostingDetail() {
                                 )}
                               </TableCell>
                               <TableCell className="text-right">{line.quantity}</TableCell>
-                              <TableCell className="text-right">{formatCurrency((materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? line.unit_cost ?? 0))}</TableCell>
-                              <TableCell className="text-right font-medium">{formatCurrency(((materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? line.unit_cost ?? 0) * (line.quantity || 0)))}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? 0)}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency((materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? 0) * (line.quantity || 0))}</TableCell>
                               <TableCell>
                                 <Button
                                   variant="ghost"
