@@ -67,14 +67,15 @@ export default function JobCostingDetail() {
   const { costs, isLoading: loadingCosts, createCost, updateCost, deleteCost } = useJobNonMaterialCosts(id);
   const { analysis, isLoading: loadingAnalysis } = useJobCostAnalysis(job);
   const { data: saleOrderLines, isLoading: loadingSaleOrderLines, refetch: refetchSaleOrderLines } = useOdooSaleOrderLines(job?.odoo_sale_order_id);
-  const materialCostMap = useMemo(() => {
+  const materialPurchasePriceMap = useMemo(() => {
     const map = new Map<number, number>();
     if (saleOrderLines && saleOrderLines.length > 0) {
       for (const l of saleOrderLines) {
         try {
           const pid = Array.isArray(l.product_id) ? l.product_id[0] : undefined;
-          if (pid && l.is_material) {
-            map.set(pid, Number(l.actual_cost) || 0);
+          const pp: any = (l as any).purchase_price;
+          if (pid && pp !== undefined && pp !== null && pp !== false) {
+            map.set(pid, Number(pp) || 0);
           }
         } catch (e) {
           // ignore
@@ -519,8 +520,8 @@ export default function JobCostingDetail() {
                             <TableRow key={line.id}>
                               <TableCell className="font-medium">{line.product_name}</TableCell>
                               <TableCell className="text-right">{line.quantity}</TableCell>
-                              <TableCell className="text-right">{formatCurrency((materialCostMap.get(line.product_id) ?? line.unit_price ?? 0))}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(((materialCostMap.get(line.product_id) ?? line.unit_price ?? 0) * (line.quantity || 0)))}</TableCell>
+                              <TableCell className="text-right">{formatCurrency((materialPurchasePriceMap.get(line.product_id) ?? line.unit_price ?? 0))}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(((materialPurchasePriceMap.get(line.product_id) ?? line.unit_price ?? 0) * (line.quantity || 0)))}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -554,8 +555,8 @@ export default function JobCostingDetail() {
                                 )}
                               </TableCell>
                               <TableCell className="text-right">{line.quantity}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(line.unit_cost)}</TableCell>
-                              <TableCell className="text-right font-medium">{formatCurrency(line.total_cost)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency((materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? line.unit_cost ?? 0))}</TableCell>
+                              <TableCell className="text-right font-medium">{formatCurrency(((materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? line.unit_cost ?? 0) * (line.quantity || 0)))}</TableCell>
                               <TableCell>
                                 <Button
                                   variant="ghost"
