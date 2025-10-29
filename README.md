@@ -59,6 +59,27 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Supabase (Backend & Database)
+- Odoo Integration (via Edge Functions)
+
+## 🤖 AI-Powered Development with MCP
+
+This project includes **MCP (Model Context Protocol)** support for Supabase, enabling AI assistants in Cursor to directly interact with your database!
+
+### Quick Setup
+1. Get your Supabase service role key from the [API settings](https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj/settings/api)
+2. Set as environment variable: `SUPABASE_SERVICE_ROLE_KEY`
+3. Restart Cursor
+4. Start asking AI to query, modify, and manage your database!
+
+📖 **[Read the MCP Quickstart Guide](./MCP_QUICKSTART.md)** for detailed setup instructions.
+
+### What You Can Do
+- Query your database with natural language
+- Create and modify tables
+- Analyze data and generate reports
+- Set up migrations and schema changes
+- All without leaving your AI chat!
 
 ## How can I deploy this project?
 
