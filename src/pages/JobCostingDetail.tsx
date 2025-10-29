@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import { useOdooProducts } from "@/hooks/useOdooProducts";
 import { useOdooSaleOrderLines } from "@/hooks/useOdooSaleOrderLines";
@@ -67,6 +67,22 @@ export default function JobCostingDetail() {
   const { costs, isLoading: loadingCosts, createCost, updateCost, deleteCost } = useJobNonMaterialCosts(id);
   const { analysis, isLoading: loadingAnalysis } = useJobCostAnalysis(job);
   const { data: saleOrderLines, isLoading: loadingSaleOrderLines, refetch: refetchSaleOrderLines } = useOdooSaleOrderLines(job?.odoo_sale_order_id);
+  const materialCostMap = useMemo(() => {
+    const map = new Map<number, number>();
+    if (saleOrderLines && saleOrderLines.length > 0) {
+      for (const l of saleOrderLines) {
+        try {
+          const pid = Array.isArray(l.product_id) ? l.product_id[0] : undefined;
+          if (pid && l.is_material) {
+            map.set(pid, Number(l.actual_cost) || 0);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+    return map;
+  }, [saleOrderLines]);
 
   const [isAddBOMOpen, setIsAddBOMOpen] = useState(false);
   const [isAddCostOpen, setIsAddCostOpen] = useState(false);
@@ -503,8 +519,8 @@ export default function JobCostingDetail() {
                             <TableRow key={line.id}>
                               <TableCell className="font-medium">{line.product_name}</TableCell>
                               <TableCell className="text-right">{line.quantity}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(line.unit_price)}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(line.subtotal)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency((materialCostMap.get(line.product_id) ?? line.unit_price ?? 0))}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(((materialCostMap.get(line.product_id) ?? line.unit_price ?? 0) * (line.quantity || 0)))}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
