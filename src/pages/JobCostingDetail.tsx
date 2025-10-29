@@ -26,6 +26,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { useOdooProducts } from "@/hooks/useOdooProducts";
+import { useOdooSaleOrderLines } from "@/hooks/useOdooSaleOrderLines";
+import { JobCostingSummary } from "@/components/job-costing/JobCostingSummary";
 
 export default function JobCostingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -64,6 +66,7 @@ export default function JobCostingDetail() {
   const { bomLines, isLoading: loadingBOM, createBOMLine, updateBOMLine, deleteBOMLine, importBOMFromCSV } = useJobBOM(id);
   const { costs, isLoading: loadingCosts, createCost, updateCost, deleteCost } = useJobNonMaterialCosts(id);
   const { analysis, isLoading: loadingAnalysis } = useJobCostAnalysis(job);
+  const { data: saleOrderLines, isLoading: loadingSaleOrderLines, refetch: refetchSaleOrderLines } = useOdooSaleOrderLines(job?.odoo_sale_order_id);
 
   const [isAddBOMOpen, setIsAddBOMOpen] = useState(false);
   const [isAddCostOpen, setIsAddCostOpen] = useState(false);
@@ -332,6 +335,32 @@ export default function JobCostingDetail() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Quotation Material & Service Costs */}
+        {saleOrderLines && saleOrderLines.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Quotation Material & Service Costs</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Costs from Odoo sale order lines (purchase_price field)
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchSaleOrderLines()}
+                disabled={loadingSaleOrderLines}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${loadingSaleOrderLines ? 'animate-spin' : ''}`} />
+                Reload
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <JobCostingSummary lines={saleOrderLines} />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Cost Analysis Section */}
         {analysis && (

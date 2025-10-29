@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { model, method, args } = await req.json();
+    const { model, method, args, kwargs } = await req.json();
     
     let ODOO_URL = Deno.env.get('ODOO_URL');
     const ODOO_USERNAME = Deno.env.get('ODOO_USERNAME');
@@ -83,7 +83,7 @@ serve(async (req) => {
           model,
           method,
           args,
-          kwargs: {},
+          kwargs: kwargs || {},
         },
       }),
     });
