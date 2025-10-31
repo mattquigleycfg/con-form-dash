@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # Con-form Dashboard Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY}
+    container_name: con-form-dashboard
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - con-form-network
+
+  # Optional: Nginx reverse proxy (if you want SSL/custom domain)
+  # Uncomment this section if you need a reverse proxy
+  # nginx-proxy:
+  #   image: nginx:alpine
+  #   container_name: con-form-proxy
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+  #     - ./ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - app
+  #   restart: unless-stopped
+  #   networks:
+  #     - con-form-network
+
+networks:
+  con-form-network:
+    driver: bridge
+
+# Volumes (if needed for persistence)
+# volumes:
+#   app-data:
+
