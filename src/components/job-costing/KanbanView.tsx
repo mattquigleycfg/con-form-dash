@@ -37,7 +37,9 @@ export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: Kanban
   console.log('Using stage list:', stageList);
 
   // Create ordered stage list starting with Unassigned
-  const orderedStages = ['Unassigned', ...stageList];
+  // Use Set to ensure uniqueness, then convert back to array
+  const uniqueStages = Array.from(new Set(stageList));
+  const orderedStages = ['Unassigned', ...uniqueStages];
 
   // Group jobs by stage
   const jobsByStage = new Map<string, Job[]>();
