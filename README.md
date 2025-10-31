@@ -67,7 +67,7 @@ This project is built with:
 This project includes **MCP (Model Context Protocol)** support for Supabase, enabling AI assistants in Cursor to directly interact with your database!
 
 ### Quick Setup
-1. Get your Supabase service role key from the [API settings](https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj/settings/api)
+1. Get your Supabase service role key from the [API settings](https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns/settings/api)
 2. Set as environment variable: `SUPABASE_SERVICE_ROLE_KEY`
 3. Restart Cursor
 4. Start asking AI to query, modify, and manage your database!

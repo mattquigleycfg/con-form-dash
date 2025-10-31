@@ -12,7 +12,7 @@
 **In PowerShell, run:**
 
 ```powershell
-$env:SUPABASE_ACCESS_TOKEN="sbp_YOUR_TOKEN_HERE"
+$env:SUPABASE_ACCESS_TOKEN="sbp_163094896cda1f04731391ae3b15751c552ad3c6"
 ```
 
 **Replace** `sbp_YOUR_TOKEN_HERE` with your actual token.

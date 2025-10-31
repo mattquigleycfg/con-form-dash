@@ -91,7 +91,7 @@ Docker will use your `.env` file automatically. Ensure it exists:
 Get-Content .env
 
 # Should contain:
-# VITE_SUPABASE_URL=https://hfscflqjpozqyfpohvjj.supabase.co
+# VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
 # VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
@@ -289,7 +289,7 @@ docker build -t con-form-dashboard .
 ```bash
 # Start container
 docker run -p 8080:80 \
-  -e VITE_SUPABASE_URL="https://hfscflqjpozqyfpohvjj.supabase.co" \
+  -e VITE_SUPABASE_URL="https://ibqgwakjmsnjtvwpkdns.supabase.co" \
   -e VITE_SUPABASE_PUBLISHABLE_KEY="your-key" \
   con-form-dashboard
 

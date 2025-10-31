@@ -406,7 +406,7 @@ Create `.env` file with:
 
 ```env
 # Supabase Configuration
-VITE_SUPABASE_URL=https://hfscflqjpozqyfpohvjj.supabase.co
+VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
 
 # Note: Odoo credentials are configured in Supabase Edge Functions

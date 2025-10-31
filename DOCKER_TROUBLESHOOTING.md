@@ -26,7 +26,7 @@ Get-Content .env | Select-String "VITE_SUPABASE"
 
 Should show:
 ```
-VITE_SUPABASE_URL=https://hfscflqjpozqyfpohvjj.supabase.co
+VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
@@ -382,16 +382,16 @@ docker exec con-form-dashboard-dev env | findstr VITE
 ```
 
 **2. Verify Supabase Project is Active:**
-- Go to: https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj
+- Go to: https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns
 - Check project status
 
 **3. Check Network:**
 ```powershell
 # From host
-curl https://hfscflqjpozqyfpohvjj.supabase.co
+curl https://ibqgwakjmsnjtvwpkdns.supabase.co
 
 # From container
-docker exec con-form-dashboard-dev wget -O- https://hfscflqjpozqyfpohvjj.supabase.co
+docker exec con-form-dashboard-dev wget -O- https://ibqgwakjmsnjtvwpkdns.supabase.co
 ```
 
 ---
@@ -547,7 +547,7 @@ Get-Content .env
 netstat -ano | findstr :8080
 
 # 5. Can access Supabase?
-curl https://hfscflqjpozqyfpohvjj.supabase.co
+curl https://ibqgwakjmsnjtvwpkdns.supabase.co
 
 # 6. Container logs?
 docker logs con-form-dashboard-dev --tail 50

@@ -302,7 +302,7 @@ After successful deployment:
 
 - **Netlify Dashboard:** https://app.netlify.com/team/matthewjquigley
 - **GitHub Repo:** https://github.com/mattquigleycfg/con-form-dash
-- **Supabase Dashboard:** https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj
+- **Supabase Dashboard:** https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns
 - **Local Dev:** http://localhost:8080
 
 ---

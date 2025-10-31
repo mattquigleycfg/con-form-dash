@@ -416,13 +416,13 @@ npm outdated             # Check for updates
 
 - **Local Dev:** http://localhost:8080
 - **Lovable Project:** https://lovable.dev/projects/d5056f6f-e114-4e35-a8da-e68395a164c6
-- **Supabase Dashboard:** https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj
+- **Supabase Dashboard:** https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns
 
 ### Environment Variables
 
 ```env
 # Required in .env
-VITE_SUPABASE_URL=https://hfscflqjpozqyfpohvjj.supabase.co
+VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your_key_here
 ```
 
