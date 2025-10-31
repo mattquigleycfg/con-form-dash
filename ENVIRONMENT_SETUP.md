@@ -12,7 +12,7 @@ Location: `c:\Users\CAD\Documents\GitHub\con-form-dash\.env`
 
 **Contents:**
 ```env
-VITE_SUPABASE_URL=https://hfscflqjpozqyfpohvjj.supabase.co
+VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
@@ -86,7 +86,7 @@ ODOO_PASSWORD ............................ ⏳ Pending
 ```
 
 **How to add them:**
-1. Go to: https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj/settings/functions
+1. Go to: https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns/settings/functions
 2. Navigate to **Secrets** or **Environment Variables**
 3. Add the three Odoo variables above
 
@@ -120,7 +120,7 @@ When you're ready to deploy, add these to **Netlify**:
 ### Netlify Dashboard → Site Configuration → Environment Variables
 
 ```
-VITE_SUPABASE_URL=https://hfscflqjpozqyfpohvjj.supabase.co
+VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhmc2NmbHFqcG96cXlmcG9odmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0Mzg5ODUsImV4cCI6MjA0NDAxNDk4NX0.VF0RBEsJJNUzQv8_Jt3zv5TC9D5rLKU8v5OmPvGPpYs
 ```
 

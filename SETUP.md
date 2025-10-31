@@ -56,7 +56,7 @@ nvm use 20
 You need Supabase credentials to connect to the backend:
 
 1. **Get Supabase URL and Key:**
-   - Go to [Supabase Dashboard](https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj/settings/api)
+   - Go to [Supabase Dashboard](https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns/settings/api)
    - Copy your **Project URL**
    - Copy your **anon public** key
 
@@ -70,7 +70,7 @@ cp env.example .env
 3. **Edit `.env`** and add your credentials:
 
 ```env
-VITE_SUPABASE_URL=https://hfscflqjpozqyfpohvjj.supabase.co
+VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your_actual_anon_key_here
 ```
 
@@ -78,7 +78,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your_actual_anon_key_here
 
 Odoo credentials are configured in **Supabase Edge Functions** (not in your local `.env`):
 
-1. Go to [Supabase Dashboard > Edge Functions > Secrets](https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj/functions)
+1. Go to [Supabase Dashboard > Edge Functions > Secrets](https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns/functions)
 2. Add these secrets:
    - `ODOO_URL` - Your Odoo instance URL (e.g., `https://your-company.odoo.com`)
    - `ODOO_USERNAME` - Your Odoo login email
@@ -381,7 +381,7 @@ The app uses a custom logger utility (`src/utils/logger.ts`).
 ### Resources
 
 - **Lovable Platform:** https://lovable.dev/projects/d5056f6f-e114-4e35-a8da-e68395a164c6
-- **Supabase Dashboard:** https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj
+- **Supabase Dashboard:** https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns
 - **Odoo Documentation:** https://www.odoo.com/documentation
 
 ---

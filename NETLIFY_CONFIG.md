@@ -12,7 +12,7 @@
 
 ```
 Key: VITE_SUPABASE_URL
-Value: https://hfscflqjpozqyfpohvjj.supabase.co
+Value: https://ibqgwakjmsnjtvwpkdns.supabase.co
 Scopes: All (Production, Deploy Previews, Branch deploys)
 ```
 
@@ -22,7 +22,7 @@ Scopes: All (Production, Deploy Previews, Branch deploys)
 
 ```
 Key: VITE_SUPABASE_PUBLISHABLE_KEY
-Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhmc2NmbHFqcG96cXlmcG9odmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0Mzg5ODUsImV4cCI6MjA0NDAxNDk4NX0.VF0RBEsJJNUzQv8_Jt3zv5TC9D5rLKU8v5OmPvGPpYs
+Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlicWd3YWtqbXNuanR2d3BrZG5zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NzU3MjIsImV4cCI6MjA3NzM1MTcyMn0.mufRIN2JjlfrVqHZ6PnFypkTxvGWW562CO6IHO2skdI
 Scopes: All (Production, Deploy Previews, Branch deploys)
 ```
 
@@ -49,7 +49,7 @@ Scopes: All (Production, Deploy Previews, Branch deploys)
 3. **Navigate:** Site configuration → Environment variables
 4. **Click:** "Add a variable" button
 5. **Enter Key:** `VITE_SUPABASE_URL`
-6. **Enter Value:** `https://hfscflqjpozqyfpohvjj.supabase.co`
+6. **Enter Value:** `https://ibqgwakjmsnjtvwpkdns.supabase.co`
 7. **Select Scopes:** Check all boxes (Production, Deploy Previews, Branch deploys)
 8. **Click:** "Create variable"
 9. **Repeat steps 4-8** for `VITE_SUPABASE_PUBLISHABLE_KEY`
@@ -70,8 +70,8 @@ netlify login
 netlify link
 
 # Add environment variables
-netlify env:set VITE_SUPABASE_URL "https://hfscflqjpozqyfpohvjj.supabase.co"
-netlify env:set VITE_SUPABASE_PUBLISHABLE_KEY "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhmc2NmbHFqcG96cXlmcG9odmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0Mzg5ODUsImV4cCI6MjA0NDAxNDk4NX0.VF0RBEsJJNUzQv8_Jt3zv5TC9D5rLKU8v5OmPvGPpYs"
+netlify env:set VITE_SUPABASE_URL "https://ibqgwakjmsnjtvwpkdns.supabase.co"
+netlify env:set VITE_SUPABASE_PUBLISHABLE_KEY "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlicWd3YWtqbXNuanR2d3BrZG5zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NzU3MjIsImV4cCI6MjA3NzM1MTcyMn0.mufRIN2JjlfrVqHZ6PnFypkTxvGWW562CO6IHO2skdI"
 
 # Trigger new deployment
 netlify deploy --prod
@@ -90,7 +90,7 @@ After adding variables and redeploying:
    ```javascript
    console.log(import.meta.env.VITE_SUPABASE_URL);
    ```
-5. **Should display:** `https://hfscflqjpozqyfpohvjj.supabase.co`
+5. **Should display:** `https://ibqgwakjmsnjtvwpkdns.supabase.co`
 
 ---
 
@@ -171,12 +171,12 @@ For easy copying:
 
 **Variable 1:**
 ```
-VITE_SUPABASE_URL=https://hfscflqjpozqyfpohvjj.supabase.co
+VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
 ```
 
 **Variable 2:**
 ```
-VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhmc2NmbHFqcG96cXlmcG9odmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0Mzg5ODUsImV4cCI6MjA0NDAxNDk4NX0.VF0RBEsJJNUzQv8_Jt3zv5TC9D5rLKU8v5OmPvGPpYs
+VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlicWd3YWtqbXNuanR2d3BrZG5zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NzU3MjIsImV4cCI6MjA3NzM1MTcyMn0.mufRIN2JjlfrVqHZ6PnFypkTxvGWW562CO6IHO2skdI
 ```
 
 ---

@@ -1,4 +1,4 @@
-project_id = "hfscflqjpozqyfpohvjj"
+project_id = "ibqgwakjmsnjtvwpkdns"
 
 [functions.odoo-query]
 verify_jwt = true

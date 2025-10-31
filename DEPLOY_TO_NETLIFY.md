@@ -48,8 +48,8 @@ netlify init
 
 8. **Add variables:**
    ```
-   VITE_SUPABASE_URL = https://hfscflqjpozqyfpohvjj.supabase.co
-   VITE_SUPABASE_PUBLISHABLE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhmc2NmbHFqcG96cXlmcG9odmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0Mzg5ODUsImV4cCI6MjA0NDAxNDk4NX0.VF0RBEsJJNUzQv8_Jt3zv5TC9D5rLKU8v5OmPvGPpYs
+   VITE_SUPABASE_URL = https://ibqgwakjmsnjtvwpkdns.supabase.co
+   VITE_SUPABASE_PUBLISHABLE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlicWd3YWtqbXNuanR2d3BrZG5zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NzU3MjIsImV4cCI6MjA3NzM1MTcyMn0.mufRIN2JjlfrVqHZ6PnFypkTxvGWW562CO6IHO2skdI
    ```
 
 9. **Done!** Your site will be created and deployed.
@@ -97,11 +97,11 @@ Then select the con-form site from the list.
 
 ### Command 3: Add Environment Variables
 ```bash
-netlify env:set VITE_SUPABASE_URL "https://hfscflqjpozqyfpohvjj.supabase.co" --context production --context deploy-preview --context branch-deploy
+netlify env:set VITE_SUPABASE_URL "https://ibqgwakjmsnjtvwpkdns.supabase.co" --context production --context deploy-preview --context branch-deploy
 ```
 
 ```bash
-netlify env:set VITE_SUPABASE_PUBLISHABLE_KEY "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhmc2NmbHFqcG96cXlmcG9odmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0Mzg5ODUsImV4cCI6MjA0NDAxNDk4NX0.VF0RBEsJJNUzQv8_Jt3zv5TC9D5rLKU8v5OmPvGPpYs" --context production --context deploy-preview --context branch-deploy
+netlify env:set VITE_SUPABASE_PUBLISHABLE_KEY "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlicWd3YWtqbXNuanR2d3BrZG5zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NzU3MjIsImV4cCI6MjA3NzM1MTcyMn0.mufRIN2JjlfrVqHZ6PnFypkTxvGWW562CO6IHO2skdI" --context production --context deploy-preview --context branch-deploy
 ```
 
 ### Command 4: Verify Environment Variables
@@ -151,14 +151,14 @@ After deployment starts:
 **Variable 1:**
 ```
 Key: VITE_SUPABASE_URL
-Value: https://hfscflqjpozqyfpohvjj.supabase.co
+Value: https://ibqgwakjmsnjtvwpkdns.supabase.co
 Scopes: ✅ Production ✅ Deploy previews ✅ Branch deploys
 ```
 
 **Variable 2:**
 ```
 Key: VITE_SUPABASE_PUBLISHABLE_KEY
-Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhmc2NmbHFqcG96cXlmcG9odmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0Mzg5ODUsImV4cCI6MjA0NDAxNDk4NX0.VF0RBEsJJNUzQv8_Jt3zv5TC9D5rLKU8v5OmPvGPpYs
+Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlicWd3YWtqbXNuanR2d3BrZG5zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NzU3MjIsImV4cCI6MjA3NzM1MTcyMn0.mufRIN2JjlfrVqHZ6PnFypkTxvGWW562CO6IHO2skdI
 Scopes: ✅ Production ✅ Deploy previews ✅ Branch deploys
 ```
 
@@ -194,7 +194,7 @@ netlify env:list
 
 Ensure both variables are listed. If not:
 ```bash
-netlify env:set VITE_SUPABASE_URL "https://hfscflqjpozqyfpohvjj.supabase.co"
+netlify env:set VITE_SUPABASE_URL "https://ibqgwakjmsnjtvwpkdns.supabase.co"
 netlify env:set VITE_SUPABASE_PUBLISHABLE_KEY "your-key-here"
 ```
 
@@ -255,8 +255,8 @@ netlify init
 
 # OR if site exists, link and deploy
 netlify link
-netlify env:set VITE_SUPABASE_URL "https://hfscflqjpozqyfpohvjj.supabase.co"
-netlify env:set VITE_SUPABASE_PUBLISHABLE_KEY "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhmc2NmbHFqcG96cXlmcG9odmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0Mzg5ODUsImV4cCI6MjA0NDAxNDk4NX0.VF0RBEsJJNUzQv8_Jt3zv5TC9D5rLKU8v5OmPvGPpYs"
+netlify env:set VITE_SUPABASE_URL "https://ibqgwakjmsnjtvwpkdns.supabase.co"
+netlify env:set VITE_SUPABASE_PUBLISHABLE_KEY "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlicWd3YWtqbXNuanR2d3BrZG5zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NzU3MjIsImV4cCI6MjA3NzM1MTcyMn0.mufRIN2JjlfrVqHZ6PnFypkTxvGWW562CO6IHO2skdI"
 netlify deploy --prod
 ```
 

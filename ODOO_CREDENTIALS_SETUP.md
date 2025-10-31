@@ -47,7 +47,7 @@ VITE_ODOO_PASSWORD=***
 ### Add Secrets to Supabase
 
 1. **Go to Supabase Dashboard:**
-   - URL: https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj/settings/functions
+   - URL: https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns/settings/functions
    - Or navigate: Project Settings → Edge Functions → Secrets
 
 2. **Add these 4 secrets:**
@@ -97,7 +97,7 @@ Value: 47977d425aad95e73b4445b37b75bbc9a624f365
 2. **Add ONLY these variables:**
 
 ```
-VITE_SUPABASE_URL=https://hfscflqjpozqyfpohvjj.supabase.co
+VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhmc2NmbHFqcG96cXlmcG9odmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjg0Mzg5ODUsImV4cCI6MjA0NDAxNDk4NX0.VF0RBEsJJNUzQv8_Jt3zv5TC9D5rLKU8v5OmPvGPpYs
 ```
 
@@ -274,9 +274,9 @@ Your application queries these Odoo models:
 ## 🎯 Quick Reference
 
 ### Supabase Dashboard URLs:
-- **Main Dashboard:** https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj
-- **Edge Functions:** https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj/functions
-- **Secrets:** https://supabase.com/dashboard/project/hfscflqjpozqyfpohvjj/settings/functions
+- **Main Dashboard:** https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns
+- **Edge Functions:** https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns/functions
+- **Secrets:** https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns/settings/functions
 
 ### Odoo Instance:
 - **URL:** https://con-formgroup.odoo.com/
