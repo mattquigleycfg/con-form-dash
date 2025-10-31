@@ -213,6 +213,5 @@ export const useMonthlyTargets = (financialYear?: string) => {
     updateTarget,
     deleteTarget,
     fetchTargets,
-    seedFY2526Data,
   };
 };

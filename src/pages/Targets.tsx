@@ -16,13 +16,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMonthlyTargets } from "@/hooks/useMonthlyTargets";
 import { MonthlyTargetsTable } from "@/components/MonthlyTargetsTable";
 import { MonthlyTargetsGantt } from "@/components/MonthlyTargetsGantt";
+import { MonthlyTargetDialog, MonthlyTargetData } from "@/components/MonthlyTargetDialog";
 import { BarChart3, Table2 } from "lucide-react";
 
 export default function Targets() {
   const { syncOdooData, metrics } = useOdooSync();
   const { targets, isLoading, createTarget, updateTarget, deleteTarget } = useTargets();
-  const { targets: monthlyTargets, isLoading: isMonthlyLoading, updateTarget: updateMonthlyTarget, seedFY2526Data } = useMonthlyTargets("FY25-26");
+  const { targets: monthlyTargets, isLoading: isMonthlyLoading, createTarget: createMonthlyTarget, updateTarget: updateMonthlyTarget } = useMonthlyTargets("FY25-26");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [monthlyDialogOpen, setMonthlyDialogOpen] = useState(false);
   const [monthlyView, setMonthlyView] = useState<"table" | "gantt">("table");
   const [editingTarget, setEditingTarget] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -99,6 +101,10 @@ export default function Targets() {
     setEditingTarget(null);
   };
 
+  const handleMonthlyTargetSave = (targetData: MonthlyTargetData) => {
+    createMonthlyTarget(targetData);
+  };
+
   return (
     <DashboardLayout>
       <div className="mb-8 flex items-start justify-between">
@@ -139,7 +145,11 @@ export default function Targets() {
         </TabsList>
 
         <TabsContent value="monthly" className="space-y-6">
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-between items-center mb-4">
+            <Button onClick={() => setMonthlyDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Monthly Target
+            </Button>
             <Tabs value={monthlyView} onValueChange={(v) => setMonthlyView(v as "table" | "gantt")}>
               <TabsList>
                 <TabsTrigger value="table" className="flex items-center gap-2">
@@ -273,6 +283,12 @@ export default function Targets() {
         onOpenChange={setDialogOpen}
         onSave={handleSave}
         target={editingTarget}
+      />
+
+      <MonthlyTargetDialog
+        open={monthlyDialogOpen}
+        onOpenChange={setMonthlyDialogOpen}
+        onSave={handleMonthlyTargetSave}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
