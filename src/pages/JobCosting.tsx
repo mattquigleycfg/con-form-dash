@@ -77,7 +77,7 @@ export default function JobCosting() {
           .select("id")
           .eq("odoo_sale_order_id", order.id)
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
         if (existingJob) {
           logger.info(`Job for SO ${order.name} already exists, skipping`);
