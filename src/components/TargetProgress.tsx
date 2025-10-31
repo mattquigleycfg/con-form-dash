@@ -31,10 +31,10 @@ export function TargetProgress() {
           .select('*')
           .gte('month_date', currentMonthDate.toISOString())
           .lt('month_date', new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString())
-          .single();
+          .maybeSingle();
         
         if (error) throw error;
-        setMonthlyTarget(data);
+        setMonthlyTarget(data || null);
       } catch (error) {
         console.error('Error fetching monthly target:', error);
       } finally {

@@ -75,11 +75,11 @@ export const useOdooTeam = () => {
         .select('total_sales_target')
         .gte('month_date', currentMonthDate.toISOString())
         .lt('month_date', new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString())
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
       
-      // Use current month's target
+      // Use current month's target (null if no data)
       setTotalTarget(data?.total_sales_target || 0);
     } catch (error) {
       console.error('Error fetching targets:', error);
