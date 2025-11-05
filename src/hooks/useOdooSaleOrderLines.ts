@@ -45,9 +45,10 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
             [["order_id", "=", saleOrderId]],
             [
               "id", "order_id", "product_id", "name",
-              "product_uom_qty", "qty_delivered", "price_unit", 
+              "product_uom_qty", "qty_delivered", "price_unit",
               "price_subtotal", "discount", "product_uom", "sequence",
-              "purchase_price", "product_cost", "cost_price", "display_type"
+              "purchase_price", "product_cost", "cost_price", "display_type",
+              "margin", "margin_percent"
             ],
           ],
         },
@@ -109,12 +110,12 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
 
           const product = productMap.get(line.product_id[0]);
 
-          const detailedType = (product?.detailed_type || product?.type || 'product') as 'service' | 'consu' | 'product';
+          const detailedTypeRaw = (product?.detailed_type || product?.type || 'product') as string;
+          const detailedType = detailedTypeRaw?.toLowerCase?.() as 'service' | 'consu' | 'product';
           const isMaterial = detailedType === 'consu' || detailedType === 'product';
 
-          // COST FALLBACK LOGIC (priority): purchase_price → product_cost → cost_price → product.standard_price → 0
+          // COST FALLBACK LOGIC (priority): purchase_price → product_cost → cost_price → margin → product.standard_price → 0
           let actualCost = 0;
-          let costSource = '';
 
           const valPurchase = line.purchase_price;
           const valProductCost = line.product_cost;
@@ -122,35 +123,76 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
 
           if (valPurchase !== undefined && valPurchase !== null && valPurchase !== false) {
             actualCost = Number(valPurchase) || 0;
-            costSource = 'purchase_price';
           } else if (valProductCost !== undefined && valProductCost !== null) {
             actualCost = Number(valProductCost) || 0;
-            costSource = 'product_cost';
           } else if (valCostPrice !== undefined && valCostPrice !== null) {
             actualCost = Number(valCostPrice) || 0;
-            costSource = 'cost_price';
-          } else {
-            // Try to detect custom fields like x_purchase_price or x_cost
-            const dynamicKeys = Object.keys(line).filter(k =>
+          }
+
+          const quantity = Number(line.product_uom_qty || 0);
+
+          if ((!actualCost || actualCost <= 0) && line.margin !== undefined && line.margin !== null) {
+            const marginValue = Number(line.margin);
+            const subtotal = Number(line.price_subtotal || 0);
+            const totalCostFromMargin = subtotal - marginValue;
+            const perUnit = quantity > 0 ? totalCostFromMargin / quantity : 0;
+            if (perUnit > 0) {
+              actualCost = perUnit;
+            }
+          }
+
+          if ((!actualCost || actualCost <= 0) && line.margin_percent !== undefined && line.margin_percent !== null) {
+            const marginPercent = Number(line.margin_percent);
+            if (marginPercent > 0 && marginPercent < 100) {
+              const perUnit = Number(line.price_unit || 0) * (1 - marginPercent / 100);
+              if (perUnit > 0) {
+                actualCost = perUnit;
+              }
+            }
+          }
+
+          if ((!actualCost || actualCost <= 0)) {
+            const dynamicKeys = Object.keys(line).filter((k) =>
               k.startsWith('x_') && /(purchase.*price|cost.*price|purchase_price|cost)/i.test(k)
             );
             for (const k of dynamicKeys) {
               const v = Number((line as any)[k]);
               if (!isNaN(v) && v > 0) {
                 actualCost = v;
-                costSource = k;
                 break;
               }
             }
-            if (!actualCost && product?.standard_price !== undefined && product?.standard_price !== null) {
-              actualCost = Number(product.standard_price) || 0;
-              costSource = 'standard_price';
+          }
+
+          if ((!actualCost || actualCost <= 0) && product?.standard_price !== undefined && product?.standard_price !== null) {
+            actualCost = Number(product.standard_price) || 0;
+          }
+
+          if ((!actualCost || actualCost <= 0) && line.price_subtotal) {
+            const subtotal = Number(line.price_subtotal || 0);
+            actualCost = quantity > 0 ? subtotal / quantity : subtotal;
+          }
+
+          if ((!actualCost || actualCost <= 0) && line.total_cost && line.product_uom_qty) {
+            const perUnit = Number(line.total_cost) / Number(line.product_uom_qty || 1);
+            if (perUnit > 0 && Number.isFinite(perUnit)) {
+              actualCost = perUnit;
             }
           }
 
-          const totalCost = actualCost * (line.product_uom_qty || 0);
-          const lineMargin = (line.price_subtotal || 0) - totalCost;
-          const marginPercent = (line.price_subtotal || 0) > 0 ? (lineMargin / line.price_subtotal) * 100 : 0;
+          actualCost = Math.max(0, actualCost);
+          let totalCost = actualCost * (line.product_uom_qty || 0);
+          if ((!totalCost || totalCost <= 0) && line.price_subtotal) {
+            totalCost = Number(line.price_subtotal || 0);
+          }
+
+          let lineMargin = Number(line.margin ?? 0);
+          if (!lineMargin && line.margin !== 0) {
+            lineMargin = (Number(line.price_subtotal || 0)) - totalCost;
+          }
+          const marginPercent = line.margin_percent !== undefined && line.margin_percent !== null
+            ? Number(line.margin_percent)
+            : (Number(line.price_subtotal || 0) > 0 ? (lineMargin / Number(line.price_subtotal || 0)) * 100 : 0);
 
           return {
             id: line.id,

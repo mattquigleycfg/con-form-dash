@@ -37,6 +37,12 @@ export function ListView({ jobs, onJobClick }: ListViewProps) {
               return "secondary";
             };
 
+            const getHealthColor = () => {
+              if (budgetUtilization > 100) return "bg-red-500";
+              if (budgetUtilization > 80) return "bg-yellow-500";
+              return "bg-green-500";
+            };
+
             return (
               <TableRow
                 key={job.id}
@@ -44,7 +50,13 @@ export function ListView({ jobs, onJobClick }: ListViewProps) {
                 onClick={() => onJobClick(job.id)}
               >
                 <TableCell className="font-medium">
-                  {job.sale_order_name}
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className={`w-2.5 h-2.5 rounded-full ${getHealthColor()} shadow-sm`}
+                      title={budgetUtilization > 100 ? 'Over Budget' : budgetUtilization > 80 ? 'At Risk' : 'On Track'}
+                    />
+                    <span>{job.sale_order_name}</span>
+                  </div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {job.opportunity_name || '-'}
@@ -71,7 +83,16 @@ export function ListView({ jobs, onJobClick }: ListViewProps) {
                       <span className="text-xs text-muted-foreground">
                         {budgetUtilization.toFixed(1)}%
                       </span>
-                      <Badge variant={getStatusVariant()} className="text-xs">
+                      <Badge 
+                        variant={getStatusVariant()} 
+                        className={`text-xs font-medium ${
+                          budgetUtilization > 100 
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' 
+                            : budgetUtilization > 80 
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' 
+                            : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                        }`}
+                      >
                         {budgetUtilization > 100 ? 'Over' : budgetUtilization > 80 ? 'At Risk' : 'On Track'}
                       </Badge>
                     </div>

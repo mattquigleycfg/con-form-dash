@@ -28,11 +28,12 @@ import { toast } from "sonner";
 import { useOdooProducts } from "@/hooks/useOdooProducts";
 import { useOdooSaleOrderLines } from "@/hooks/useOdooSaleOrderLines";
 import { JobCostingSummary } from "@/components/job-costing/JobCostingSummary";
+import { BudgetCircleChart } from "@/components/job-costing/BudgetCircleChart";
+import { Database } from "@/integrations/supabase/types";
 
 export default function JobCostingDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   const { data: job, isLoading: loadingJob } = useQuery({
@@ -63,32 +64,151 @@ export default function JobCostingDetail() {
     enabled: !!id,
   });
 
-  const { bomLines, isLoading: loadingBOM, createBOMLine, updateBOMLine, deleteBOMLine, importBOMFromCSV } = useJobBOM(id);
+  const { bomLines, isLoading: loadingBOM, createBOMLineAsync, deleteBOMLineAsync, importBOMFromCSVAsync } = useJobBOM(id);
   const { costs, isLoading: loadingCosts, createCost, updateCost, deleteCost } = useJobNonMaterialCosts(id);
   const { analysis, isLoading: loadingAnalysis } = useJobCostAnalysis(job);
   const { data: saleOrderLines, isLoading: loadingSaleOrderLines, refetch: refetchSaleOrderLines } = useOdooSaleOrderLines(job?.odoo_sale_order_id);
   const materialPurchasePriceMap = useMemo(() => {
     const map = new Map<number, number>();
     if (saleOrderLines && saleOrderLines.length > 0) {
-      for (const l of saleOrderLines) {
+      for (const line of saleOrderLines as any[]) {
         try {
-          const pid = Array.isArray(l.product_id) ? l.product_id[0] : undefined;
-          const pp: any = (l as any).purchase_price;
-          if (pid && pp !== undefined && pp !== null && pp !== false) {
-            map.set(pid, Number(pp) || 0);
+          const pid = Array.isArray(line.product_id) ? line.product_id[0] : undefined;
+          if (!pid) continue;
+
+          let cost = 0;
+
+          const actualCost = Number(line.actual_cost || 0);
+          if (actualCost && actualCost > 0) {
+            cost = actualCost;
+          } else {
+            const margin = (line as any).margin;
+            if (margin !== undefined && margin !== null && margin !== false) {
+              cost = Number(line.price_unit) - Number(margin);
+            }
+
+            if (!cost || cost <= 0) {
+              const marginPercent = Number(line.margin_percent || 0);
+              if (marginPercent > 0 && marginPercent < 100) {
+                cost = Number(line.price_unit) * (1 - marginPercent / 100);
+              }
+            }
+
+            if (!cost || cost <= 0) {
+              const purchasePrice = Number(line.purchase_price || 0);
+              if (purchasePrice > 0) cost = purchasePrice;
+            }
+
+            if (!cost || cost <= 0) {
+              const productCost = Number(line.product_cost || 0);
+              if (productCost > 0) cost = productCost;
+            }
+
+            if (!cost || cost <= 0) {
+              const costPrice = Number(line.cost_price || 0);
+              if (costPrice > 0) cost = costPrice;
+            }
+
+            if ((!cost || cost <= 0) && line.standard_price !== undefined && line.standard_price !== null) {
+              const standardPrice = Number(line.standard_price || 0);
+              if (standardPrice > 0) cost = standardPrice;
+            }
+
+            if ((!cost || cost <= 0) && line.total_cost && line.product_uom_qty) {
+              const perUnit = Number(line.total_cost) / Number(line.product_uom_qty || 1);
+              if (perUnit > 0 && Number.isFinite(perUnit)) {
+                cost = perUnit;
+              }
+            }
           }
-        } catch (e) {
-          // ignore
+
+          cost = Math.max(0, Number.isFinite(cost) ? cost : 0);
+          map.set(pid, cost);
+        } catch (error) {
+          console.warn('Failed to compute cost for sale order line', error);
         }
       }
     }
     return map;
   }, [saleOrderLines]);
 
+  const SERVICE_KEYWORDS = [
+    "INSTALLATION",
+    "FREIGHT",
+    "CRANAGE",
+    "ACCOMMODATION",
+    "TRAVEL",
+    "TRANSPORT",
+    "DELIVERY",
+    "LABOUR",
+    "SERVICE",
+    "SITE INSPECTION",
+    "WORKSHOP LABOUR",
+    "SHOP DRAWING",
+    "MAN DAY",
+    "EXPENSES",
+    "SITE LABOUR"
+  ];
+
+  const isServiceName = (name?: string | null) => {
+    const upper = name?.toUpperCase() || "";
+    return SERVICE_KEYWORDS.some((keyword) => upper.includes(keyword));
+  };
+
+const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: number | null; quantity?: number | null }) => {
+    if (line.total_cost !== undefined && line.total_cost !== null) {
+      return Number(line.total_cost);
+    }
+  const subtotal = (line as any).subtotal;
+  if (subtotal !== undefined && subtotal !== null) {
+    return Number(subtotal);
+  }
+    const unit = Number(line.unit_cost ?? 0);
+    const quantity = Number(line.quantity ?? 0);
+    const computed = unit * quantity;
+    return Number.isFinite(computed) ? computed : 0;
+  };
+
+  const isServiceBudgetLine = (line: Database["public"]["Tables"]["job_budget_lines"]["Row"]) => {
+    const type = line.product_type?.toString().toLowerCase() || "";
+    if (type === "service") return true;
+    return isServiceName(line.product_name);
+  };
+
+  const isMaterialBudgetLine = (line: Database["public"]["Tables"]["job_budget_lines"]["Row"]) => !isServiceBudgetLine(line);
+
+  const formatNumber = (value: number) => (Number.isFinite(value) ? formatCurrency(value) : formatCurrency(0));
+
   const [isAddBOMOpen, setIsAddBOMOpen] = useState(false);
   const [isAddCostOpen, setIsAddCostOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const { data: products } = useOdooProducts(productSearch);
+
+const budgetLineByProductId = useMemo(() => {
+  const map = new Map<number, Database["public"]["Tables"]["job_budget_lines"]["Row"]>();
+  budgetLines?.forEach((line) => {
+    if (line.product_id) {
+      map.set(line.product_id, line);
+    }
+  });
+  return map;
+}, [budgetLines]);
+
+const materialActualByProductId = useMemo(() => {
+  const map = new Map<number, number>();
+  if (!bomLines) return map;
+
+  bomLines.forEach((line) => {
+    if (!line.odoo_product_id) return;
+    const budgetLine = budgetLineByProductId.get(line.odoo_product_id);
+    if (!budgetLine || !isMaterialBudgetLine(budgetLine)) return;
+
+    const totalCost = resolveBomLineTotal(line);
+    map.set(line.odoo_product_id, (map.get(line.odoo_product_id) ?? 0) + totalCost);
+  });
+
+  return map;
+}, [bomLines, budgetLineByProductId]);
 
   const [newBOM, setNewBOM] = useState({
     odoo_product_id: null as number | null,
@@ -102,37 +222,175 @@ export default function JobCostingDetail() {
     cost_type: "installation" | "freight" | "cranage" | "travel" | "accommodation" | "other";
     description: string;
     amount: number;
-  }>({
-    cost_type: "installation",
-    description: "",
-    amount: 0,
-  });
+  }>(
+    {
+      cost_type: "installation",
+      description: "",
+      amount: 0,
+    }
+  );
 
-  const handleAddBOM = () => {
+  const [actualInputs, setActualInputs] = useState<Record<number, string>>({});
+  const [isSavingActual, setIsSavingActual] = useState(false);
+  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+const getManualAdjustmentLine = (productId: number) =>
+  bomLines?.find(
+    (line) =>
+      line.odoo_product_id === productId &&
+      (line.notes === "Manual actual adjustment" || line.product_name?.includes("(Manual Actual)"))
+  );
+
+const sumActualExcludingManual = (productId: number) =>
+  bomLines?.reduce((sum, line) => {
+    if (line.odoo_product_id !== productId) return sum;
+    if (line.notes === "Manual actual adjustment" || line.product_name?.includes("(Manual Actual)")) {
+      return sum;
+    }
+    return sum + resolveBomLineTotal(line);
+  }, 0) || 0;
+
+const handleActualInputChange = (productId: number, value: string) => {
+  setActualInputs((prev) => ({ ...prev, [productId]: value }));
+};
+
+const recalculateJobTotals = async () => {
+  if (!id) return;
+
+  const { data: allMaterial } = await supabase
+    .from("job_bom_lines")
+    .select("total_cost")
+    .eq("job_id", id);
+
+  const materialActual = allMaterial?.reduce((sum, line) => sum + Number(line.total_cost || 0), 0) || 0;
+
+  const { data: allNonMaterial } = await supabase
+    .from("job_non_material_costs")
+    .select("amount")
+    .eq("job_id", id);
+
+  const nonMaterialActual = allNonMaterial?.reduce((sum, line) => sum + Number(line.amount || 0), 0) || 0;
+
+  await supabase
+    .from("jobs")
+    .update({
+      material_actual: materialActual,
+      total_actual: materialActual + nonMaterialActual,
+    })
+    .eq("id", id);
+};
+
+const handleActualSave = async (
+  line: Database["public"]["Tables"]["job_budget_lines"]["Row"],
+  rawValue: string
+) => {
+  if (!id) return;
+
+  const normalizedInput = rawValue.trim();
+  const parsed = normalizedInput === "" ? 0 : parseFloat(normalizedInput.replace(/,/g, ""));
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    toast.error("Please enter a valid actual amount");
+    return;
+  }
+
+  setIsSavingActual(true);
+
+  try {
+    const productId = line.product_id;
+    if (!productId) {
+      toast.error("Cannot update actuals for this item");
+      return;
+    }
+
+    const baseActual = sumActualExcludingManual(productId);
+    const adjustment = parsed - baseActual;
+    const manualLine = getManualAdjustmentLine(productId);
+
+    if (adjustment <= 0.0001) {
+      if (manualLine) {
+        await supabase
+          .from("job_bom_lines")
+          .delete()
+          .eq("id", manualLine.id);
+      }
+    } else if (manualLine) {
+      await supabase
+        .from("job_bom_lines")
+        .update({
+          quantity: 1,
+          unit_cost: adjustment,
+          total_cost: adjustment,
+          notes: "Manual actual adjustment",
+        })
+        .eq("id", manualLine.id);
+    } else {
+      await supabase
+        .from("job_bom_lines")
+        .insert({
+          job_id: id,
+          odoo_product_id: productId,
+          product_name: `${line.product_name} (Manual Actual)`,
+          quantity: 1,
+          unit_cost: adjustment,
+          total_cost: adjustment,
+          notes: "Manual actual adjustment",
+        });
+    }
+
+    await recalculateJobTotals();
+
+    queryClient.invalidateQueries({ queryKey: ["job-bom", id] });
+    queryClient.invalidateQueries({ queryKey: ["job", id] });
+    queryClient.invalidateQueries({ queryKey: ["jobs"] });
+
+    setActualInputs((prev) => ({ ...prev, [productId]: parsed.toFixed(2) }));
+
+    toast.success("Actual updated");
+  } catch (error) {
+    console.error(error);
+    toast.error("Failed to update actual");
+  } finally {
+    setIsSavingActual(false);
+  }
+};
+
+  const handleAddBOM = async () => {
     if (!id || !newBOM.product_name || newBOM.quantity <= 0 || newBOM.unit_cost < 0) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    createBOMLine({
-      job_id: id,
-      odoo_product_id: newBOM.odoo_product_id || undefined,
-      product_name: newBOM.product_name,
-      quantity: newBOM.quantity,
-      unit_cost: newBOM.unit_cost,
-      total_cost: newBOM.quantity * newBOM.unit_cost,
-      notes: newBOM.notes || undefined,
-    });
+    try {
+      await createBOMLineAsync({
+        job_id: id,
+        odoo_product_id: newBOM.odoo_product_id || undefined,
+        product_name: newBOM.product_name,
+        quantity: newBOM.quantity,
+        unit_cost: newBOM.unit_cost,
+        total_cost: newBOM.quantity * newBOM.unit_cost,
+        notes: newBOM.notes || undefined,
+      });
 
-    setNewBOM({
-      odoo_product_id: null,
-      product_name: "",
-      quantity: 0,
-      unit_cost: 0,
-      notes: "",
-    });
-    setIsAddBOMOpen(false);
-    toast.success("BOM line added successfully");
+      await recalculateJobTotals();
+
+      queryClient.invalidateQueries({ queryKey: ["job-bom", id] });
+      queryClient.invalidateQueries({ queryKey: ["job", id] });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+
+      toast.success("BOM line added successfully");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to add BOM line");
+    } finally {
+      setNewBOM({
+        odoo_product_id: null,
+        product_name: "",
+        quantity: 0,
+        unit_cost: 0,
+        notes: "",
+      });
+      setIsAddBOMOpen(false);
+    }
   };
 
   const handleAddCost = () => {
@@ -232,10 +490,19 @@ export default function JobCostingDetail() {
       }));
 
       const validLines = bomData.filter(line => line.product_name && line.quantity > 0);
-
-      if (validLines.length > 0) {
-        importBOMFromCSV({ jobId: id, lines: validLines });
-        toast.success(`Imported ${validLines.length} BOM lines with costs from Odoo`);
+ 
+       if (validLines.length > 0) {
+        try {
+          await importBOMFromCSVAsync({ jobId: id, lines: validLines });
+          await recalculateJobTotals();
+          queryClient.invalidateQueries({ queryKey: ["job-bom", id] });
+          queryClient.invalidateQueries({ queryKey: ["job", id] });
+          queryClient.invalidateQueries({ queryKey: ["jobs"] });
+          toast.success(`Imported ${validLines.length} BOM lines with costs from Odoo`);
+        } catch (error) {
+          console.error(error);
+          toast.error("Failed to import BOM lines");
+        }
       } else {
         toast.error("No valid lines found in CSV");
       }
@@ -281,27 +548,57 @@ export default function JobCostingDetail() {
   const remaining = job.total_budget - job.total_actual;
   const isOverBudget = remaining < 0;
 
-  // Calculate material totals using purchase_price from SO lines
-  const materialBudgetTotal = budgetLines?.filter(line => line.cost_category === 'material').reduce((sum, line) => {
-    const purchasePrice = materialPurchasePriceMap.get(line.product_id) ?? 0;
-    return sum + (purchasePrice * (line.quantity || 0));
-  }, 0) || 0;
-  const materialActualTotal = bomLines?.reduce((sum, line) => {
-    const purchasePrice = materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? 0;
-    return sum + (purchasePrice * (line.quantity || 0));
-  }, 0) || 0;
+  // Calculate material totals using enriched cost data
+  const materialBudgetTotal =
+    budgetLines?.filter(isMaterialBudgetLine).reduce((sum, line) => {
+      return sum + (line.subtotal ?? 0);
+    }, 0) || 0;
+  const matchedMaterialActualTotal = Array.from(materialActualByProductId.values()).reduce((sum, value) => sum + value, 0);
+  const unmatchedMaterialActualTotal =
+    bomLines?.reduce((sum, line) => {
+      if (line.odoo_product_id && budgetLineByProductId.has(line.odoo_product_id)) return sum;
+      if (isServiceName(line.product_name)) return sum;
+      return sum + resolveBomLineTotal(line);
+    }, 0) || 0;
+  const materialActualTotal = matchedMaterialActualTotal + unmatchedMaterialActualTotal;
   const materialRemaining = materialBudgetTotal - materialActualTotal;
   const materialOverBudget = materialRemaining < 0;
 
   // Calculate non-material totals
-  const nonMaterialBudgetTotal = budgetLines?.filter(line => line.cost_category !== 'material').reduce((sum, line) => sum + line.subtotal, 0) || 0;
+  const nonMaterialBudgetTotal = budgetLines?.filter(isServiceBudgetLine).reduce((sum, line) => sum + (line.subtotal ?? 0), 0) || 0;
   const nonMaterialActualTotal = costs?.reduce((sum, cost) => sum + cost.amount, 0) || 0;
   const nonMaterialRemaining = nonMaterialBudgetTotal - nonMaterialActualTotal;
   const nonMaterialOverBudget = nonMaterialRemaining < 0;
 
+  const costAnalysisOverview = useMemo(() => {
+    if (!analysis) return null;
+    return {
+      ...analysis,
+      materialBudget: materialBudgetTotal,
+      nonMaterialBudget: nonMaterialBudgetTotal,
+      totalBudget: materialBudgetTotal + nonMaterialBudgetTotal,
+    };
+  }, [analysis, materialBudgetTotal, nonMaterialBudgetTotal]);
+
+  const materialBudgetQtyTotal = useMemo(() => {
+    return budgetLines?.filter(isMaterialBudgetLine).reduce((sum, line) => sum + Number(line.quantity || 0), 0) || 0;
+  }, [budgetLines]);
+
+  const materialBomQtyTotal = useMemo(() => {
+    return bomLines?.reduce((sum, line) => sum + Number(line.quantity || 0), 0) || 0;
+  }, [bomLines]);
+
+  const materialBomCostTotal = useMemo(() => {
+    return bomLines?.reduce((sum, line) => sum + resolveBomLineTotal(line), 0) || 0;
+  }, [bomLines]);
+
+  const nonMaterialBudgetQtyTotal = useMemo(() => {
+    return budgetLines?.filter(isServiceBudgetLine).reduce((sum, line) => sum + Number(line.quantity || 0), 0) || 0;
+  }, [budgetLines]);
+
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate("/job-costing")}>
             <ArrowLeft className="h-4 w-4" />
@@ -312,41 +609,86 @@ export default function JobCostingDetail() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        {/* Budget Circle Chart - Hero Section */}
+        <BudgetCircleChart
+          totalBudget={job.total_budget}
+          totalActual={job.total_actual}
+          materialBudget={job.material_budget}
+          materialActual={job.material_actual}
+          nonMaterialBudget={job.non_material_budget}
+          nonMaterialActual={job.non_material_actual}
+        />
+
+        {/* Cost Analysis Overview */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Cost Analysis Overview</CardTitle>
+              <Badge variant="outline" className="ml-2">
+                {analysis?.analyticLines?.length || 0} entries
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingAnalysis ? (
+              <div className="text-center py-8">
+                <Skeleton className="h-40 w-full" />
+              </div>
+            ) : (
+              costAnalysisOverview && <CostAnalysisCard analysis={costAnalysisOverview} job={job} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* BOM Breakdown - Only show if data exists */}
+        {analysis?.bomBreakdowns && analysis.bomBreakdowns.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-medium">Total Budget</CardTitle>
+              <CardTitle>Bill of Materials Cost Breakdown</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(job.total_budget)}</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Material: {formatCurrency(job.material_budget)} | Non-Material: {formatCurrency(job.non_material_budget)}
-              </div>
+              <BomBreakdownCard bomBreakdowns={analysis.bomBreakdowns} />
             </CardContent>
           </Card>
+        )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium">Actual Costs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(job.total_actual)}</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Material: {formatCurrency(job.material_actual)} | Non-Material: {formatCurrency(job.non_material_actual)}
-              </div>
-            </CardContent>
-          </Card>
+        {/* Keep old cards hidden for data compatibility but don't display */}
+        <div className="hidden">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Total Budget</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(job.total_budget)}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Material: {formatCurrency(job.material_budget)} | Non-Material: {formatCurrency(job.non_material_budget)}
+                </div>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium">Remaining</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${isOverBudget ? 'text-destructive' : 'text-primary'}`}>
-                {formatCurrency(remaining)}
-              </div>
-              <Progress 
-                value={percentage} 
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Actual Costs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(job.total_actual)}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Material: {formatCurrency(job.material_actual)} | Non-Material: {formatCurrency(job.non_material_actual)}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Remaining</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${isOverBudget ? 'text-destructive' : 'text-primary'}`}>
+                  {formatCurrency(remaining)}
+                </div>
+                <Progress 
+                  value={percentage} 
                 className="mt-2"
                 style={{
                   ['--progress-background' as any]: isOverBudget 
@@ -357,48 +699,223 @@ export default function JobCostingDetail() {
               <div className="text-xs text-muted-foreground mt-1">{percentage.toFixed(1)}% spent</div>
             </CardContent>
           </Card>
+          </div>
         </div>
 
-        {/* Quotation Material & Service Costs */}
-        {saleOrderLines && saleOrderLines.length > 0 && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Quotation Material & Service Costs</CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Costs from Odoo sale order lines (purchase_price field)
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetchSaleOrderLines()}
-                disabled={loadingSaleOrderLines}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${loadingSaleOrderLines ? 'animate-spin' : ''}`} />
-                Reload
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <JobCostingSummary lines={saleOrderLines} />
+        {/* Quotation Material & Service Costs - Hidden, data shown in circle chart */}
+        <div className="hidden">
+          {saleOrderLines && saleOrderLines.length > 0 && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Quotation Material & Service Costs</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Costs from Odoo sale order lines (purchase_price field)
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchSaleOrderLines()}
+                  disabled={loadingSaleOrderLines}
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${loadingSaleOrderLines ? 'animate-spin' : ''}`} />
+                  Reload
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <JobCostingSummary lines={saleOrderLines} />
             </CardContent>
           </Card>
-        )}
+          )}
+        </div>
 
-        {/* Cost Analysis Section */}
-        {analysis && (
-          <div className="space-y-4">
-            <CostAnalysisCard analysis={analysis} />
-            <AnalyticLinesTable analyticLines={analysis.analyticLines} />
-            <BomBreakdownCard bomBreakdowns={analysis.bomBreakdowns} />
-          </div>
-        )}
-
-        <Tabs defaultValue="material" className="w-full">
-          <TabsList>
-            <TabsTrigger value="material">Material</TabsTrigger>
-            <TabsTrigger value="non-material">Non-Material</TabsTrigger>
-          </TabsList>
+        {/* Cost Analysis Breakdown */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Cost Analysis Breakdown</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (!analysis?.analyticLines || !id || !job) return;
+                    
+                    toast.info("Importing costs from analytic account...");
+                    
+                    // Get products for classification
+                    const productIds = analysis.analyticLines
+                      .filter(line => line.product_id && line.product_id[0])
+                      .map(line => line.product_id![0]);
+                    
+                    let productMap = new Map();
+                    if (productIds.length > 0) {
+                      const { data: products } = await supabase.functions.invoke("odoo-query", {
+                        body: {
+                          model: "product.product",
+                          method: "search_read",
+                          args: [
+                            [["id", "in", productIds]],
+                            ["id", "detailed_type", "default_code", "name"],
+                          ],
+                        },
+                      });
+                      productMap = new Map((products as any[] || []).map(p => [p.id, p]));
+                    }
+                    
+                    // Check existing costs to avoid duplicates
+                    const { data: existingCosts } = await supabase
+                      .from('job_non_material_costs')
+                      .select('description')
+                      .eq('job_id', id)
+                      .eq('is_from_odoo', true);
+                    
+                    const { data: existingBOMLines } = await supabase
+                      .from('job_bom_lines')
+                      .select('odoo_product_id')
+                      .eq('job_id', id)
+                      .not('odoo_product_id', 'is', null);
+                    
+                    const existingDescriptions = new Set(existingCosts?.map(c => c.description) || []);
+                    const existingBOMProductIds = new Set(existingBOMLines?.map(b => b.odoo_product_id).filter(Boolean) || []);
+                    
+                    // Classify analytic lines by product type
+                    const materialLines: any[] = [];
+                    const nonMaterialLines: any[] = [];
+                    
+                    analysis.analyticLines.forEach(line => {
+                      if (line.amount === 0) return;
+                      
+                      const lineDescription = `${line.name} (${line.date})`;
+                      if (existingDescriptions.has(lineDescription)) return;
+                      
+                      const productId = line.product_id?.[0];
+                      const product = productMap.get(productId);
+                      const productName = line.product_id?.[1] || '';
+                      const productNameUpper = productName.toUpperCase();
+                      
+                      // Classify by product type (same logic as quote lines)
+                      let productType = product?.detailed_type || 'product';
+                      
+                      const serviceKeywords = [
+                        'INSTALLATION', 'FREIGHT', 'CRANAGE', 'ACCOMMODATION', 'TRAVEL',
+                        'TRANSPORT', 'DELIVERY', 'LABOUR', 'SERVICE', 'SITE INSPECTION',
+                        'WORKSHOP LABOUR', 'SHOP DRAWING', 'MAN DAY', 'EXPENSES', 'SITE LABOUR'
+                      ];
+                      
+                      const isServiceByName = serviceKeywords.some(keyword => productNameUpper.includes(keyword));
+                      
+                      if (isServiceByName && productType !== 'service') {
+                        productType = 'service';
+                      }
+                      
+                      const amount = Math.abs(line.amount);
+                      
+                      if (productType === 'service') {
+                        // Non-material
+                        let costType: "installation" | "freight" | "cranage" | "travel" | "accommodation" | "other" = "other";
+                        if (productNameUpper.includes('INSTALLATION')) costType = 'installation';
+                        else if (productNameUpper.includes('FREIGHT')) costType = 'freight';
+                        else if (productNameUpper.includes('CRANAGE')) costType = 'cranage';
+                        else if (productNameUpper.includes('ACCOMMODATION')) costType = 'accommodation';
+                        else if (productNameUpper.includes('TRAVEL')) costType = 'travel';
+                        
+                        nonMaterialLines.push({
+                          job_id: id,
+                          cost_type: costType,
+                          description: lineDescription,
+                          amount: amount,
+                          is_from_odoo: true,
+                        });
+                      } else {
+                        // Material - add to BOM if product exists and not already imported
+                        if (productId && !existingBOMProductIds.has(productId)) {
+                          materialLines.push({
+                            job_id: id,
+                            odoo_product_id: productId,
+                            product_name: productName,
+                            quantity: 1, // Default quantity
+                            unit_cost: amount,
+                            notes: `Imported from analytic: ${line.name}`,
+                          });
+                        }
+                      }
+                    });
+                    
+                    // Import material lines (BOM)
+                    let materialImported = 0;
+                    for (const line of materialLines) {
+                      try {
+                        await createBOMLineAsync(line);
+                        materialImported++;
+                      } catch (error) {
+                        console.error('Error importing material line:', error);
+                      }
+                    }
+                    
+                    // Import non-material lines
+                    let nonMaterialImported = 0;
+                    for (const line of nonMaterialLines) {
+                      try {
+                        await createCost(line);
+                        nonMaterialImported++;
+                      } catch (error) {
+                        console.error('Error importing non-material line:', error);
+                      }
+                    }
+                    
+                    if (materialImported > 0 || nonMaterialImported > 0) {
+                      // Wait for mutations to complete
+                      await new Promise(resolve => setTimeout(resolve, 500));
+                      
+                      // Recalculate job totals
+                      const { data: allBOMLines } = await supabase
+                        .from("job_bom_lines")
+                        .select("unit_cost, quantity")
+                        .eq("job_id", id);
+                      
+                      const { data: allCosts } = await supabase
+                        .from("job_non_material_costs")
+                        .select("amount")
+                        .eq("job_id", id);
+                      
+                      const materialActual = allBOMLines?.reduce((sum, line) => sum + (Number(line.unit_cost) * Number(line.quantity)), 0) || 0;
+                      const nonMaterialActual = allCosts?.reduce((sum, cost) => sum + Number(cost.amount), 0) || 0;
+                      
+                      await supabase
+                        .from("jobs")
+                        .update({
+                          material_actual: materialActual,
+                          non_material_actual: nonMaterialActual,
+                          total_actual: materialActual + nonMaterialActual
+                        })
+                        .eq("id", id);
+                      
+                      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+                      queryClient.invalidateQueries({ queryKey: ["job", id] });
+                      queryClient.invalidateQueries({ queryKey: ["job-bom-lines", id] });
+                      queryClient.invalidateQueries({ queryKey: ["job-non-material-costs", id] });
+                      
+                      toast.success(`Imported ${materialImported} material line(s) and ${nonMaterialImported} non-material cost(s)`);
+                    } else {
+                      toast.info('No new costs to import (all already imported or no cost lines found)');
+                    }
+                  }}
+                  disabled={!analysis?.analyticLines || analysis.analyticLines.length === 0}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Import from Analytic
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="material" className="w-full">
+              <TabsList>
+                <TabsTrigger value="material">Material</TabsTrigger>
+                <TabsTrigger value="non-material">Non-Material</TabsTrigger>
+              </TabsList>
 
           <TabsContent value="material" className="space-y-4">
             <Card>
@@ -409,100 +926,77 @@ export default function JobCostingDetail() {
                     Budget: {formatCurrency(job.material_budget)} | Actual: {formatCurrency(job.material_actual)}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv"
-                    onChange={handleCSVUpload}
-                    className="hidden"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    Import BOM CSV
-                  </Button>
-                  <Dialog open={isAddBOMOpen} onOpenChange={setIsAddBOMOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="sm">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Material
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Add Material Line</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label>Search Odoo Product (Optional)</Label>
-                          <Input
-                            placeholder="Search by product name or internal reference..."
-                            value={productSearch}
-                            onChange={(e) => setProductSearch(e.target.value)}
-                          />
-                          {products && products.length > 0 && (
-                            <div className="border rounded-md max-h-48 overflow-y-auto">
-                              {products.map((product) => (
-                                <div
-                                  key={product.id}
-                                  className="p-2 hover:bg-accent cursor-pointer"
-                                  onClick={() => selectProduct(product.id, product.name, product.standard_price)}
-                                >
-                                  <div className="font-medium">{product.name}</div>
-                                  {product.default_code && (
-                                    <div className="text-xs text-muted-foreground">
-                                      Ref: {product.default_code}
-                                    </div>
-                                  )}
-                                  <div className="text-sm text-muted-foreground">
-                                    Cost: {formatCurrency(product.standard_price)}
+                <Dialog open={isAddBOMOpen} onOpenChange={setIsAddBOMOpen}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add Material Line</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label>Search Odoo Product (Optional)</Label>
+                        <Input
+                          placeholder="Search by product name or internal reference..."
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                        />
+                        {products && products.length > 0 && (
+                          <div className="border rounded-md max-h-48 overflow-y-auto">
+                            {products.map((product) => (
+                              <div
+                                key={product.id}
+                                className="p-2 hover:bg-accent cursor-pointer"
+                                onClick={() => selectProduct(product.id, product.name, product.standard_price)}
+                              >
+                                <div className="font-medium">{product.name}</div>
+                                {product.default_code && (
+                                  <div className="text-xs text-muted-foreground">
+                                    Ref: {product.default_code}
                                   </div>
+                                )}
+                                <div className="text-sm text-muted-foreground">
+                                  Cost: {formatCurrency(product.standard_price)}
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Product Name *</Label>
-                          <Input
-                            value={newBOM.product_name}
-                            onChange={(e) => setNewBOM({ ...newBOM, product_name: e.target.value })}
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>Quantity *</Label>
-                            <Input
-                              type="number"
-                              value={newBOM.quantity || ""}
-                              onChange={(e) => setNewBOM({ ...newBOM, quantity: parseFloat(e.target.value) || 0 })}
-                            />
+                              </div>
+                            ))}
                           </div>
-                          <div className="space-y-2">
-                            <Label>Unit Cost *</Label>
-                            <Input
-                              type="number"
-                              value={newBOM.unit_cost || ""}
-                              onChange={(e) => setNewBOM({ ...newBOM, unit_cost: parseFloat(e.target.value) || 0 })}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Notes</Label>
-                          <Textarea
-                            value={newBOM.notes}
-                            onChange={(e) => setNewBOM({ ...newBOM, notes: e.target.value })}
-                          />
-                        </div>
-                        <Button onClick={handleAddBOM} className="w-full">Add Material Line</Button>
+                        )}
                       </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
+                      <div className="space-y-2">
+                        <Label>Product Name *</Label>
+                        <Input
+                          value={newBOM.product_name}
+                          onChange={(e) => setNewBOM({ ...newBOM, product_name: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Quantity *</Label>
+                          <Input
+                            type="number"
+                            value={newBOM.quantity || ""}
+                            onChange={(e) => setNewBOM({ ...newBOM, quantity: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Unit Cost *</Label>
+                          <Input
+                            type="number"
+                            value={newBOM.unit_cost || ""}
+                            onChange={(e) => setNewBOM({ ...newBOM, unit_cost: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Notes</Label>
+                        <Textarea
+                          value={newBOM.notes}
+                          onChange={(e) => setNewBOM({ ...newBOM, notes: e.target.value })}
+                        />
+                      </div>
+                      <Button onClick={handleAddBOM} className="w-full">Add Material Line</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
@@ -518,18 +1012,95 @@ export default function JobCostingDetail() {
                             <TableHead>Product</TableHead>
                             <TableHead className="text-right">Quantity</TableHead>
                             <TableHead className="text-right">Unit Cost</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right">Budget Total</TableHead>
+                            <TableHead className="text-right">Actual</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {budgetLines?.filter(line => line.cost_category === 'material').map((line) => (
-                            <TableRow key={line.id}>
-                              <TableCell className="font-medium">{line.product_name}</TableCell>
-                              <TableCell className="text-right">{line.quantity}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(materialPurchasePriceMap.get(line.product_id) ?? 0)}</TableCell>
-                              <TableCell className="text-right">{formatCurrency((materialPurchasePriceMap.get(line.product_id) ?? 0) * (line.quantity || 0))}</TableCell>
+                          {budgetLines?.filter(isMaterialBudgetLine).map((line) => {
+                            const unitCost = line.unit_price ?? materialPurchasePriceMap.get(line.product_id) ?? 0;
+                            const totalCost = line.subtotal ?? unitCost * (line.quantity || 0);
+                            const productId = line.product_id || 0;
+                            const actualValue = materialActualByProductId.get(productId) ?? 0;
+                            const displayValue = actualInputs[productId] ?? actualValue.toFixed(2);
+                            return (
+                              <TableRow key={line.id}>
+                                <TableCell className="font-medium">{line.product_name}</TableCell>
+                                <TableCell className="text-right">{line.quantity}</TableCell>
+                                <TableCell className="text-right">
+                                  {formatNumber(unitCost)}
+                                </TableCell>
+                                <TableCell className="text-right">{formatNumber(totalCost)}</TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end">
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={displayValue}
+                                      onChange={(e) => handleActualInputChange(productId, e.target.value)}
+                                      onBlur={() => handleActualSave(line, actualInputs[productId] ?? displayValue)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.currentTarget.blur();
+                                        }
+                                      }}
+                                      disabled={isSavingActual}
+                                      className="h-8 w-32 text-right pr-2"
+                                    />
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right space-x-1">
+                                  <input
+                                    type="file"
+                                    accept=".csv"
+                                    className="hidden"
+                                    ref={(el) => {
+                                      fileInputRefs.current[productId] = el;
+                                    }}
+                                    onChange={(event) => {
+                                      handleCSVUpload(event);
+                                      event.target.value = "";
+                                    }}
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => fileInputRefs.current[productId]?.click()}
+                                  >
+                                    <Upload className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setNewBOM({
+                                        odoo_product_id: line.product_id || null,
+                                        product_name: line.product_name,
+                                        quantity: 1,
+                                        unit_cost: line.unit_price ?? 0,
+                                        notes: "",
+                                      });
+                                      setProductSearch("");
+                                      setIsAddBOMOpen(true);
+                                    }}
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                          {budgetLines && budgetLines.filter(isMaterialBudgetLine).length > 0 && (
+                            <TableRow className="font-semibold bg-muted/50">
+                              <TableCell>Total</TableCell>
+                              <TableCell className="text-right">{materialBudgetQtyTotal}</TableCell>
+                              <TableCell className="text-right">-</TableCell>
+                              <TableCell className="text-right">{formatNumber(materialBudgetTotal)}</TableCell>
+                              <TableCell className="text-right">{formatNumber(materialActualTotal)}</TableCell>
+                              <TableCell></TableCell>
                             </TableRow>
-                          ))}
+                          )}
                         </TableBody>
                       </Table>
                     )}
@@ -552,33 +1123,59 @@ export default function JobCostingDetail() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {bomLines?.map((line) => (
-                            <TableRow key={line.id}>
-                              <TableCell>
-                                <div className="font-medium">{line.product_name}</div>
-                                {line.notes && (
-                                  <div className="text-xs text-muted-foreground">{line.notes}</div>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right">{line.quantity}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? 0)}</TableCell>
-                              <TableCell className="text-right font-medium">{formatCurrency((materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? 0) * (line.quantity || 0))}</TableCell>
-                              <TableCell>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (confirm("Delete this BOM line?")) {
-                                      deleteBOMLine(line.id);
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
+                          {bomLines?.map((line) => {
+                            const unitCost = line.unit_cost ?? materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? 0;
+                            const totalCost = line.total_cost ?? unitCost * (line.quantity || 0);
+                            return (
+                              <TableRow key={line.id}>
+                                <TableCell>
+                                  <div className="font-medium">{line.product_name}</div>
+                                  {line.notes && (
+                                    <div className="text-xs text-muted-foreground">{line.notes}</div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">{line.quantity}</TableCell>
+                                <TableCell className="text-right">
+                                  {formatNumber(unitCost)}
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {formatNumber(totalCost)}
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (!confirm("Delete this BOM line?")) return;
+                                      try {
+                                        await deleteBOMLineAsync(line.id);
+                                        await recalculateJobTotals();
+                                        queryClient.invalidateQueries({ queryKey: ["job-bom", id] });
+                                        queryClient.invalidateQueries({ queryKey: ["job", id] });
+                                        queryClient.invalidateQueries({ queryKey: ["jobs"] });
+                                        toast.success("BOM line removed");
+                                      } catch (error) {
+                                        console.error(error);
+                                        toast.error("Failed to delete BOM line");
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                          {bomLines && bomLines.length > 0 && (
+                            <TableRow className="font-semibold bg-muted/50">
+                              <TableCell>Total</TableCell>
+                              <TableCell className="text-right">{materialBomQtyTotal}</TableCell>
+                              <TableCell className="text-right">-</TableCell>
+                              <TableCell className="text-right">{formatNumber(materialBomCostTotal)}</TableCell>
+                              <TableCell></TableCell>
                             </TableRow>
-                          ))}
+                          )}
                         </TableBody>
                       </Table>
                     )}
@@ -613,85 +1210,6 @@ export default function JobCostingDetail() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      if (!analysis?.analyticLines || !id) return;
-                      
-                      toast.info("Importing non-material costs from analytic account...");
-                      
-                      // Check existing costs to avoid duplicates
-                      const { data: existingCosts } = await supabase
-                        .from('job_non_material_costs')
-                        .select('description')
-                        .eq('job_id', id)
-                        .eq('is_from_odoo', true);
-                      
-                      const existingDescriptions = new Set(existingCosts?.map(c => c.description) || []);
-                      
-                      // Filter for lines with costs (checking both negative and positive amounts)
-                      const expenseLines = analysis.analyticLines.filter(line => {
-                        const lineDescription = `${line.name} (${line.date})`;
-                        return line.amount !== 0 && !existingDescriptions.has(lineDescription);
-                      });
-                      
-                      for (const line of expenseLines) {
-                        const productName = line.product_id ? line.product_id[1] : '';
-                        const amount = Math.abs(line.amount); // Always use absolute value
-                        
-                        // Determine cost type based on product name
-                        let costType: "installation" | "freight" | "cranage" | "travel" | "accommodation" | "other" = "other";
-                        const nameUpper = productName.toUpperCase();
-                        
-                        if (nameUpper.includes('INSTALLATION')) costType = 'installation';
-                        else if (nameUpper.includes('FREIGHT')) costType = 'freight';
-                        else if (nameUpper.includes('CRANAGE')) costType = 'cranage';
-                        else if (nameUpper.includes('ACCOMMODATION')) costType = 'accommodation';
-                        else if (nameUpper.includes('TRAVEL')) costType = 'travel';
-                        
-                        createCost({
-                          job_id: id,
-                          cost_type: costType,
-                          description: `${line.name} (${line.date})`,
-                          amount: amount,
-                          is_from_odoo: true,
-                        });
-                      }
-                      
-                      if (expenseLines.length > 0) {
-                        // Wait a moment for mutations to complete
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        
-                        // Recalculate job totals
-                        const { data: allCosts } = await supabase
-                          .from("job_non_material_costs")
-                          .select("amount")
-                          .eq("job_id", id);
-
-                        const nonMaterialActual = allCosts?.reduce((sum, cost) => sum + Number(cost.amount), 0) || 0;
-                        
-                        await supabase
-                          .from("jobs")
-                          .update({
-                            non_material_actual: nonMaterialActual,
-                            total_actual: job.material_actual + nonMaterialActual
-                          })
-                          .eq("id", id);
-
-                        queryClient.invalidateQueries({ queryKey: ["jobs"] });
-                        queryClient.invalidateQueries({ queryKey: ["job", id] });
-                        
-                        toast.success(`Imported ${expenseLines.length} non-material costs`);
-                      } else {
-                        toast.info('No new costs to import (all already imported or no cost lines found)');
-                      }
-                    }}
-                    disabled={!analysis?.analyticLines || analysis.analyticLines.length === 0}
-                  >
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Import from Analytic
-                  </Button>
                   <Dialog open={isAddCostOpen} onOpenChange={setIsAddCostOpen}>
                     <DialogTrigger asChild>
                     <Button size="sm">
@@ -762,21 +1280,29 @@ export default function JobCostingDetail() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {budgetLines?.filter(line => line.cost_category !== 'material').length === 0 ? (
+                          {budgetLines?.filter(isServiceBudgetLine).length === 0 ? (
                             <TableRow>
                               <TableCell colSpan={4} className="text-center text-muted-foreground">
                                 No non-material budget items
                               </TableCell>
                             </TableRow>
                           ) : (
-                            budgetLines?.filter(line => line.cost_category !== 'material').map((line) => (
+                            budgetLines?.filter(isServiceBudgetLine).map((line) => (
                               <TableRow key={line.id}>
                                 <TableCell className="font-medium">{line.product_name}</TableCell>
                                 <TableCell className="text-right">{line.quantity}</TableCell>
-                                <TableCell className="text-right">{formatCurrency(line.unit_price)}</TableCell>
-                                <TableCell className="text-right">{formatCurrency(line.subtotal)}</TableCell>
+                                <TableCell className="text-right">{formatNumber(line.unit_price ?? 0)}</TableCell>
+                                <TableCell className="text-right">{formatNumber(line.subtotal ?? 0)}</TableCell>
                               </TableRow>
                             ))
+                          )}
+                          {budgetLines && budgetLines.filter(isServiceBudgetLine).length > 0 && (
+                            <TableRow className="font-semibold bg-muted/50">
+                              <TableCell>Total</TableCell>
+                              <TableCell className="text-right">{nonMaterialBudgetQtyTotal}</TableCell>
+                              <TableCell className="text-right">-</TableCell>
+                              <TableCell className="text-right">{formatNumber(nonMaterialBudgetTotal)}</TableCell>
+                            </TableRow>
                           )}
                         </TableBody>
                       </Table>
@@ -789,6 +1315,8 @@ export default function JobCostingDetail() {
                     {['installation', 'freight', 'cranage', 'accommodation', 'travel', 'other'].map((type) => {
                       const typeCosts = costs?.filter(c => c.cost_type === type) || [];
                       if (typeCosts.length === 0) return null;
+
+                      const typeTotal = typeCosts.reduce((sum, cost) => sum + cost.amount, 0);
 
                       return (
                         <div key={type}>
@@ -829,6 +1357,11 @@ export default function JobCostingDetail() {
                                   </TableCell>
                                 </TableRow>
                               ))}
+                              <TableRow className="font-semibold bg-muted/50">
+                                <TableCell>Total</TableCell>
+                                <TableCell className="text-right">{formatNumber(typeTotal)}</TableCell>
+                                <TableCell></TableCell>
+                              </TableRow>
                             </TableBody>
                           </Table>
                         </div>
@@ -861,6 +1394,8 @@ export default function JobCostingDetail() {
             </Card>
           </TabsContent>
         </Tabs>
+          </CardContent>
+        </Card>
       </div>
       <AICopilot />
     </DashboardLayout>

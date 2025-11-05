@@ -98,8 +98,11 @@ export const useJobBOM = (jobId?: string) => {
     bomLines,
     isLoading,
     createBOMLine: createBOMLine.mutate,
+    createBOMLineAsync: createBOMLine.mutateAsync,
     updateBOMLine: updateBOMLine.mutate,
     deleteBOMLine: deleteBOMLine.mutate,
+    deleteBOMLineAsync: deleteBOMLine.mutateAsync,
     importBOMFromCSV: importBOMFromCSV.mutate,
+    importBOMFromCSVAsync: importBOMFromCSV.mutateAsync,
   };
 };

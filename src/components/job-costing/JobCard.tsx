@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Job } from "@/hooks/useJobs";
 import { format } from "date-fns";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
 interface JobCardProps {
   job: Job;
@@ -27,9 +28,20 @@ export function JobCard({ job, onClick, compact = false }: JobCardProps) {
     return "Over Budget";
   };
 
+  const getChartColor = () => {
+    if (budgetUtilization > 100) return "#ef4444";
+    if (budgetUtilization > 80) return "#f59e0b";
+    return "#10b981";
+  };
+
+  const chartData = [
+    { value: Math.min(job.total_actual, job.total_budget) },
+    { value: Math.max(0, job.total_budget - job.total_actual) },
+  ];
+
   return (
     <Card 
-      className="cursor-pointer hover:shadow-md transition-shadow"
+      className="cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all duration-200"
       onClick={onClick}
     >
       <CardHeader className={compact ? "pb-3" : "pb-4"}>
@@ -42,9 +54,44 @@ export function JobCard({ job, onClick, compact = false }: JobCardProps) {
               {job.customer_name}
             </p>
           </div>
-          <Badge variant={budgetUtilization > 100 ? "destructive" : "secondary"} className="text-xs shrink-0">
-            {getStatusLabel()}
-          </Badge>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Mini Donut Chart */}
+            <div className="relative w-10 h-10">
+              <ResponsiveContainer width={40} height={40}>
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    cx={20}
+                    cy={20}
+                    innerRadius={12}
+                    outerRadius={18}
+                    dataKey="value"
+                    isAnimationActive={false}
+                  >
+                    <Cell fill={getChartColor()} />
+                    <Cell fill="#e5e7eb" />
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-[8px] font-bold" style={{ color: getChartColor() }}>
+                  {Math.round(budgetUtilization)}%
+                </span>
+              </div>
+            </div>
+            <Badge 
+              variant={budgetUtilization > 100 ? "destructive" : "secondary"} 
+              className={`text-xs shrink-0 ${
+                budgetUtilization > 100 
+                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' 
+                  : budgetUtilization > 80 
+                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' 
+                  : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+              }`}
+            >
+              {getStatusLabel()}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className={compact ? "pt-0" : ""}>

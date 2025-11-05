@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Download, RefreshCw, Search } from "lucide-react";
@@ -160,7 +160,8 @@ export default function JobCosting() {
           const product = productMap.get(line.product_id[0]);
           const productName = line.product_id[1] || '';
           const productNameUpper = productName.toUpperCase();
-          let productType = product?.detailed_type || 'product';
+          const productTypeRaw = (product?.detailed_type || product?.type || 'product') as string;
+          let productType = productTypeRaw?.toLowerCase?.() || 'product';
           
           // CRITICAL FIX: Classify services by product name if detailed_type doesn't indicate service
           // Check for service-related keywords in product name
@@ -206,11 +207,20 @@ export default function JobCosting() {
             costPrice = line.purchase_price;
           }
           
+          if ((!costPrice || costPrice <= 0) && line.price_subtotal) {
+            costPrice = line.product_uom_qty > 0
+              ? line.price_subtotal / line.product_uom_qty
+              : line.price_subtotal;
+          }
+
           // Ensure cost is not negative
           costPrice = Math.max(0, costPrice);
           
           const quantity = line.product_uom_qty;
-          const costSubtotal = costPrice * quantity;
+          let costSubtotal = quantity > 0 ? costPrice * quantity : line.price_subtotal || 0;
+          if ((!costSubtotal || costSubtotal <= 0) && line.price_subtotal) {
+            costSubtotal = line.price_subtotal;
+          }
           
           if (productType === 'service') {
             nonMaterialLines.push({
@@ -671,6 +681,94 @@ export default function JobCosting() {
           view={view}
           onViewChange={setView}
         />
+
+        {/* Summary Dashboard */}
+        {filteredJobs && filteredJobs.length > 0 && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Active Jobs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{filteredJobs.length}</div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Budget</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${(filteredJobs.reduce((sum, job) => sum + job.total_budget, 0) / 1000).toFixed(0)}K
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Actual</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${(filteredJobs.reduce((sum, job) => sum + job.total_actual, 0) / 1000).toFixed(0)}K
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Utilization</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div 
+                  className={`text-2xl font-bold ${
+                    (() => {
+                      const totalBudget = filteredJobs.reduce((sum, job) => sum + job.total_budget, 0);
+                      const totalActual = filteredJobs.reduce((sum, job) => sum + job.total_actual, 0);
+                      const util = totalBudget > 0 ? (totalActual / totalBudget) * 100 : 0;
+                      return util > 100 ? 'text-red-600' : util > 80 ? 'text-yellow-600' : 'text-green-600';
+                    })()
+                  }`}
+                >
+                  {(() => {
+                    const totalBudget = filteredJobs.reduce((sum, job) => sum + job.total_budget, 0);
+                    const totalActual = filteredJobs.reduce((sum, job) => sum + job.total_actual, 0);
+                    return totalBudget > 0 ? ((totalActual / totalBudget) * 100).toFixed(1) : 0;
+                  })()}%
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Over Budget</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  {filteredJobs.filter(job => {
+                    const util = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
+                    return util > 100;
+                  }).length}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">At Risk</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">
+                  {filteredJobs.filter(job => {
+                    const util = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
+                    return util > 80 && util <= 100;
+                  }).length}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Search */}
         <div className="relative max-w-md">
