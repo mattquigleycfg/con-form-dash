@@ -94,7 +94,8 @@ export const useOdooTeam = () => {
 
   // Process sales reps data
   useEffect(() => {
-    const allowedSalespeople = ['Joel Boustani', 'Hein Cro', 'Adam Ford', 'Mitch Lavelle', 'Ami Kirk'];
+    // Only show Adam, Joel, and Mitch as per requirements
+    const allowedSalespeople = ['Adam Ford', 'Joel Boustani', 'Mitch Lavelle'];
     
     // Note: allOrders already contains only current month's data from the fetch
     // No additional date filtering needed

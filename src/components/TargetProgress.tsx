@@ -2,57 +2,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Target, Calendar, DollarSign } from "lucide-react";
 import { useOdooSync } from "@/hooks/useOdooSync";
-import { useEffect, useState } from "react";
+import { useTargetsContext } from "@/hooks/useTargetsContext";
+import { useEffect } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 
 export function TargetProgress() {
   const { syncOdooData, metrics, isLoading: metricsLoading } = useOdooSync();
-  const { user } = useAuth();
-  const [monthlyTarget, setMonthlyTarget] = useState<any>(null);
-  const [isLoadingTarget, setIsLoadingTarget] = useState(false);
+  const { currentMonthTeamTarget, isLoading: isTargetsLoading } = useTargetsContext();
 
   useEffect(() => {
     syncOdooData();
   }, []);
 
-  useEffect(() => {
-    const fetchMonthlyTarget = async () => {
-      if (!user) return;
-      
-      setIsLoadingTarget(true);
-      try {
-        const now = new Date();
-        const currentMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        
-        const { data, error } = await supabase
-          .from('monthly_targets')
-          .select('*')
-          .gte('month_date', currentMonthDate.toISOString())
-          .lt('month_date', new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString())
-          .maybeSingle();
-        
-        if (error) throw error;
-        setMonthlyTarget(data || null);
-      } catch (error) {
-        console.error('Error fetching monthly target:', error);
-      } finally {
-        setIsLoadingTarget(false);
-      }
-    };
-    
-    fetchMonthlyTarget();
-  }, [user]);
-
-  const isLoading = metricsLoading || isLoadingTarget;
+  const isLoading = metricsLoading || isTargetsLoading;
   
   const targets = [
     {
       id: 1,
-      name: "Monthly Revenue Target",
+      name: "CFG Monthly Sales Target",
       current: metrics?.totalRevenue || 0,
-      target: monthlyTarget?.total_sales_target || 0,
+      target: currentMonthTeamTarget || 0,
       period: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
       icon: DollarSign,
     },

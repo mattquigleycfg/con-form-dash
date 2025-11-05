@@ -101,23 +101,52 @@ export const useOdooRevenue = () => {
       monthlyData[monthKey] = (monthlyData[monthKey] || 0) + order.amount_total;
     });
 
-    // Create array with all months, matching with targets from database
-    const currentMonth = new Date().getMonth();
-    const data: MonthlyRevenue[] = monthNames
-      .slice(0, currentMonth + 1)
-      .map((month) => {
-        // Find matching target from monthly_targets table
-        const targetRecord = monthlyTargets.find(t => {
-          const targetMonth = t.month.split('-')[0]; // Extract month part from "Jul-25"
-          return targetMonth === month;
-        });
-        
-        return {
-          month,
-          actual: Math.round(monthlyData[month] || 0),
-          target: targetRecord ? targetRecord.total_sales_target : 0
-        };
+    // Determine which months to show based on filter
+    let monthsToShow: string[];
+    
+    if (filters.dateRange.preset === 'all' || !filters.dateRange.startDate || !filters.dateRange.endDate) {
+      // Show all months up to current month for year view
+      const currentMonth = new Date().getMonth();
+      monthsToShow = monthNames.slice(0, currentMonth + 1);
+    } else {
+      // Show months within the filtered date range
+      const startDate = new Date(filters.dateRange.startDate);
+      const endDate = new Date(filters.dateRange.endDate);
+      const monthsSet = new Set<string>();
+      
+      // Collect all months that have data in the filtered range
+      filteredOrders.forEach((order: any) => {
+        const date = new Date(order.date_order);
+        monthsSet.add(monthNames[date.getMonth()]);
       });
+      
+      // If no data, show months in the date range
+      if (monthsSet.size === 0) {
+        let current = new Date(startDate);
+        while (current <= endDate) {
+          monthsSet.add(monthNames[current.getMonth()]);
+          current.setMonth(current.getMonth() + 1);
+        }
+      }
+      
+      // Sort months in calendar order
+      monthsToShow = monthNames.filter(m => monthsSet.has(m));
+    }
+
+    // Create array with selected months, matching with targets from database
+    const data: MonthlyRevenue[] = monthsToShow.map((month) => {
+      // Find matching target from monthly_targets table
+      const targetRecord = monthlyTargets.find(t => {
+        const targetMonth = t.month.split('-')[0]; // Extract month part from "Jul-25"
+        return targetMonth === month;
+      });
+      
+      return {
+        month,
+        actual: Math.round(monthlyData[month] || 0),
+        target: targetRecord ? targetRecord.total_sales_target : 0
+      };
+    });
 
     setRevenueData(data);
   }, [allOrders, filters.dateRange, monthlyTargets]);

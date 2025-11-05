@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Download, RefreshCw, Search } from "lucide-react";
 import { useJobs } from "@/hooks/useJobs";
 import { useNavigate } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useOdooSalesOrders } from "@/hooks/useOdooSalesOrders";
+import { useJobCostingSalesOrders } from "@/hooks/useJobCostingSalesOrders";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,7 +26,6 @@ export default function JobCosting() {
   const navigate = useNavigate();
   const { jobs, isLoading } = useJobs();
   const { user } = useAuth();
-  const { salesOrders, isLoading: loadingSalesOrders } = useOdooSalesOrders();
   const { stages, isLoading: loadingStages } = useOdooProjectStages();
   const queryClient = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
@@ -43,6 +42,12 @@ export default function JobCosting() {
   });
   const [budgetSort, setBudgetSort] = useState<BudgetSort>('high-low');
   
+  // Fetch sales orders using the job costing specific hook (not global filters)
+  const { salesOrders, isLoading: loadingSalesOrders } = useJobCostingSalesOrders({
+    startDate: dateRange?.start,
+    endDate: dateRange?.end,
+  });
+  
   // Persist view preference
   useEffect(() => {
     localStorage.setItem('job-costing-view-mode', view);
@@ -58,9 +63,12 @@ export default function JobCosting() {
   // Apply all filters using the filtering hook
   const filteredJobs = useJobFiltering(jobs, { dateRange, budgetSort, searchTerm });
 
+  // Auto-sync on mount and when sales orders change (only run once)
+  const [hasAutoSynced, setHasAutoSynced] = useState(false);
+
 // Removed INSTALLATION SKU pre-check. We now simply filter by last month's confirmed orders using date_order.
 
-  const handleAutoSyncAll = async () => {
+  const handleAutoSyncAll = useCallback(async () => {
     if (!relevantSalesOrders.length || !user) {
       toast.error("No sales orders in selected date range to sync");
       return;
@@ -70,33 +78,34 @@ export default function JobCosting() {
     try {
       let syncedCount = 0;
       
+      
       for (const order of relevantSalesOrders) {
-        // Check if already synced
+        // Check if already synced (check across all users)
         const { data: existingJob } = await supabase
           .from("jobs")
           .select("id")
           .eq("odoo_sale_order_id", order.id)
-          .eq("user_id", user.id)
           .maybeSingle();
 
         if (existingJob) {
-          logger.info(`Job for SO ${order.name} already exists, skipping`);
           continue;
         }
-
-        // Fetch order lines
+        // Fetch order lines with margin fields to calculate cost
         const { data: orderLines, error: linesError } = await supabase.functions.invoke("odoo-query", {
           body: {
             model: "sale.order.line",
             method: "search_read",
             args: [
               [["order_id", "=", order.id]],
-              ["id", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal", "purchase_price"],
+              ["id", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal", "purchase_price", "margin", "margin_percent"],
             ],
           },
         });
 
-        if (linesError) throw linesError;
+        if (linesError) {
+          logger.error(`Error fetching order lines for SO ${order.name}:`, linesError);
+          throw linesError;
+        }
 
         // Filter out lines with no product_id, zero sale price, or "DESCRIPTION OF WORKS"
         const lines = (orderLines as any[]).filter(line => {
@@ -117,7 +126,7 @@ export default function JobCosting() {
             method: "search_read",
             args: [
               [["id", "in", productIds]],
-              ["id", "detailed_type", "standard_price", "default_code"],
+              ["id", "detailed_type", "default_code"],
             ],
           },
         });
@@ -149,9 +158,57 @@ export default function JobCosting() {
 
         lines.forEach(line => {
           const product = productMap.get(line.product_id[0]);
-          const productType = product?.detailed_type || 'product';
-          // Use purchase_price from sale order line (actual quoted cost) instead of generic product cost
-          const costPrice = line.purchase_price || product?.standard_price || 0;
+          const productName = line.product_id[1] || '';
+          const productNameUpper = productName.toUpperCase();
+          let productType = product?.detailed_type || 'product';
+          
+          // CRITICAL FIX: Classify services by product name if detailed_type doesn't indicate service
+          // Check for service-related keywords in product name
+          const serviceKeywords = [
+            'INSTALLATION',
+            'FREIGHT',
+            'CRANAGE',
+            'ACCOMMODATION',
+            'TRAVEL',
+            'TRANSPORT',
+            'DELIVERY',
+            'LABOUR',
+            'SERVICE',
+            'SITE INSPECTION',
+            'WORKSHOP LABOUR',
+            'SHOP DRAWING',
+            'MAN DAY',
+            'EXPENSES',
+            'SITE LABOUR'
+          ];
+          
+          const isServiceByName = serviceKeywords.some(keyword => productNameUpper.includes(keyword));
+          
+          // Override product type if name suggests it's a service
+          if (isServiceByName && productType !== 'service') {
+            productType = 'service';
+          }
+          
+          // Calculate cost price with multiple methods:
+          // 1. Calculate from margin: price_unit - margin (most reliable)
+          // 2. Calculate from margin_percent if margin not available
+          // 3. Use purchase_price as fallback
+          let costPrice = 0;
+          
+          if (line.margin !== undefined && line.margin !== null && line.margin !== false) {
+            // Option 1: Direct margin calculation (price - margin = cost)
+            costPrice = line.price_unit - line.margin;
+          } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
+            // Option 2: Calculate from margin percentage
+            costPrice = line.price_unit * (1 - line.margin_percent / 100);
+          } else if (line.purchase_price && line.purchase_price > 0) {
+            // Option 3: Direct purchase price (if available)
+            costPrice = line.purchase_price;
+          }
+          
+          // Ensure cost is not negative
+          costPrice = Math.max(0, costPrice);
+          
           const quantity = line.product_uom_qty;
           const costSubtotal = costPrice * quantity;
           
@@ -161,7 +218,8 @@ export default function JobCosting() {
               detailed_type: productType,
               cost_price: costPrice,
               cost_subtotal: costSubtotal,
-              cost_category: getNonMaterialCategory(product, line.product_id[1]),
+              cost_category: 'non_material', // Fixed: use constraint-compliant value
+              sub_category: getNonMaterialCategory(product, line.product_id[1]), // Store subcategory separately
             });
           } else {
             materialLines.push({
@@ -169,6 +227,7 @@ export default function JobCosting() {
               detailed_type: productType,
               cost_price: costPrice,
               cost_subtotal: costSubtotal,
+              cost_category: 'material', // Fixed: use constraint-compliant value
             });
           }
         });
@@ -279,14 +338,19 @@ export default function JobCosting() {
           quantity: line.product_uom_qty,
           unit_price: line.cost_price, // Use cost price
           subtotal: line.cost_subtotal, // Use cost-based subtotal
-          cost_category: line.cost_category || 'material',
+          cost_category: line.cost_category, // 'material' or 'non_material'
         }));
 
-        const { error: linesError2 } = await supabase
-          .from("job_budget_lines")
-          .insert(budgetLines);
+        if (budgetLines.length > 0) {
+          const { error: linesError2 } = await supabase
+            .from("job_budget_lines")
+            .insert(budgetLines);
 
-        if (linesError2) throw linesError2;
+          if (linesError2) {
+            logger.error('Budget lines insert error:', linesError2);
+            throw linesError2;
+          }
+        }
 
         syncedCount++;
       }
@@ -300,6 +364,138 @@ export default function JobCosting() {
     } catch (error) {
       logger.error("Error auto-syncing jobs", error);
       toast.error("Failed to sync jobs from Odoo");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [relevantSalesOrders, user, queryClient]);
+
+  // Trigger auto-sync once on mount
+  useEffect(() => {
+    if (!loadingSalesOrders && salesOrders && salesOrders.length > 0 && user && !isSyncing && !hasAutoSynced) {
+      setHasAutoSynced(true);
+      handleAutoSyncAll();
+    }
+  }, [salesOrders?.length, user?.id, hasAutoSynced, loadingSalesOrders, isSyncing, handleAutoSyncAll]);
+
+  const handleSyncCosts = async () => {
+    if (!user || jobs.length === 0) {
+      toast.error("No jobs to sync costs for");
+      return;
+    }
+
+    setIsSyncing(true);
+    
+    try {
+      let updatedCount = 0;
+      
+      toast.info(`Syncing costs for ${jobs.length} jobs...`);
+      
+      for (const job of jobs) {
+        try {
+          // Fetch order lines with margin data from Odoo
+          const { data: orderLines, error: linesError } = await supabase.functions.invoke("odoo-query", {
+            body: {
+              model: "sale.order.line",
+              method: "search_read",
+              args: [
+                [["order_id", "=", job.odoo_sale_order_id]],
+                ["id", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal", "purchase_price", "margin", "margin_percent"],
+              ],
+            },
+          });
+
+          if (linesError) {
+            logger.error(`Error fetching lines for job ${job.sale_order_name}:`, linesError);
+            continue;
+          }
+
+          if (!orderLines || orderLines.length === 0) continue;
+
+          // Filter out lines with no product_id, zero sale price, or "DESCRIPTION OF WORKS"
+          const lines = (orderLines as any[]).filter(line => {
+            if (!line.product_id || !line.product_id[0]) return false;
+            if (!line.price_subtotal || line.price_subtotal === 0) return false;
+            
+            const productName = line.product_id[1] || '';
+            if (productName.toLowerCase().includes('description of works')) return false;
+            
+            return true;
+          });
+
+          if (lines.length === 0) continue;
+
+          // Calculate costs using margin (same logic as sync)
+          const updatedBudgetLines = lines.map(line => {
+            // Calculate cost price with multiple methods:
+            let costPrice = 0;
+            
+            if (line.margin !== undefined && line.margin !== null && line.margin !== false) {
+              costPrice = line.price_unit - line.margin;
+            } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
+              costPrice = line.price_unit * (1 - line.margin_percent / 100);
+            } else if (line.purchase_price && line.purchase_price > 0) {
+              costPrice = line.purchase_price;
+            }
+            
+            costPrice = Math.max(0, costPrice);
+            const quantity = line.product_uom_qty;
+            const costSubtotal = costPrice * quantity;
+
+            return {
+              odoo_line_id: line.id,
+              unit_price: costPrice,
+              subtotal: costSubtotal,
+            };
+          });
+
+          // Update existing budget lines
+          for (const updatedLine of updatedBudgetLines) {
+            const { error: updateError } = await supabase
+              .from("job_budget_lines")
+              .update({
+                unit_price: updatedLine.unit_price,
+                subtotal: updatedLine.subtotal,
+              })
+              .eq("job_id", job.id)
+              .eq("odoo_line_id", updatedLine.odoo_line_id);
+
+            if (updateError) {
+              logger.error(`Error updating budget line:`, updateError);
+            }
+          }
+
+          // Recalculate job totals
+          const materialBudget = updatedBudgetLines
+            .reduce((sum, line) => sum + line.subtotal, 0);
+
+          const { error: jobUpdateError } = await supabase
+            .from("jobs")
+            .update({
+              material_budget: materialBudget,
+            })
+            .eq("id", job.id);
+
+          if (jobUpdateError) {
+            logger.error(`Error updating job totals:`, jobUpdateError);
+          } else {
+            updatedCount++;
+          }
+
+        } catch (error) {
+          logger.error(`Error syncing costs for job ${job.sale_order_name}:`, error);
+          continue;
+        }
+      }
+
+      if (updatedCount > 0) {
+        toast.success(`Updated costs for ${updatedCount} job(s)!`);
+        queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      } else {
+        toast.warning("No jobs were updated. Check console for errors.");
+      }
+    } catch (error) {
+      logger.error("Error syncing costs:", error);
+      toast.error("Failed to sync costs. Check console for details.");
     } finally {
       setIsSyncing(false);
     }
@@ -415,6 +611,23 @@ export default function JobCosting() {
             <Button variant="outline" onClick={() => navigate("/job-costing/reports")}>
               <Download className="mr-2 h-4 w-4" />
               Reports
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleSyncCosts} 
+              disabled={isSyncing || isLoading || !jobs || jobs.length === 0}
+            >
+              {isSyncing ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Sync Costs
+                </>
+              )}
             </Button>
             <Button 
               variant="outline" 

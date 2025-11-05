@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { SalesRep } from "@/hooks/useOdooTeam";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -53,42 +54,48 @@ export function PerformanceTable({ salesReps, isLoading }: PerformanceTableProps
             return (
               <div
                 key={rep.id}
-                className="flex items-center gap-4 rounded-lg border border-border p-4 transition-all hover:bg-muted/50"
+                className="rounded-lg border border-border p-4 transition-all hover:bg-muted/50"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                  {rep.avatar}
-                </div>
-
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-foreground">{rep.name}</h4>
-                    {index === 0 && (
-                      <Badge className="bg-gradient-primary">🏆 Top Performer</Badge>
-                    )}
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                    {rep.avatar}
                   </div>
-                  <div className="mt-1 flex items-center gap-4 text-sm text-muted-foreground">
-                    <span>{rep.deals} deals</span>
-                    <span>•</span>
-                    <span>${rep.revenue.toLocaleString()}</span>
-                  </div>
-                </div>
 
-                <div className="text-right">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-lg font-bold ${
-                        isAboveTarget ? "text-accent" : "text-warning"
-                      }`}
-                    >
-                      {performance}%
-                    </span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-foreground">{rep.name}</h4>
+                      {index === 0 && (
+                        <Badge className="bg-gradient-primary">🏆 Top Performer</Badge>
+                      )}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>{rep.deals} deals</span>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-foreground">
+                      ${Math.round(rep.revenue / 1000)}K
+                    </div>
                     {rep.trend === "up" ? (
-                      <TrendingUp className="h-5 w-5 text-accent" />
+                      <TrendingUp className="h-4 w-4 text-accent ml-auto" />
                     ) : (
-                      <TrendingDown className="h-5 w-5 text-destructive" />
+                      <TrendingDown className="h-4 w-4 text-destructive ml-auto" />
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">of target</p>
+                </div>
+                
+                {/* Progress Bar */}
+                <Progress value={parseFloat(performance)} className="h-2" />
+                
+                {/* Stats below progress bar */}
+                <div className="mt-2 flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {performance}% of target
+                  </span>
+                  <span className="font-medium text-muted-foreground">
+                    Target: ${Math.round(rep.target / 1000)}K
+                  </span>
                 </div>
               </div>
             );

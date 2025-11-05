@@ -98,12 +98,6 @@ export const useFilteredMetrics = () => {
       ? (wonOpportunities.length / opportunitiesInPeriod.length) * 100
       : 0;
 
-    console.log('Conversion Rate Debug', {
-      totalCreated: opportunitiesInPeriod.length,
-      wonCount: wonOpportunities.length,
-      conversionRate: conversionRate.toFixed(1) + '%'
-    });
-
     // Filter to only active/open opportunities (exclude won >= 90% and lost <= 10%)
     const activeOpportunities = opportunities.filter(
       (opp) => opp.probability > 10 && opp.probability < 90

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { subDays } from 'date-fns';
 
 export interface DateRange {
   preset: string;
@@ -35,12 +36,17 @@ interface FilterContextType {
   isFiltered: boolean;
 }
 
+const getDefaultDateRange = (): DateRange => {
+  const now = new Date();
+  return {
+    preset: '30d',
+    startDate: subDays(now, 30),
+    endDate: now,
+  };
+};
+
 const defaultFilters: FilterState = {
-  dateRange: {
-    preset: 'all',
-    startDate: null,
-    endDate: null,
-  },
+  dateRange: getDefaultDateRange(),
   opportunityStage: [],
   dealStatus: [],
   salesRep: [],
@@ -145,7 +151,7 @@ export const FilterProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const isFiltered =
-    filters.dateRange.preset !== 'all' ||
+    filters.dateRange.preset !== '30d' ||
     filters.opportunityStage.length > 0 ||
     filters.dealStatus.length > 0 ||
     filters.salesRep.length > 0 ||

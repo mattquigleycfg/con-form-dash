@@ -17,6 +17,7 @@ import { useMonthlyTargets } from "@/hooks/useMonthlyTargets";
 import { MonthlyTargetsTable } from "@/components/MonthlyTargetsTable";
 import { MonthlyTargetsGantt } from "@/components/MonthlyTargetsGantt";
 import { MonthlyTargetDialog, MonthlyTargetData } from "@/components/MonthlyTargetDialog";
+import { SalespersonTargetsTable } from "@/components/SalespersonTargetsTable";
 import { BarChart3, Table2 } from "lucide-react";
 
 export default function Targets() {
@@ -111,7 +112,7 @@ export default function Targets() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Sales Targets</h1>
           <p className="mt-1 text-muted-foreground">
-            Track progress towards your goals and manage monthly targets
+            Track team and individual sales targets for Adam, Joel, and Mitch
           </p>
         </div>
         <div className="flex gap-2">
@@ -132,11 +133,15 @@ export default function Targets() {
         </div>
       </div>
 
-      <Tabs defaultValue="monthly" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="monthly" className="flex items-center gap-2">
+      <Tabs defaultValue="team" className="space-y-6">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
+          <TabsTrigger value="team" className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
-            Monthly Targets
+            Team Targets
+          </TabsTrigger>
+          <TabsTrigger value="salesperson" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Sales Person Targets
           </TabsTrigger>
           <TabsTrigger value="goals" className="flex items-center gap-2">
             <Target className="h-4 w-4" />
@@ -144,11 +149,11 @@ export default function Targets() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="monthly" className="space-y-6">
+        <TabsContent value="team" className="space-y-6">
           <div className="flex justify-between items-center mb-4">
             <Button onClick={() => setMonthlyDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              New Monthly Target
+              New Team Target
             </Button>
             <Tabs value={monthlyView} onValueChange={(v) => setMonthlyView(v as "table" | "gantt")}>
               <TabsList>
@@ -172,6 +177,10 @@ export default function Targets() {
           ) : (
             <MonthlyTargetsGantt targets={monthlyTargets} />
           )}
+        </TabsContent>
+
+        <TabsContent value="salesperson" className="space-y-6">
+          <SalespersonTargetsTable />
         </TabsContent>
 
         <TabsContent value="goals" className="space-y-6">

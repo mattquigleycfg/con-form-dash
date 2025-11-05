@@ -79,11 +79,6 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
             }
           }
         });
-        if (debugLine && (debugLine as any[]).length > 0) {
-          const line0 = (debugLine as any[])[0];
-          console.log("Available fields on sale.order.line:", Object.keys(line0));
-          console.log("Full line data:", line0);
-        }
       }
 
       const productIds = lines
@@ -153,12 +148,6 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
             }
           }
 
-          if (!actualCost) {
-            console.warn(`Line ${line.id} (${line.product_id?.[1]}): No cost found!`);
-          } else {
-            console.log(`Line ${line.id} (${line.product_id?.[1]}): Using ${costSource} = ${actualCost}`);
-          }
-
           const totalCost = actualCost * (line.product_uom_qty || 0);
           const lineMargin = (line.price_subtotal || 0) - totalCost;
           const marginPercent = (line.price_subtotal || 0) > 0 ? (lineMargin / line.price_subtotal) * 100 : 0;
@@ -188,9 +177,6 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
           } as SaleOrderLine;
         }).filter(Boolean) as SaleOrderLine[]
       );
-
-      const linesWithCost = enrichedLines.filter(l => l.actual_cost > 0).length;
-      console.log(`SO ${saleOrderId}: ${enrichedLines.length} lines, ${linesWithCost} with cost, ${enrichedLines.length - linesWithCost} without cost`);
 
       return enrichedLines;
     },

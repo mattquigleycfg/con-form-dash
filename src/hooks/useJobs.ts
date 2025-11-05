@@ -32,7 +32,7 @@ export const useJobs = () => {
   const queryClient = useQueryClient();
 
   const { data: jobs, isLoading } = useQuery({
-    queryKey: ["jobs", user?.id],
+    queryKey: ["jobs"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("jobs")

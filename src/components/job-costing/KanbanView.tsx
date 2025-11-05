@@ -11,10 +11,6 @@ interface KanbanViewProps {
 }
 
 export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: KanbanViewProps) {
-  console.log('KanbanView render - stages:', stages);
-  console.log('KanbanView render - jobs count:', jobs.length);
-  console.log('KanbanView render - job stages sample:', jobs.slice(0, 5).map(j => ({ so: j.sale_order_name, stage: j.project_stage_name })));
-
   // Expected stage names as ordered list
   const expectedStageNames = [
     "Operation paperwork",
@@ -33,8 +29,6 @@ export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: Kanban
   const stageList = stages.length > 0 
     ? stages.map(s => s.name)
     : expectedStageNames;
-
-  console.log('Using stage list:', stageList);
 
   // Create ordered stage list starting with Unassigned
   // Use Set to ensure uniqueness, then convert back to array
@@ -55,16 +49,12 @@ export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: Kanban
     
     // If this stage doesn't exist in our ordered list, add it at the end
     if (!jobsByStage.has(stageName)) {
-      console.warn(`Job ${job.sale_order_name} has unexpected stage: ${stageName}`);
       orderedStages.push(stageName);
       jobsByStage.set(stageName, []);
     }
     
     jobsByStage.get(stageName)!.push(job);
   });
-
-  console.log('Final stages order:', orderedStages);
-  console.log('Jobs distribution:', Array.from(jobsByStage.entries()).map(([stage, jobs]) => `${stage}: ${jobs.length}`));
 
   if (isLoadingStages) {
     return (

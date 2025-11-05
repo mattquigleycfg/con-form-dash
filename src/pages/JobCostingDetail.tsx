@@ -621,8 +621,6 @@ export default function JobCostingDetail() {
                       
                       toast.info("Importing non-material costs from analytic account...");
                       
-                      console.log('Analytic lines:', analysis.analyticLines);
-                      
                       // Check existing costs to avoid duplicates
                       const { data: existingCosts } = await supabase
                         .from('job_non_material_costs')
@@ -637,8 +635,6 @@ export default function JobCostingDetail() {
                         const lineDescription = `${line.name} (${line.date})`;
                         return line.amount !== 0 && !existingDescriptions.has(lineDescription);
                       });
-                      
-                      console.log(`Found ${expenseLines.length} new expense lines to import`);
                       
                       for (const line of expenseLines) {
                         const productName = line.product_id ? line.product_id[1] : '';

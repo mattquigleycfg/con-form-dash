@@ -150,20 +150,21 @@ export const useMonthlyTargets = (financialYear?: string) => {
     try {
       if (!user) throw new Error("User not authenticated");
 
-      // Data from Monthly Targets sheet in Excel with actuals
+      // Data from Master KPI Dashboard - Updated CFG targets from Excel
+      // Monthly targets based on provided spreadsheet data
       const fy2526Data = [
-        { month: "Jul-25", date: "2025-07-01", cfg_sales: 1850000, cfg_invoice: 1700000, dsf_sales: 50000, dsf_invoice: 80000, cfg_sales_actual: 1433486.41, cfg_invoice_actual: 1449803.33, dsf_sales_actual: 62713.79, dsf_invoice_actual: 58117.54 },
-        { month: "Aug-25", date: "2025-08-01", cfg_sales: 1850000, cfg_invoice: 1800000, dsf_sales: 100000, dsf_invoice: 80000, cfg_sales_actual: 1739394.50, cfg_invoice_actual: 1518861.00, dsf_sales_actual: 135048.78, dsf_invoice_actual: 98049.90 },
-        { month: "Sep-25", date: "2025-09-01", cfg_sales: 1900000, cfg_invoice: 1800000, dsf_sales: 100000, dsf_invoice: 80000, cfg_sales_actual: 2497078.50, cfg_invoice_actual: 684748.40, dsf_sales_actual: 63562.12, dsf_invoice_actual: 49612.10 },
-        { month: "Oct-25", date: "2025-10-01", cfg_sales: 1900000, cfg_invoice: 1800000, dsf_sales: 150000, dsf_invoice: 120000, cfg_sales_actual: 613773.71, cfg_invoice_actual: 0, dsf_sales_actual: 76828.36, dsf_invoice_actual: 0 },
-        { month: "Nov-25", date: "2025-11-01", cfg_sales: 1900000, cfg_invoice: 1800000, dsf_sales: 150000, dsf_invoice: 120000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
-        { month: "Dec-25", date: "2025-12-01", cfg_sales: 1400000, cfg_invoice: 1200000, dsf_sales: 100000, dsf_invoice: 100000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
-        { month: "Jan-26", date: "2026-01-01", cfg_sales: 1200000, cfg_invoice: 950000, dsf_sales: 50000, dsf_invoice: 50000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
-        { month: "Feb-26", date: "2026-02-01", cfg_sales: 2100000, cfg_invoice: 2000000, dsf_sales: 200000, dsf_invoice: 200000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
-        { month: "Mar-26", date: "2026-03-01", cfg_sales: 2100000, cfg_invoice: 2000000, dsf_sales: 250000, dsf_invoice: 220000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
-        { month: "Apr-26", date: "2026-04-01", cfg_sales: 2250000, cfg_invoice: 2000000, dsf_sales: 300000, dsf_invoice: 270000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
-        { month: "May-26", date: "2026-05-01", cfg_sales: 2300000, cfg_invoice: 2000000, dsf_sales: 300000, dsf_invoice: 280000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
-        { month: "Jun-26", date: "2026-06-01", cfg_sales: 2250000, cfg_invoice: 1950000, dsf_sales: 250000, dsf_invoice: 200000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
+        { month: "Jul-25", date: "2025-07-01", cfg_sales: 1800000, cfg_invoice: 1700000, dsf_sales: 50000, dsf_invoice: 80000, cfg_sales_actual: 1433486.41, cfg_invoice_actual: 1449803.33, dsf_sales_actual: 62713.79, dsf_invoice_actual: 58117.54 },
+        { month: "Aug-25", date: "2025-08-01", cfg_sales: 1900000, cfg_invoice: 1800000, dsf_sales: 100000, dsf_invoice: 80000, cfg_sales_actual: 1739394.50, cfg_invoice_actual: 1518861.00, dsf_sales_actual: 135048.78, dsf_invoice_actual: 98049.90 },
+        { month: "Sep-25", date: "2025-09-01", cfg_sales: 1600000, cfg_invoice: 1800000, dsf_sales: 100000, dsf_invoice: 80000, cfg_sales_actual: 2497078.50, cfg_invoice_actual: 684748.40, dsf_sales_actual: 63562.12, dsf_invoice_actual: 49612.10 },
+        { month: "Oct-25", date: "2025-10-01", cfg_sales: 1600000, cfg_invoice: 1800000, dsf_sales: 150000, dsf_invoice: 120000, cfg_sales_actual: 613773.71, cfg_invoice_actual: 0, dsf_sales_actual: 76828.36, dsf_invoice_actual: 0 },
+        { month: "Nov-25", date: "2025-11-01", cfg_sales: 1600000, cfg_invoice: 1800000, dsf_sales: 150000, dsf_invoice: 120000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
+        { month: "Dec-25", date: "2025-12-01", cfg_sales: 1500000, cfg_invoice: 1200000, dsf_sales: 100000, dsf_invoice: 100000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
+        { month: "Jan-26", date: "2026-01-01", cfg_sales: 750000, cfg_invoice: 950000, dsf_sales: 50000, dsf_invoice: 50000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
+        { month: "Feb-26", date: "2026-02-01", cfg_sales: 1850000, cfg_invoice: 2000000, dsf_sales: 200000, dsf_invoice: 200000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
+        { month: "Mar-26", date: "2026-03-01", cfg_sales: 1850000, cfg_invoice: 2000000, dsf_sales: 250000, dsf_invoice: 220000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
+        { month: "Apr-26", date: "2026-04-01", cfg_sales: 1850000, cfg_invoice: 2000000, dsf_sales: 300000, dsf_invoice: 270000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
+        { month: "May-26", date: "2026-05-01", cfg_sales: 1850000, cfg_invoice: 2000000, dsf_sales: 300000, dsf_invoice: 280000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
+        { month: "Jun-26", date: "2026-06-01", cfg_sales: 1850000, cfg_invoice: 1950000, dsf_sales: 250000, dsf_invoice: 200000, cfg_sales_actual: 0, cfg_invoice_actual: 0, dsf_sales_actual: 0, dsf_invoice_actual: 0 },
       ];
 
       const dataToInsert = fy2526Data.map(row => ({
