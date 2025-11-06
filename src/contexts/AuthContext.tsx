@@ -102,8 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         console.log("Auth state changed:", event);
 
-        // Skip duplicate INITIAL_SESSION events that fire during initialization
-        if (!hasInitialized.current && event === "INITIAL_SESSION") {
+        // Always skip INITIAL_SESSION events - they're redundant with getSession()
+        if (event === "INITIAL_SESSION") {
           return;
         }
 
@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             navigate("/");
           }
           // Navigate to dashboard only when signing in from the auth page
-          // Don't navigate on TOKEN_REFRESHED or INITIAL_SESSION events
+          // Don't navigate on TOKEN_REFRESHED events
           else if (event === "SIGNED_IN" && window.location.pathname === "/auth") {
             navigate("/");
           }
