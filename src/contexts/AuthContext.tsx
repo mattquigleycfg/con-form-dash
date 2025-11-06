@@ -79,18 +79,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    let mounted = true;
+
     // Check for existing session first
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-      hasInitialized.current = true;
+
+      // Mark as initialized after a brief delay to avoid race conditions
+      setTimeout(() => {
+        hasInitialized.current = true;
+      }, 100);
     });
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!mounted) return;
+
         console.log("Auth state changed:", event);
+
+        // Skip duplicate INITIAL_SESSION events that fire during initialization
+        if (!hasInitialized.current && event === "INITIAL_SESSION") {
+          return;
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -110,7 +126,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithMicrosoft = async (email: string, password: string) => {
