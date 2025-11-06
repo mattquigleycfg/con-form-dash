@@ -23,6 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const geoAccessStatus = useRef<"unknown" | "allowed" | "blocked">("unknown");
+  const hasInitialized = useRef(false);
   const navigate = useNavigate();
 
   const verifyAustralianAccess = async () => {
@@ -78,6 +79,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Check for existing session first
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+      hasInitialized.current = true;
+    });
+
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -86,20 +95,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // Only redirect to dashboard on PASSWORD_RECOVERY or if we're on the auth page
-        // This prevents navigation loops when already on other pages
-        if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && window.location.pathname === "/auth")) {
-          navigate("/");
+        // Only navigate after initialization and on specific events
+        if (hasInitialized.current) {
+          // Navigate to dashboard after password recovery
+          if (event === "PASSWORD_RECOVERY") {
+            navigate("/");
+          }
+          // Navigate to dashboard only when signing in from the auth page
+          // Don't navigate on TOKEN_REFRESHED or INITIAL_SESSION events
+          else if (event === "SIGNED_IN" && window.location.pathname === "/auth") {
+            navigate("/");
+          }
         }
       }
     );
-
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
 
     return () => subscription.unsubscribe();
   }, []);

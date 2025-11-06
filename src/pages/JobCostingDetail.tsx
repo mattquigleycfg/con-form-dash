@@ -30,6 +30,7 @@ import { useOdooSaleOrderLines } from "@/hooks/useOdooSaleOrderLines";
 import { JobCostingSummary } from "@/components/job-costing/JobCostingSummary";
 import { BudgetCircleChart } from "@/components/job-costing/BudgetCircleChart";
 import { Database } from "@/integrations/supabase/types";
+import confetti from "canvas-confetti";
 
 export default function JobCostingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -896,7 +897,14 @@ const handleActualSave = async (
                       queryClient.invalidateQueries({ queryKey: ["job", id] });
                       queryClient.invalidateQueries({ queryKey: ["job-bom-lines", id] });
                       queryClient.invalidateQueries({ queryKey: ["job-non-material-costs", id] });
-                      
+
+                      // Trigger confetti celebration
+                      confetti({
+                        particleCount: 100,
+                        spread: 70,
+                        origin: { y: 0.6 }
+                      });
+
                       toast.success(`Imported ${materialImported} material line(s) and ${nonMaterialImported} non-material cost(s)`);
                     } else {
                       toast.info('No new costs to import (all already imported or no cost lines found)');
