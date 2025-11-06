@@ -1,7 +1,11 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+
+const GEO_RESTRICTION_ERROR = "Access restricted to Australian connections.";
+const GEO_VERIFICATION_RETRY_ERROR = "Unable to verify geographic access. Please try again.";
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface AuthContextType {
   user: User | null;
@@ -18,7 +22,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const geoAccessStatus = useRef<"unknown" | "allowed" | "blocked">("unknown");
   const navigate = useNavigate();
+
+  const verifyAustralianAccess = async () => {
+    if (geoAccessStatus.current === "allowed") {
+      return;
+    }
+
+    if (geoAccessStatus.current === "blocked") {
+      throw new Error(GEO_RESTRICTION_ERROR);
+    }
+
+    const maxAttempts = 3;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await fetch("https://ipwho.is/", {
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`${response.status} ${response.statusText}`);
+        }
+
+        const geoData = await response.json();
+        const isAustralia = geoData?.country_code === "AU";
+
+        if (!isAustralia) {
+          console.warn("Access attempt from non-Australian location", geoData);
+          geoAccessStatus.current = "blocked";
+          throw new Error(GEO_RESTRICTION_ERROR);
+        }
+
+        geoAccessStatus.current = "allowed";
+        return;
+      } catch (error) {
+        if (error instanceof Error && error.message === GEO_RESTRICTION_ERROR) {
+          throw error;
+        }
+
+        const isLastAttempt = attempt === maxAttempts;
+        console.error(`Error verifying geographic access (attempt ${attempt}/${maxAttempts})`, error);
+
+        if (isLastAttempt) {
+          geoAccessStatus.current = "unknown";
+          throw new Error(GEO_VERIFICATION_RETRY_ERROR);
+        }
+
+        await delay(200 * attempt);
+      }
+    }
+  };
 
   useEffect(() => {
     // Set up auth state listener
@@ -29,8 +86,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // Redirect to dashboard after sign in
-        if (event === "SIGNED_IN" && session) {
+        // Only redirect to dashboard on PASSWORD_RECOVERY or if we're on the auth page
+        // This prevents navigation loops when already on other pages
+        if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && window.location.pathname === "/auth")) {
           navigate("/");
         }
       }
@@ -44,11 +102,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, []);
 
   const signInWithMicrosoft = async (email: string, password: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
+    await verifyAustralianAccess();
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -61,10 +121,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const allowedDomain = "@con-formgroup.com.au";
+
+    if (!normalizedEmail.endsWith(allowedDomain)) {
+      const error = new Error("Sign ups are restricted to Con-form Group email addresses.");
+      console.error("Sign up blocked: invalid email domain", { email: normalizedEmail });
+      throw error;
+    }
+
     const redirectUrl = `${window.location.origin}/`;
     
+    await verifyAustralianAccess();
+
     const { error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: {
         emailRedirectTo: redirectUrl,
