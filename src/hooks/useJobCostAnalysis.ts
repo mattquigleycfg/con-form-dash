@@ -53,6 +53,7 @@ export interface CostAnalysis {
 
   // Analytic line details
   analyticLines: AnalyticLine[];
+  rawAnalyticLines: AnalyticLine[];
 }
 
 export const useJobCostAnalysis = (job: Job | undefined) => {
@@ -60,6 +61,10 @@ export const useJobCostAnalysis = (job: Job | undefined) => {
   const { data: analyticLines = [], isLoading: loadingAnalytics } = useOdooAnalyticLines(
     job?.analytic_account_id
   );
+
+  const costAnalyticLines = useMemo(() => {
+    return analyticLines.filter((line) => line.amount < 0);
+  }, [analyticLines]);
 
   // Fetch MRP/BoM data
   const {
@@ -80,11 +85,10 @@ export const useJobCostAnalysis = (job: Job | undefined) => {
     const totalBudget = materialBudget + nonMaterialBudget;
 
     // Actual costs from analytic lines
-    // Negative amounts in Odoo analytic lines represent expenses
-    const materialLines = analyticLines.filter(
+    const materialLines = costAnalyticLines.filter(
       (line) => line.category === "material" || !line.category
     );
-    const nonMaterialLines = analyticLines.filter((line) => line.category === "service");
+    const nonMaterialLines = costAnalyticLines.filter((line) => line.category === "service");
 
     const actualMaterialCost = Math.abs(
       materialLines.reduce((sum, line) => sum + line.amount, 0)
@@ -182,9 +186,18 @@ export const useJobCostAnalysis = (job: Job | undefined) => {
       budgetedMarginPercent,
       actualMargin,
       actualMarginPercent,
-      analyticLines,
+      analyticLines: costAnalyticLines,
+      rawAnalyticLines: analyticLines,
     };
-  }, [job, analyticLines, manufacturingOrders, boms, bomLines, productCosts]);
+  }, [
+    job,
+    analyticLines,
+    costAnalyticLines,
+    manufacturingOrders,
+    boms,
+    bomLines,
+    productCosts,
+  ]);
 
   return {
     analysis,

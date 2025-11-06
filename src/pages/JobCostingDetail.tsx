@@ -626,7 +626,7 @@ const handleActualSave = async (
             <div className="flex items-center justify-between">
               <CardTitle>Cost Analysis Overview</CardTitle>
               <Badge variant="outline" className="ml-2">
-                {analysis?.analyticLines?.length || 0} entries
+                {analysis?.rawAnalyticLines?.length || 0} entries
               </Badge>
             </div>
           </CardHeader>
@@ -786,8 +786,6 @@ const handleActualSave = async (
                     const nonMaterialLines: any[] = [];
                     
                     analysis.analyticLines.forEach(line => {
-                      if (line.amount === 0) return;
-                      
                       const lineDescription = `${line.name} (${line.date})`;
                       if (existingDescriptions.has(lineDescription)) return;
                       
