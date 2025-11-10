@@ -310,6 +310,19 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
   const [productSearch, setProductSearch] = useState("");
   const { data: products } = useOdooProducts(productSearch);
 
+  // Calculate budgets from budget_lines table (fixes donut chart source bug)
+  const materialBudget = useMemo(() => {
+    return budgetLines
+      ?.filter(line => isMaterialBudgetLine(line))
+      .reduce((sum, line) => sum + Number(line.subtotal || 0), 0) || 0;
+  }, [budgetLines]);
+
+  const nonMaterialBudget = useMemo(() => {
+    return budgetLines
+      ?.filter(line => isServiceBudgetLine(line))
+      .reduce((sum, line) => sum + Number(line.subtotal || 0), 0) || 0;
+  }, [budgetLines]);
+
 const budgetLineByProductId = useMemo(() => {
   const map = new Map<number, Database["public"]["Tables"]["job_budget_lines"]["Row"]>();
   budgetLines?.forEach((line) => {
@@ -385,22 +398,29 @@ const recalculateJobTotals = async () => {
 
   const { data: allMaterial } = await supabase
     .from("job_bom_lines")
-    .select("total_cost")
+    .select("unit_cost, quantity")
     .eq("job_id", id);
 
-  const materialActual = allMaterial?.reduce((sum, line) => sum + Number(line.total_cost || 0), 0) || 0;
+  const materialActual = allMaterial?.reduce(
+    (sum, line) => sum + (Number(line.unit_cost || 0) * Number(line.quantity || 0)), 
+    0
+  ) || 0;
 
   const { data: allNonMaterial } = await supabase
     .from("job_non_material_costs")
     .select("amount")
     .eq("job_id", id);
 
-  const nonMaterialActual = allNonMaterial?.reduce((sum, line) => sum + Number(line.amount || 0), 0) || 0;
+  const nonMaterialActual = allNonMaterial?.reduce(
+    (sum, line) => sum + Number(line.amount || 0), 
+    0
+  ) || 0;
 
   await supabase
     .from("jobs")
     .update({
       material_actual: materialActual,
+      non_material_actual: nonMaterialActual,
       total_actual: materialActual + nonMaterialActual,
     })
     .eq("id", id);
@@ -751,11 +771,11 @@ const handleActualSave = async (
 
         {/* Budget Circle Chart - Hero Section */}
         <BudgetCircleChart
-          totalBudget={job.total_budget}
+          totalBudget={materialBudget + nonMaterialBudget}
           totalActual={job.total_actual}
-          materialBudget={job.material_budget}
+          materialBudget={materialBudget}
           materialActual={job.material_actual}
-          nonMaterialBudget={job.non_material_budget}
+          nonMaterialBudget={nonMaterialBudget}
           nonMaterialActual={job.non_material_actual}
         />
 
@@ -1069,9 +1089,9 @@ const handleActualSave = async (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Material Budget & BOM</CardTitle>
+                  <CardTitle>Material Costs</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Budget: {formatCurrency(job.material_budget)} | Actual: {formatCurrency(job.material_actual)}
+                    Budget: {formatCurrency(materialBudget)} | Actual: {formatCurrency(job.material_actual)}
                   </p>
                 </div>
                 <Dialog open={isAddBOMOpen} onOpenChange={setIsAddBOMOpen}>
@@ -1147,10 +1167,13 @@ const handleActualSave = async (
                 </Dialog>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {/* Budget Lines */}
-                  <div>
-                    <h3 className="font-semibold mb-3 text-sm">Material Budget (From Sales Order)</h3>
+                  <Card className="rounded-lg border shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base">Budgeted Costs</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                     {loadingBudget ? (
                       <Skeleton className="h-32 w-full" />
                     ) : (
@@ -1252,11 +1275,15 @@ const handleActualSave = async (
                         </TableBody>
                       </Table>
                     )}
-                  </div>
+                    </CardContent>
+                  </Card>
 
                   {/* BOM Actuals */}
-                  <div>
-                    <h3 className="font-semibold mb-3 text-sm">BOM and Actuals</h3>
+                  <Card className="rounded-lg border shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base">Actual Costs (BOM)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                     {loadingBOM ? (
                       <Skeleton className="h-32 w-full" />
                     ) : (
@@ -1327,11 +1354,15 @@ const handleActualSave = async (
                         </TableBody>
                       </Table>
                     )}
-                  </div>
+                    </CardContent>
+                  </Card>
 
                   {/* Remaining Section */}
-                  <div>
-                    <h3 className="font-semibold mb-3 text-sm">Remaining</h3>
+                  <Card className="rounded-lg border shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base">Remaining Budget</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                     <Table>
                       <TableBody>
                         <TableRow className={`font-semibold ${materialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
@@ -1342,7 +1373,8 @@ const handleActualSave = async (
                         </TableRow>
                       </TableBody>
                     </Table>
-                  </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </CardContent>
             </Card>
@@ -1352,9 +1384,9 @@ const handleActualSave = async (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Non-Material Costs</CardTitle>
+                  <CardTitle>Service Costs</CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Budget: {formatCurrency(job.non_material_budget)} | Actual: {formatCurrency(job.non_material_actual)}
+                    Budget: {formatCurrency(nonMaterialBudget)} | Actual: {formatCurrency(job.non_material_actual)}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -1411,10 +1443,13 @@ const handleActualSave = async (
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {/* Budget Lines */}
-                  <div>
-                    <h3 className="font-semibold mb-3 text-sm">Budget (From Sales Order)</h3>
+                  <Card className="rounded-lg border shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base">Budgeted Costs</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                     {loadingBudget ? (
                       <Skeleton className="h-32 w-full" />
                     ) : (
@@ -1455,11 +1490,15 @@ const handleActualSave = async (
                         </TableBody>
                       </Table>
                     )}
-                  </div>
+                    </CardContent>
+                  </Card>
 
                   {/* Actual Costs by Category */}
-                  <div>
-                    <h3 className="font-semibold mb-3 text-sm">Actual (From Purchase Orders)</h3>
+                  <Card className="rounded-lg border shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base">Actual Costs (Actuals & POs)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                     {['installation', 'freight', 'cranage', 'accommodation', 'travel', 'other'].map((type) => {
                       const typeCosts = costs?.filter(c => c.cost_type === type) || [];
                       if (typeCosts.length === 0) return null;
@@ -1521,11 +1560,15 @@ const handleActualSave = async (
                         No non-material costs added yet. Click "Add Cost" to start tracking.
                       </div>
                     )}
-                  </div>
+                    </CardContent>
+                  </Card>
 
                   {/* Remaining Section */}
-                  <div>
-                    <h3 className="font-semibold mb-3 text-sm">Remaining</h3>
+                  <Card className="rounded-lg border shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base">Remaining Budget</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                     <Table>
                       <TableBody>
                         <TableRow className={`font-semibold ${nonMaterialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
@@ -1536,7 +1579,8 @@ const handleActualSave = async (
                         </TableRow>
                       </TableBody>
                     </Table>
-                  </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </CardContent>
             </Card>
