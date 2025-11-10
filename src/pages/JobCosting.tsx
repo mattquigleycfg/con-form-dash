@@ -190,24 +190,26 @@ export default function JobCosting() {
             productType = 'service';
           }
           
-          // Calculate cost price with multiple methods:
-          // 1. Calculate from margin: price_unit - margin (most reliable)
-          // 2. Calculate from margin_percent if margin not available
-          // 3. Use purchase_price as fallback
+          // Calculate cost price with multiple methods (prioritized order):
+          // 1. Use purchase_price (direct cost from Odoo)
+          // 2. Calculate from margin: price_unit - margin
+          // 3. Calculate from margin_percent
+          // 4. Fallback to price if no cost data available
           let costPrice = 0;
           
-          if (line.margin !== undefined && line.margin !== null && line.margin !== false) {
-            // Option 1: Direct margin calculation (price - margin = cost)
+          if (line.purchase_price && line.purchase_price > 0) {
+            // Option 1: Direct purchase price/cost from Odoo (most accurate)
+            costPrice = line.purchase_price;
+          } else if (line.margin !== undefined && line.margin !== null && line.margin !== false) {
+            // Option 2: Calculate from margin (price - margin = cost)
             costPrice = line.price_unit - line.margin;
           } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
-            // Option 2: Calculate from margin percentage
+            // Option 3: Calculate from margin percentage
             costPrice = line.price_unit * (1 - line.margin_percent / 100);
-          } else if (line.purchase_price && line.purchase_price > 0) {
-            // Option 3: Direct purchase price (if available)
-            costPrice = line.purchase_price;
           }
           
           if ((!costPrice || costPrice <= 0) && line.price_subtotal) {
+            // Option 4: Use price as last resort
             costPrice = line.product_uom_qty > 0
               ? line.price_subtotal / line.product_uom_qty
               : line.price_subtotal;
@@ -434,17 +436,20 @@ export default function JobCosting() {
 
           if (lines.length === 0) continue;
 
-          // Calculate costs using margin (same logic as sync)
+          // Calculate costs using margin (same prioritized logic as sync)
           const updatedBudgetLines = lines.map(line => {
-            // Calculate cost price with multiple methods:
+            // Calculate cost price with prioritized methods:
             let costPrice = 0;
             
-            if (line.margin !== undefined && line.margin !== null && line.margin !== false) {
+            if (line.purchase_price && line.purchase_price > 0) {
+              // Option 1: Direct purchase price/cost from Odoo (most accurate)
+              costPrice = line.purchase_price;
+            } else if (line.margin !== undefined && line.margin !== null && line.margin !== false) {
+              // Option 2: Calculate from margin
               costPrice = line.price_unit - line.margin;
             } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
+              // Option 3: Calculate from margin percentage
               costPrice = line.price_unit * (1 - line.margin_percent / 100);
-            } else if (line.purchase_price && line.purchase_price > 0) {
-              costPrice = line.purchase_price;
             }
             
             costPrice = Math.max(0, costPrice);
