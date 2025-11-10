@@ -521,34 +521,6 @@ const handleActualSave = async (
     setProductSearch("");
   };
 
-  if (loadingJob) {
-    return (
-      <DashboardLayout>
-        <div className="space-y-4">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  if (!job) {
-    return (
-      <DashboardLayout>
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Job not found</p>
-          <Button onClick={() => navigate("/job-costing")} className="mt-4">
-            Back to Jobs
-          </Button>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  const percentage = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
-  const remaining = job.total_budget - job.total_actual;
-  const isOverBudget = remaining < 0;
-
   // Calculate material totals using enriched cost data
   const materialBudgetTotal =
     budgetLines?.filter(isMaterialBudgetLine).reduce((sum, line) => {
@@ -596,6 +568,35 @@ const handleActualSave = async (
   const nonMaterialBudgetQtyTotal = useMemo(() => {
     return budgetLines?.filter(isServiceBudgetLine).reduce((sum, line) => sum + Number(line.quantity || 0), 0) || 0;
   }, [budgetLines]);
+
+  // Early returns AFTER all hooks
+  if (loadingJob) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!job) {
+    return (
+      <DashboardLayout>
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Job not found</p>
+          <Button onClick={() => navigate("/job-costing")} className="mt-4">
+            Back to Jobs
+          </Button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const percentage = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
+  const remaining = job.total_budget - job.total_actual;
+  const isOverBudget = remaining < 0;
 
   return (
     <DashboardLayout>
