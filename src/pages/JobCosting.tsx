@@ -384,24 +384,93 @@ export default function JobCosting() {
   useEffect(() => {
     if (!loadingSalesOrders && salesOrders && salesOrders.length > 0 && user && !isSyncing && !hasAutoSynced) {
       setHasAutoSynced(true);
-      handleAutoSyncAll();
+      handleSyncAll();
     }
-  }, [salesOrders?.length, user?.id, hasAutoSynced, loadingSalesOrders, isSyncing, handleAutoSyncAll]);
+  }, [salesOrders?.length, user?.id, hasAutoSynced, loadingSalesOrders, isSyncing]);
 
-  const handleSyncCosts = async () => {
-    if (!user || jobs.length === 0) {
-      toast.error("No jobs to sync costs for");
+  // Consolidated sync function that syncs new jobs from Odoo, updates costs, and refreshes stages
+  const handleSyncAll = async () => {
+    if (!user) {
+      toast.error("You must be logged in to sync");
       return;
     }
 
     setIsSyncing(true);
     
     try {
-      let updatedCount = 0;
+      let newJobsCount = 0;
+      let updatedCostsCount = 0;
+      let updatedStagesCount = 0;
       
-      toast.info(`Syncing costs for ${jobs.length} jobs...`);
+      toast.info("Starting comprehensive sync with Odoo...");
       
-      for (const job of jobs) {
+      // Step 1: Sync new jobs from Odoo (from handleAutoSyncAll)
+      if (salesOrders && salesOrders.length > 0) {
+        toast.info("Step 1/3: Checking for new jobs...");
+        
+        for (const order of salesOrders) {
+          // Check if already synced
+          const { data: existingJob } = await supabase
+            .from("jobs")
+            .select("id")
+            .eq("odoo_sale_order_id", order.id)
+            .maybeSingle();
+
+          if (existingJob) {
+            continue;
+          }
+          
+          // Create new job (simplified version)
+          try {
+            const { data: job } = await supabase
+              .from("jobs")
+              .insert([{
+                user_id: user.id,
+                created_by_user_id: user.id,
+                last_synced_at: new Date().toISOString(),
+                last_synced_by_user_id: user.id,
+                odoo_sale_order_id: order.id,
+                sale_order_name: order.name,
+                customer_name: order.partner_id[1],
+                total_budget: order.amount_total,
+                material_budget: 0,
+                non_material_budget: 0,
+                total_actual: 0,
+                material_actual: 0,
+                non_material_actual: 0,
+                status: 'active',
+                analytic_account_id: order.analytic_account_id ? order.analytic_account_id[0] : null,
+                analytic_account_name: order.analytic_account_id ? order.analytic_account_id[1] : null,
+                sales_person_name: order.user_id ? order.user_id[1] : null,
+                opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
+                date_order: order.date_order,
+              }])
+              .select()
+              .single();
+            
+            if (job) newJobsCount++;
+          } catch (error) {
+            logger.error(`Error creating job for ${order.name}:`, error);
+          }
+        }
+        
+        // Refresh jobs list after creating new ones
+        if (newJobsCount > 0) {
+          queryClient.invalidateQueries({ queryKey: ['jobs'] });
+          await new Promise(resolve => setTimeout(resolve, 500)); // Wait for cache to update
+        }
+      }
+      
+      // Step 2: Update costs for all jobs (from handleSyncCosts)
+      const { data: currentJobs } = await supabase
+        .from("jobs")
+        .select("*")
+        .order("date_order", { ascending: false });
+      
+      if (currentJobs && currentJobs.length > 0) {
+        toast.info(`Step 2/3: Updating costs for ${currentJobs.length} jobs...`);
+        
+        for (const job of currentJobs) {
         try {
           // Fetch order lines with cost fields from Odoo
           const { data: orderLines, error: linesError } = await supabase.functions.invoke("odoo-query", {
@@ -499,7 +568,7 @@ export default function JobCosting() {
           if (jobUpdateError) {
             logger.error(`Error updating job totals:`, jobUpdateError);
           } else {
-            updatedCount++;
+            updatedCostsCount++;
           }
 
         } catch (error) {
@@ -507,16 +576,69 @@ export default function JobCosting() {
           continue;
         }
       }
+      }
+      
+      // Step 3: Update project stages for all jobs (from handleRefreshStages)
+      const { data: jobsWithAnalytic } = await supabase
+        .from("jobs")
+        .select("*")
+        .not("analytic_account_id", "is", null);
+      
+      if (jobsWithAnalytic && jobsWithAnalytic.length > 0) {
+        toast.info(`Step 3/3: Refreshing stages for ${jobsWithAnalytic.length} jobs...`);
+        
+        for (const job of jobsWithAnalytic) {
+          try {
+            // Find project linked to this analytic account
+            const { data: projects } = await supabase.functions.invoke("odoo-query", {
+              body: {
+                model: "project.project",
+                method: "search_read",
+                args: [
+                  [["analytic_account_id", "=", job.analytic_account_id]],
+                  ["id", "name", "stage_id"],
+                ],
+              },
+            });
 
-      if (updatedCount > 0) {
-        toast.success(`Updated costs for ${updatedCount} job(s)!`);
-        queryClient.invalidateQueries({ queryKey: ['jobs'] });
+            if (!projects || projects.length === 0) {
+              continue;
+            }
+
+            const project = projects[0];
+            const stageName = project.stage_id?.[1] || null;
+
+            // Update job with project stage
+            await supabase
+              .from("jobs")
+              .update({
+                project_stage_name: stageName,
+              })
+              .eq("id", job.id);
+
+            updatedStagesCount++;
+          } catch (error) {
+            logger.error(`Error refreshing stage for job ${job.sale_order_name}:`, error);
+          }
+        }
+      }
+
+      // Final summary
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      
+      const messages = [];
+      if (newJobsCount > 0) messages.push(`${newJobsCount} new job(s) created`);
+      if (updatedCostsCount > 0) messages.push(`${updatedCostsCount} job(s) costs updated`);
+      if (updatedStagesCount > 0) messages.push(`${updatedStagesCount} job(s) stages refreshed`);
+      
+      if (messages.length > 0) {
+        toast.success(`Sync complete! ${messages.join(', ')}`);
       } else {
-        toast.warning("No jobs were updated. Check console for errors.");
+        toast.info("Sync complete - all data is up to date");
       }
     } catch (error) {
-      logger.error("Error syncing costs:", error);
-      toast.error("Failed to sync costs. Check console for details.");
+      logger.error("Error syncing with Odoo:", error);
+      toast.error("Failed to sync with Odoo. Check console for details.");
     } finally {
       setIsSyncing(false);
     }
@@ -634,9 +756,8 @@ export default function JobCosting() {
               Reports
             </Button>
             <Button 
-              variant="outline" 
-              onClick={handleSyncCosts} 
-              disabled={isSyncing || isLoading || !jobs || jobs.length === 0}
+              onClick={handleSyncAll} 
+              disabled={isSyncing || loadingSalesOrders}
             >
               {isSyncing ? (
                 <>
@@ -646,37 +767,7 @@ export default function JobCosting() {
               ) : (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4" />
-                  Sync Costs
-                </>
-              )}
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={handleRefreshStages} 
-              disabled={isSyncing || isLoading || !jobs || jobs.length === 0}
-            >
-              {isSyncing ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Refresh Stages
-                </>
-              )}
-            </Button>
-            <Button onClick={handleAutoSyncAll} disabled={isSyncing || loadingSalesOrders}>
-              {isSyncing ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Auto-Sync from Odoo
+                  Sync All Jobs
                 </>
               )}
             </Button>
