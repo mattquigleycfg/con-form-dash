@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { useOdooProducts } from "@/hooks/useOdooProducts";
 import { useOdooSaleOrderLines } from "@/hooks/useOdooSaleOrderLines";
@@ -182,6 +182,131 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
 
   const [isAddBOMOpen, setIsAddBOMOpen] = useState(false);
   const [isAddCostOpen, setIsAddCostOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  
+  // Consolidated sync function that combines all sync operations
+  const handleSyncWithOdoo = async () => {
+    if (!job || !id) return;
+    
+    setIsSyncing(true);
+    toast.info("Syncing with Odoo...");
+    
+    try {
+      // 1. Refresh budget line costs from sale order
+      const { data: orderLines, error: linesError } = await supabase.functions.invoke("odoo-query", {
+        body: {
+          model: "sale.order.line",
+          method: "search_read",
+          args: [
+            [["order_id", "=", job.odoo_sale_order_id]],
+            ["id", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal", "purchase_price", "margin", "margin_percent"],
+          ],
+        },
+      });
+      
+      if (linesError) throw linesError;
+      
+      const lines = (orderLines as any[]) || [];
+      const updatedBudgetLines = lines.map(line => {
+        // Calculate cost price with proper priority
+        let costPrice = 0;
+        
+        if (line.purchase_price !== undefined && line.purchase_price !== null && line.purchase_price !== false && line.purchase_price > 0) {
+          costPrice = Number(line.purchase_price);
+        } else if (line.margin !== undefined && line.margin !== null && line.margin !== false && line.margin > 0) {
+          costPrice = line.price_unit - line.margin;
+        } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
+          costPrice = line.price_unit * (1 - line.margin_percent / 100);
+        } else if (line.price_subtotal && line.product_uom_qty > 0) {
+          costPrice = line.price_subtotal / line.product_uom_qty;
+        } else {
+          costPrice = line.price_unit;
+        }
+        
+        costPrice = Math.max(0, costPrice);
+        const quantity = line.product_uom_qty;
+        const costSubtotal = costPrice * quantity;
+
+        return {
+          odoo_line_id: line.id,
+          unit_price: costPrice,
+          subtotal: costSubtotal,
+        };
+      });
+      
+      // Update existing budget lines
+      for (const update of updatedBudgetLines) {
+        await supabase
+          .from("job_budget_lines")
+          .update({
+            unit_price: update.unit_price,
+            subtotal: update.subtotal,
+          })
+          .eq("job_id", id)
+          .eq("odoo_line_id", update.odoo_line_id);
+      }
+      
+      // 2. Update project stage
+      if (job.analytic_account_id) {
+        const { data: projects } = await supabase.functions.invoke("odoo-query", {
+          body: {
+            model: "project.project",
+            method: "search_read",
+            args: [
+              [["analytic_account_id", "=", job.analytic_account_id]],
+              ["id", "name", "stage_id"],
+            ],
+          },
+        });
+
+        const projectData = projects as any[];
+        if (projectData && projectData.length > 0) {
+          const project = projectData[0];
+          const stageName = project.stage_id?.[1] || null;
+          
+          await supabase
+            .from("jobs")
+            .update({ project_stage_name: stageName })
+            .eq("id", id);
+        }
+      }
+      
+      // 3. Mark job as synced
+      await supabase
+        .from("jobs")
+        .update({ 
+          last_synced_at: new Date().toISOString()
+        })
+        .eq("id", id);
+      
+      // 4. Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["job", id] });
+      queryClient.invalidateQueries({ queryKey: ["job-budget-lines", id] });
+      queryClient.invalidateQueries({ queryKey: ["sale-order-lines", job.odoo_sale_order_id] });
+      
+      toast.success("Successfully synced with Odoo!");
+      
+    } catch (error) {
+      console.error("Error syncing with Odoo:", error);
+      toast.error("Failed to sync with Odoo. Please try again.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+  
+  // Smart sync: Auto-refresh if data is stale (> 1 hour old)
+  useEffect(() => {
+    if (!job || !id) return;
+    
+    const lastSync = job.last_synced_at;
+    const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime()) > 3600000; // 1 hour
+    
+    if (isStale && !isSyncing) {
+      // Auto-refresh in background
+      handleSyncWithOdoo();
+    }
+  }, [job?.id]); // Only trigger on job ID change, not on job object changes
+  
   const [productSearch, setProductSearch] = useState("");
   const { data: products } = useOdooProducts(productSearch);
 
@@ -608,7 +733,20 @@ const handleActualSave = async (
           <div className="flex-1">
             <h1 className="text-3xl font-bold tracking-tight text-foreground">{job.sale_order_name}</h1>
             <p className="text-muted-foreground mt-1">{job.customer_name}</p>
+            {job.last_synced_at && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Last synced: {new Date(job.last_synced_at).toLocaleString()}
+              </p>
+            )}
           </div>
+          <Button
+            variant="outline"
+            onClick={handleSyncWithOdoo}
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync with Odoo'}
+          </Button>
         </div>
 
         {/* Budget Circle Chart - Hero Section */}

@@ -80,7 +80,7 @@ export default function JobCosting() {
       
       
       for (const order of relevantSalesOrders) {
-        // Check if already synced (check across all users)
+        // Check if already synced (check across all users to prevent duplicates)
         const { data: existingJob } = await supabase
           .from("jobs")
           .select("id")
@@ -88,9 +88,10 @@ export default function JobCosting() {
           .maybeSingle();
 
         if (existingJob) {
+          logger.info(`Job already exists for SO ${order.name}, skipping duplicate creation`);
           continue;
         }
-        // Fetch order lines with margin fields to calculate cost
+        // Fetch order lines with cost fields (purchase_price is the direct cost field)
         const { data: orderLines, error: linesError } = await supabase.functions.invoke("odoo-query", {
           body: {
             model: "sale.order.line",
@@ -190,29 +191,24 @@ export default function JobCosting() {
             productType = 'service';
           }
           
-          // Calculate cost price with multiple methods (prioritized order):
-          // 1. Use purchase_price (direct cost from Odoo)
-          // 2. Calculate from margin: price_unit - margin
-          // 3. Calculate from margin_percent
-          // 4. Fallback to price if no cost data available
+          // Calculate cost price with proper priority (purchase_price is Odoo's Cost field - column 8)
           let costPrice = 0;
           
-          if (line.purchase_price && line.purchase_price > 0) {
-            // Option 1: Direct purchase price/cost from Odoo (most accurate)
-            costPrice = line.purchase_price;
-          } else if (line.margin !== undefined && line.margin !== null && line.margin !== false) {
-            // Option 2: Calculate from margin (price - margin = cost)
+          if (line.purchase_price !== undefined && line.purchase_price !== null && line.purchase_price !== false && line.purchase_price > 0) {
+            // Priority 1: Direct purchase_price from Odoo (most accurate - this is the "Cost" column)
+            costPrice = Number(line.purchase_price);
+          } else if (line.margin !== undefined && line.margin !== null && line.margin !== false && line.margin > 0) {
+            // Priority 2: Calculate from margin (price - margin = cost)
             costPrice = line.price_unit - line.margin;
           } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
-            // Option 3: Calculate from margin percentage
+            // Priority 3: Calculate from margin percentage
             costPrice = line.price_unit * (1 - line.margin_percent / 100);
-          }
-          
-          if ((!costPrice || costPrice <= 0) && line.price_subtotal) {
-            // Option 4: Use price as last resort
-            costPrice = line.product_uom_qty > 0
-              ? line.price_subtotal / line.product_uom_qty
-              : line.price_subtotal;
+          } else if (line.price_subtotal && line.product_uom_qty > 0) {
+            // Priority 4: Use price as fallback when no cost data
+            costPrice = line.price_subtotal / line.product_uom_qty;
+          } else {
+            // Priority 5: Last resort - use unit price as cost
+            costPrice = line.price_unit;
           }
 
           // Ensure cost is not negative
@@ -316,7 +312,10 @@ export default function JobCosting() {
         const { data: job, error: jobError } = await supabase
           .from("jobs")
           .insert([{
-            user_id: user.id,
+            user_id: user.id, // Legacy field for backwards compatibility
+            created_by_user_id: user.id, // Track who created the job
+            last_synced_at: new Date().toISOString(), // Mark as just synced
+            last_synced_by_user_id: user.id,
             odoo_sale_order_id: order.id,
             sale_order_name: order.name,
             customer_name: order.partner_id[1],
@@ -404,7 +403,7 @@ export default function JobCosting() {
       
       for (const job of jobs) {
         try {
-          // Fetch order lines with margin data from Odoo
+          // Fetch order lines with cost fields from Odoo
           const { data: orderLines, error: linesError } = await supabase.functions.invoke("odoo-query", {
             body: {
               model: "sale.order.line",
@@ -436,20 +435,25 @@ export default function JobCosting() {
 
           if (lines.length === 0) continue;
 
-          // Calculate costs using margin (same prioritized logic as sync)
+          // Calculate costs using same priority as initial sync
           const updatedBudgetLines = lines.map(line => {
-            // Calculate cost price with prioritized methods:
+            // Calculate cost price with proper priority
             let costPrice = 0;
             
-            if (line.purchase_price && line.purchase_price > 0) {
-              // Option 1: Direct purchase price/cost from Odoo (most accurate)
-              costPrice = line.purchase_price;
-            } else if (line.margin !== undefined && line.margin !== null && line.margin !== false) {
-              // Option 2: Calculate from margin
+            if (line.purchase_price !== undefined && line.purchase_price !== null && line.purchase_price !== false && line.purchase_price > 0) {
+              // Priority 1: Direct purchase_price from Odoo
+              costPrice = Number(line.purchase_price);
+            } else if (line.margin !== undefined && line.margin !== null && line.margin !== false && line.margin > 0) {
+              // Priority 2: Calculate from margin
               costPrice = line.price_unit - line.margin;
             } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
-              // Option 3: Calculate from margin percentage
+              // Priority 3: Calculate from margin percentage
               costPrice = line.price_unit * (1 - line.margin_percent / 100);
+            } else if (line.price_subtotal && line.product_uom_qty > 0) {
+              // Priority 4: Use price as fallback
+              costPrice = line.price_subtotal / line.product_uom_qty;
+            } else {
+              costPrice = line.price_unit;
             }
             
             costPrice = Math.max(0, costPrice);
@@ -487,6 +491,8 @@ export default function JobCosting() {
             .from("jobs")
             .update({
               material_budget: materialBudget,
+              last_synced_at: new Date().toISOString(),
+              last_synced_by_user_id: user.id,
             })
             .eq("id", job.id);
 

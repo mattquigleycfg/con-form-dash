@@ -4,7 +4,10 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export interface Job {
   id: string;
-  user_id: string;
+  user_id: string; // Legacy - kept for backwards compatibility
+  created_by_user_id?: string; // New - tracks who created the job
+  last_synced_at?: string; // New - tracks last sync time
+  last_synced_by_user_id?: string; // New - tracks who last synced
   odoo_sale_order_id: number;
   sale_order_name: string;
   analytic_account_id?: number;
@@ -47,9 +50,15 @@ export const useJobs = () => {
 
   const createJob = useMutation({
     mutationFn: async (job: Omit<Job, "id" | "user_id" | "created_at" | "updated_at">) => {
-      const { data, error } = await supabase
+      const { data, error} = await supabase
         .from("jobs")
-        .insert([{ ...job, user_id: user?.id }])
+        .insert([{ 
+          ...job, 
+          user_id: user?.id, // Legacy field for backwards compatibility
+          created_by_user_id: user?.id, // Track who created the job
+          last_synced_at: new Date().toISOString(), // Mark as just synced
+          last_synced_by_user_id: user?.id
+        }])
         .select()
         .single();
 
