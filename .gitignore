@@ -30,3 +30,11 @@ dist-ssr
 
 # Local Netlify folder
 .netlify
+
+# MCP verification checklist (local use only)
+.mcp-verify.md
+
+# Temporary build artifacts
+temp-index.js
+live-index.js
+*.production.js
