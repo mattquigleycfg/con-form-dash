@@ -10,9 +10,14 @@ interface CostAnalysisCardProps {
 }
 
 export function CostAnalysisCard({ analysis, job }: CostAnalysisCardProps) {
-  const getVarianceClass = (variance: number) => {
-    if (variance > 0) return "text-green-600 dark:text-green-400";
-    if (variance < 0) return "text-red-600 dark:text-red-400";
+  // Color coding: green for negative variances <100% (under budget), red for positive (over budget)
+  const getVarianceClass = (variancePercent: number) => {
+    if (variancePercent < 0 && Math.abs(variancePercent) < 100) {
+      return "text-green-600 dark:text-green-400";
+    }
+    if (variancePercent > 0) {
+      return "text-red-600 dark:text-red-400";
+    }
     return "";
   };
 
@@ -21,106 +26,130 @@ export function CostAnalysisCard({ analysis, job }: CostAnalysisCardProps) {
   const actualNonMaterialCost = job.non_material_actual;
   const totalActualCost = actualMaterialCost + actualNonMaterialCost;
 
-  // Recalculate variances using job actuals
-  const materialVariance = analysis.materialBudget - actualMaterialCost;
+  // Variance = Actual - Budget (negative = under budget/good, positive = over budget/bad)
+  const materialVariance = actualMaterialCost - analysis.materialBudget;
   const materialVariancePercent = analysis.materialBudget > 0 ? (materialVariance / analysis.materialBudget) * 100 : 0;
-  const nonMaterialVariance = analysis.nonMaterialBudget - actualNonMaterialCost;
+  const nonMaterialVariance = actualNonMaterialCost - analysis.nonMaterialBudget;
   const nonMaterialVariancePercent = analysis.nonMaterialBudget > 0 ? (nonMaterialVariance / analysis.nonMaterialBudget) * 100 : 0;
-  const totalVariance = analysis.totalBudget - totalActualCost;
+  const totalVariance = totalActualCost - analysis.totalBudget;
   const totalVariancePercent = analysis.totalBudget > 0 ? (totalVariance / analysis.totalBudget) * 100 : 0;
+  
   const actualMargin = analysis.budgetedRevenue - totalActualCost;
   const actualMarginPercent = analysis.budgetedRevenue > 0 ? (actualMargin / analysis.budgetedRevenue) * 100 : 0;
 
+  // Count total analytic line entries
+  const totalEntries = analysis.analyticLines?.length || 0;
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Cost Analysis</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle>Cost Analysis Overview</CardTitle>
+        <span className="text-sm text-muted-foreground">{totalEntries} entries</span>
       </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Category</TableHead>
-              <TableHead className="text-right">Budgeted</TableHead>
-              <TableHead className="text-right">Actual</TableHead>
-              <TableHead className="text-right">Variance</TableHead>
-              <TableHead className="text-right">%</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow className="font-semibold bg-muted/50">
-              <TableCell>Revenue (Sale Price)</TableCell>
-              <TableCell className="text-right">
-                {formatCurrency(analysis.budgetedRevenue)}
-              </TableCell>
-              <TableCell className="text-right">-</TableCell>
-              <TableCell className="text-right">-</TableCell>
-              <TableCell className="text-right">-</TableCell>
-            </TableRow>
+      <CardContent className="space-y-6">
+        {/* Cost Analysis Section */}
+        <div>
+          <h3 className="text-lg font-semibold mb-3">Cost Analysis</h3>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Budget</TableHead>
+                <TableHead className="text-right">Actual</TableHead>
+                <TableHead className="text-right">Variance ($)</TableHead>
+                <TableHead className="text-right">Variance (%)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell>Materials</TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(analysis.materialBudget)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(actualMaterialCost)}
+                </TableCell>
+                <TableCell className={`text-right ${getVarianceClass(materialVariancePercent)}`}>
+                  {materialVariance >= 0 ? '+' : ''}{formatCurrency(materialVariance)}
+                </TableCell>
+                <TableCell className={`text-right ${getVarianceClass(materialVariancePercent)}`}>
+                  {materialVariance >= 0 ? '+' : ''}{materialVariancePercent.toFixed(1)}%
+                </TableCell>
+              </TableRow>
 
-            <TableRow>
-              <TableCell className="pl-8">Materials</TableCell>
-              <TableCell className="text-right">
-                {formatCurrency(analysis.materialBudget)}
-              </TableCell>
-              <TableCell className="text-right">
-                {formatCurrency(actualMaterialCost)}
-              </TableCell>
-              <TableCell className={`text-right ${getVarianceClass(materialVariance)}`}>
-                {formatCurrency(Math.abs(materialVariance))}
-              </TableCell>
-              <TableCell className={`text-right ${getVarianceClass(materialVariance)}`}>
-                {materialVariancePercent.toFixed(1)}%
-              </TableCell>
-            </TableRow>
+              <TableRow>
+                <TableCell>Non-Materials (Services)</TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(analysis.nonMaterialBudget)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(actualNonMaterialCost)}
+                </TableCell>
+                <TableCell className={`text-right ${getVarianceClass(nonMaterialVariancePercent)}`}>
+                  {nonMaterialVariance >= 0 ? '+' : ''}{formatCurrency(nonMaterialVariance)}
+                </TableCell>
+                <TableCell className={`text-right ${getVarianceClass(nonMaterialVariancePercent)}`}>
+                  {nonMaterialVariance >= 0 ? '+' : ''}{nonMaterialVariancePercent.toFixed(1)}%
+                </TableCell>
+              </TableRow>
 
-            <TableRow>
-              <TableCell className="pl-8">Non-Materials (Services)</TableCell>
-              <TableCell className="text-right">
-                {formatCurrency(analysis.nonMaterialBudget)}
-              </TableCell>
-              <TableCell className="text-right">
-                {formatCurrency(actualNonMaterialCost)}
-              </TableCell>
-              <TableCell className={`text-right ${getVarianceClass(nonMaterialVariance)}`}>
-                {formatCurrency(Math.abs(nonMaterialVariance))}
-              </TableCell>
-              <TableCell className={`text-right ${getVarianceClass(nonMaterialVariance)}`}>
-                {nonMaterialVariancePercent.toFixed(1)}%
-              </TableCell>
-            </TableRow>
+              <TableRow className="font-bold border-t-2">
+                <TableCell>Total Cost</TableCell>
+                <TableCell className="text-right">{formatCurrency(analysis.totalBudget)}</TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(totalActualCost)}
+                </TableCell>
+                <TableCell className={`text-right ${getVarianceClass(totalVariancePercent)}`}>
+                  {totalVariance >= 0 ? '+' : ''}{formatCurrency(totalVariance)}
+                </TableCell>
+                <TableCell className={`text-right ${getVarianceClass(totalVariancePercent)}`}>
+                  {totalVariance >= 0 ? '+' : ''}{totalVariancePercent.toFixed(1)}%
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
 
-            <TableRow className="font-bold border-t-2">
-              <TableCell>Total Cost</TableCell>
-              <TableCell className="text-right">{formatCurrency(analysis.totalBudget)}</TableCell>
-              <TableCell className="text-right">
-                {formatCurrency(totalActualCost)}
-              </TableCell>
-              <TableCell className={`text-right ${getVarianceClass(totalVariance)}`}>
-                {formatCurrency(Math.abs(totalVariance))}
-              </TableCell>
-              <TableCell className={`text-right ${getVarianceClass(totalVariance)}`}>
-                {totalVariancePercent.toFixed(1)}%
-              </TableCell>
-            </TableRow>
+        {/* Performance Metrics Section */}
+        <div>
+          <h3 className="text-lg font-semibold mb-3 border-t pt-4">Performance Metrics</h3>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Metric</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">%</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell>Revenue (Sale Price)</TableCell>
+                <TableCell className="text-right">
+                  {analysis.budgetedRevenue > 0 ? formatCurrency(analysis.budgetedRevenue) : 'TBD'}
+                </TableCell>
+                <TableCell className="text-right">-</TableCell>
+              </TableRow>
 
-            <TableRow className="font-bold border-t-2 bg-muted/50">
-              <TableCell>Gross Margin</TableCell>
-              <TableCell className="text-right">
-                {formatCurrency(analysis.budgetedMargin)}
-              </TableCell>
-              <TableCell className="text-right">
-                {formatCurrency(actualMargin)}
-              </TableCell>
-              <TableCell className="text-right">-</TableCell>
-              <TableCell
-                className={`text-right ${getVarianceClass(actualMargin)}`}
-              >
-                {actualMarginPercent.toFixed(1)}%
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+              <TableRow>
+                <TableCell>Total Cost</TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(totalActualCost)}
+                </TableCell>
+                <TableCell className="text-right">-</TableCell>
+              </TableRow>
+
+              <TableRow className="font-bold border-t-2">
+                <TableCell>Gross Margin</TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(actualMargin)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {actualMarginPercent.toFixed(1)}%
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
 
         {analysis.bomEstimatedMaterialCost > 0 && (
           <div className="mt-4 p-4 bg-muted/50 rounded-lg">
