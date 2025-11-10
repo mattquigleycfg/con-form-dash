@@ -63,6 +63,7 @@ export const useJobCostAnalysis = (job: Job | undefined) => {
   );
 
   const costAnalyticLines = useMemo(() => {
+    // Only include negative amounts (vendor bills/costs), exclude positive amounts (invoices/revenue)
     return analyticLines.filter((line) => line.amount < 0);
   }, [analyticLines]);
 

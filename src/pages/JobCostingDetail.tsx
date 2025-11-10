@@ -787,6 +787,9 @@ const handleActualSave = async (
                     const nonMaterialLines: any[] = [];
                     
                     analysis.analyticLines.forEach(line => {
+                      // Skip positive amounts (invoices/revenue) - only process negative amounts (vendor bills/costs)
+                      if (line.amount >= 0) return;
+                      
                       const lineDescription = `${line.name} (${line.date})`;
                       if (existingDescriptions.has(lineDescription)) return;
                       

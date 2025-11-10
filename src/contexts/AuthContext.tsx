@@ -133,7 +133,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithMicrosoft = async (email: string, password: string) => {
-    const redirectUrl = `${window.location.origin}/`;
+    // Use environment variable for production, or current origin for local dev
+    const redirectUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
     
     await verifyAustralianAccess();
 
@@ -158,7 +159,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw error;
     }
 
-    const redirectUrl = `${window.location.origin}/`;
+    // Use environment variable for production, or current origin for local dev
+    const redirectUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
     
     await verifyAustralianAccess();
 
