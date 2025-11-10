@@ -118,33 +118,34 @@ export function CostAnalysisCard({ analysis, job }: CostAnalysisCardProps) {
               <TableRow>
                 <TableHead>Metric</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">%</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               <TableRow>
                 <TableCell>Revenue (Sale Price)</TableCell>
                 <TableCell className="text-right">
-                  {analysis.budgetedRevenue > 0 ? formatCurrency(analysis.budgetedRevenue) : 'TBD'}
+                  {formatCurrency(analysis.budgetedRevenue)}
                 </TableCell>
-                <TableCell className="text-right">-</TableCell>
               </TableRow>
 
               <TableRow>
                 <TableCell>Total Cost</TableCell>
                 <TableCell className="text-right">
-                  {formatCurrency(totalActualCost)}
+                  {formatCurrency(analysis.totalBudget)}
                 </TableCell>
-                <TableCell className="text-right">-</TableCell>
               </TableRow>
 
               <TableRow className="font-bold border-t-2">
                 <TableCell>Gross Margin</TableCell>
                 <TableCell className="text-right">
-                  {formatCurrency(actualMargin)}
+                  {formatCurrency(analysis.budgetedMargin)}
                 </TableCell>
+              </TableRow>
+
+              <TableRow className="font-bold">
+                <TableCell>Gross Margin %</TableCell>
                 <TableCell className="text-right">
-                  {actualMarginPercent.toFixed(1)}%
+                  {analysis.budgetedMarginPercent.toFixed(1)}%
                 </TableCell>
               </TableRow>
             </TableBody>

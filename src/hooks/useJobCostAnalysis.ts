@@ -54,6 +54,8 @@ export interface CostAnalysis {
   // Analytic line details
   analyticLines: AnalyticLine[];
   rawAnalyticLines: AnalyticLine[];
+  materialAnalyticLines: AnalyticLine[];
+  nonMaterialAnalyticLines: AnalyticLine[];
 }
 
 export const useJobCostAnalysis = (job: Job | undefined) => {
@@ -63,9 +65,40 @@ export const useJobCostAnalysis = (job: Job | undefined) => {
   );
 
   const costAnalyticLines = useMemo(() => {
-    // Only include negative amounts (vendor bills/costs), exclude positive amounts (invoices/revenue)
-    return analyticLines.filter((line) => line.amount < 0);
+    // Filter out customer invoices and only keep actual costs/expenses
+    return analyticLines.filter((line) => {
+      // 1. Exclude positive amounts (typically revenue/customer invoices)
+      if (line.amount > 0) return false;
+      
+      // 2. Exclude customer invoice types if move_type is available
+      if (line.move_type) {
+        const customerInvoiceTypes = ['out_invoice', 'out_receipt', 'out_refund'];
+        if (customerInvoiceTypes.includes(line.move_type)) {
+          return false;
+        }
+      }
+      
+      // 3. Check journal type - exclude sales journals
+      if (line.journal_id && line.journal_id[1]) {
+        const journalName = line.journal_id[1].toLowerCase();
+        if (journalName.includes('sales') || journalName.includes('customer')) {
+          return false;
+        }
+      }
+      
+      // Keep this line - it's a genuine cost/expense
+      return true;
+    });
   }, [analyticLines]);
+
+  // Separate material and non-material analytic lines
+  const materialAnalyticLines = useMemo(() => {
+    return costAnalyticLines.filter(line => line.cost_category === 'material');
+  }, [costAnalyticLines]);
+
+  const nonMaterialAnalyticLines = useMemo(() => {
+    return costAnalyticLines.filter(line => line.cost_category === 'non_material');
+  }, [costAnalyticLines]);
 
   // Fetch MRP/BoM data
   const {
@@ -189,11 +222,15 @@ export const useJobCostAnalysis = (job: Job | undefined) => {
       actualMarginPercent,
       analyticLines: costAnalyticLines,
       rawAnalyticLines: analyticLines,
+      materialAnalyticLines,
+      nonMaterialAnalyticLines,
     };
   }, [
     job,
     analyticLines,
     costAnalyticLines,
+    materialAnalyticLines,
+    nonMaterialAnalyticLines,
     manufacturingOrders,
     boms,
     bomLines,

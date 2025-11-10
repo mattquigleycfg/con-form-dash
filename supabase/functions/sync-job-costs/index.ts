@@ -15,6 +15,9 @@ interface AnalyticLine {
   product_id: [number, string] | false;
   employee_id: [number, string] | false;
   category: string;
+  move_id: [number, string] | false;
+  move_type?: string;
+  journal_id: [number, string] | false;
 }
 
 interface PurchaseOrder {
@@ -67,13 +70,46 @@ Deno.serve(async (req) => {
             method: 'search_read',
             args: [
               [['account_id', '=', job.analytic_account_id]],
-              ['id', 'name', 'amount', 'unit_amount', 'date', 'product_id', 'employee_id', 'category'],
+              ['id', 'name', 'amount', 'unit_amount', 'date', 'product_id', 'employee_id', 'category', 'move_id', 'journal_id'],
             ],
           }),
         });
 
         const analyticLines = await analyticResponse.json() as AnalyticLine[];
         console.log(`Found ${analyticLines.length} analytic lines for job ${job.sale_order_name}`);
+        
+        // Fetch move types to filter out customer invoices
+        const moveIds = analyticLines
+          .map(line => line.move_id && line.move_id[0])
+          .filter((id): id is number => !!id);
+        
+        if (moveIds.length > 0) {
+          const movesResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/odoo-query`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'account.move',
+              method: 'search_read',
+              args: [
+                [['id', 'in', moveIds]],
+                ['id', 'move_type'],
+              ],
+            }),
+          });
+          
+          const moves = await movesResponse.json() as any[];
+          const moveTypeMap = new Map(moves.map(m => [m.id, m.move_type]));
+          
+          // Enrich analytic lines with move_type
+          analyticLines.forEach(line => {
+            if (line.move_id && line.move_id[0]) {
+              line.move_type = moveTypeMap.get(line.move_id[0]);
+            }
+          });
+        }
 
         // Check which lines are already imported
         const { data: existingCosts } = await supabase
@@ -84,7 +120,7 @@ Deno.serve(async (req) => {
 
         const existingDescriptions = new Set(existingCosts?.map(c => c.description) || []);
 
-        // Import new analytic lines (checking both negative and positive amounts)
+        // Import new analytic lines - filter out customer invoices
         for (const line of analyticLines) {
           // Skip if already imported
           const lineDescription = `${line.name} (${line.date})`;
@@ -92,6 +128,28 @@ Deno.serve(async (req) => {
 
           // Only import if there's a cost (amount !== 0)
           if (line.amount === 0) continue;
+          
+          // Filter out customer invoices and only keep actual costs/expenses
+          // 1. Exclude positive amounts (typically revenue/customer invoices)
+          if (line.amount > 0) continue;
+          
+          // 2. Exclude customer invoice types if move_type is available
+          if (line.move_type) {
+            const customerInvoiceTypes = ['out_invoice', 'out_receipt', 'out_refund'];
+            if (customerInvoiceTypes.includes(line.move_type)) {
+              console.log(`Skipping customer invoice line: ${lineDescription}`);
+              continue;
+            }
+          }
+          
+          // 3. Check journal type - exclude sales journals
+          if (line.journal_id && line.journal_id[1]) {
+            const journalName = line.journal_id[1].toLowerCase();
+            if (journalName.includes('sales') || journalName.includes('customer')) {
+              console.log(`Skipping sales journal line: ${lineDescription}`);
+              continue;
+            }
+          }
 
           const productName = line.product_id ? line.product_id[1] : '';
           const amount = Math.abs(line.amount); // Always use absolute value

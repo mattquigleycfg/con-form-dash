@@ -17,6 +17,7 @@ import { useJobNonMaterialCosts } from "@/hooks/useJobNonMaterialCosts";
 import { useJobCostAnalysis } from "@/hooks/useJobCostAnalysis";
 import { CostAnalysisCard } from "@/components/job-costing/CostAnalysisCard";
 import { AnalyticLinesTable } from "@/components/job-costing/AnalyticLinesTable";
+import { AnalyticLinesMaterialTable } from "@/components/job-costing/AnalyticLinesMaterialTable";
 import { BomBreakdownCard } from "@/components/job-costing/BomBreakdownCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -69,6 +70,14 @@ export default function JobCostingDetail() {
   const { costs, isLoading: loadingCosts, createCost, updateCost, deleteCost } = useJobNonMaterialCosts(id);
   const { analysis, isLoading: loadingAnalysis } = useJobCostAnalysis(job);
   const { data: saleOrderLines, isLoading: loadingSaleOrderLines, refetch: refetchSaleOrderLines } = useOdooSaleOrderLines(job?.odoo_sale_order_id);
+
+  // Auto-refresh analytic lines on job load to ensure we have the latest data
+  useEffect(() => {
+    if (job?.analytic_account_id) {
+      // Invalidate the analytic lines query to trigger a fresh fetch
+      queryClient.invalidateQueries({ queryKey: ["odoo-analytic-lines", job.analytic_account_id] });
+    }
+  }, [job?.analytic_account_id, queryClient]);
   const materialPurchasePriceMap = useMemo(() => {
     const map = new Map<number, number>();
     if (saleOrderLines && saleOrderLines.length > 0) {
@@ -1278,6 +1287,11 @@ const handleActualSave = async (
                     </CardContent>
                   </Card>
 
+                  {/* Analytic Lines - Material Costs */}
+                  {analysis?.materialAnalyticLines && analysis.materialAnalyticLines.length > 0 && (
+                    <AnalyticLinesMaterialTable materialLines={analysis.materialAnalyticLines} />
+                  )}
+
                   {/* BOM Actuals */}
                   <Card className="rounded-lg border shadow-sm">
                     <CardHeader>
@@ -1497,6 +1511,11 @@ const handleActualSave = async (
                   <Card className="rounded-lg border shadow-sm">
                     <CardHeader>
                       <CardTitle className="text-base">Actual Costs (Actuals & POs)</CardTitle>
+                      {analysis?.nonMaterialAnalyticLines && analysis.nonMaterialAnalyticLines.length > 0 && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Showing {costs?.length || 0} manual entries + {analysis.nonMaterialAnalyticLines.length} from analytic accounts
+                        </p>
+                      )}
                     </CardHeader>
                     <CardContent>
                     {['installation', 'freight', 'cranage', 'accommodation', 'travel', 'other'].map((type) => {
@@ -1555,7 +1574,7 @@ const handleActualSave = async (
                       );
                     })}
 
-                    {(!costs || costs.length === 0) && (
+                    {(!costs || costs.length === 0) && (!analysis?.nonMaterialAnalyticLines || analysis.nonMaterialAnalyticLines.length === 0) && (
                       <div className="text-center py-8 text-muted-foreground">
                         No non-material costs added yet. Click "Add Cost" to start tracking.
                       </div>
