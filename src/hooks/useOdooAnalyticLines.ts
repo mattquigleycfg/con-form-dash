@@ -112,7 +112,15 @@ export const useOdooAnalyticLines = (analyticAccountId?: number) => {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Odoo Analytic Lines Error:', {
+          accountId: analyticAccountId,
+          error,
+          errorData: data,
+          message: error.message
+        });
+        throw error;
+      }
       
       const lines = data as AnalyticLine[];
       

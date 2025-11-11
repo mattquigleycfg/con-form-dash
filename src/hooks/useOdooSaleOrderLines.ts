@@ -13,12 +13,10 @@ export interface SaleOrderLine {
   product_uom: [number, string];
 
   // Cost fields
-  purchase_price?: number;
-  product_cost?: number;
-  cost_price?: number;
-  standard_price: number;
-  actual_cost: number;
-  total_cost: number;
+  purchase_price?: number;  // Unit cost from sale_margin module
+  standard_price: number;   // Fallback cost from product
+  actual_cost: number;      // Computed: best available cost
+  total_cost: number;       // Computed: actual_cost * quantity
 
   // Product info
   detailed_type: 'service' | 'consu' | 'product';
@@ -47,38 +45,34 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
               "id", "order_id", "product_id", "name",
               "product_uom_qty", "qty_delivered", "price_unit",
               "price_subtotal", "discount", "product_uom", "sequence",
-              "purchase_price", "product_cost", "cost_price", "display_type",
+              "purchase_price", "display_type",
               "margin", "margin_percent"
             ],
           ],
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Odoo Sale Order Lines Error:', {
+          orderId: saleOrderId,
+          error,
+          errorData: data,
+          errorDetails: (data as any)?.details,
+          message: error.message
+        });
+        throw error;
+      }
 
       const lines = data as any[];
       if (!lines || lines.length === 0) return [];
 
-      // If no obvious cost fields are present, run a debug fetch to inspect available fields
-      const needsDebug = lines.every((l: any) =>
-        (l.purchase_price === undefined || l.purchase_price === null || l.purchase_price === false) &&
-        (l.product_cost === undefined || l.product_cost === null) &&
-        (l.cost_price === undefined || l.cost_price === null)
-      );
-
-      if (needsDebug) {
-        const { data: debugLine } = await supabase.functions.invoke("odoo-query", {
-          body: {
-            model: "sale.order.line",
-            method: "search_read",
-            args: [
-              [["order_id", "=", saleOrderId]],
-              [] // Empty array returns all fields
-            ],
-            kwargs: {
-              limit: 1
-            }
-          }
+      // Debug: Log first line to verify fields are present
+      if (lines.length > 0) {
+        console.log('Sale order line sample:', {
+          id: lines[0].id,
+          has_purchase_price: lines[0].purchase_price !== undefined,
+          has_margin: lines[0].margin !== undefined,
+          has_margin_percent: lines[0].margin_percent !== undefined
         });
       }
 
@@ -114,19 +108,14 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
           const detailedType = detailedTypeRaw?.toLowerCase?.() as 'service' | 'consu' | 'product';
           const isMaterial = detailedType === 'consu' || detailedType === 'product';
 
-          // COST FALLBACK LOGIC (priority): purchase_price → product_cost → cost_price → margin → product.standard_price → 0
+          // COST FALLBACK LOGIC (priority): purchase_price → margin calculation → product.standard_price → 0
           let actualCost = 0;
 
           const valPurchase = line.purchase_price;
-          const valProductCost = line.product_cost;
-          const valCostPrice = line.cost_price;
 
+          // First try purchase_price (from sale_margin module)
           if (valPurchase !== undefined && valPurchase !== null && valPurchase !== false) {
             actualCost = Number(valPurchase) || 0;
-          } else if (valProductCost !== undefined && valProductCost !== null) {
-            actualCost = Number(valProductCost) || 0;
-          } else if (valCostPrice !== undefined && valCostPrice !== null) {
-            actualCost = Number(valCostPrice) || 0;
           }
 
           const quantity = Number(line.product_uom_qty || 0);
@@ -173,18 +162,11 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
             actualCost = quantity > 0 ? subtotal / quantity : subtotal;
           }
 
-          if ((!actualCost || actualCost <= 0) && line.total_cost && line.product_uom_qty) {
-            const perUnit = Number(line.total_cost) / Number(line.product_uom_qty || 1);
-            if (perUnit > 0 && Number.isFinite(perUnit)) {
-              actualCost = perUnit;
-            }
-          }
-
+          // Ensure actualCost is non-negative
           actualCost = Math.max(0, actualCost);
+          
+          // Calculate total cost
           let totalCost = actualCost * (line.product_uom_qty || 0);
-          if ((!totalCost || totalCost <= 0) && line.price_subtotal) {
-            totalCost = Number(line.price_subtotal || 0);
-          }
 
           let lineMargin = Number(line.margin ?? 0);
           if (!lineMargin && line.margin !== 0) {
@@ -205,8 +187,6 @@ export const useOdooSaleOrderLines = (saleOrderId?: number) => {
             price_subtotal: line.price_subtotal,
             product_uom: line.product_uom,
             purchase_price: (line.purchase_price !== false && line.purchase_price !== null) ? Number(line.purchase_price) : undefined,
-            product_cost: (line.product_cost !== undefined && line.product_cost !== null) ? Number(line.product_cost) : undefined,
-            cost_price: (line.cost_price !== undefined && line.cost_price !== null) ? Number(line.cost_price) : undefined,
             standard_price: product?.standard_price || 0,
             actual_cost: actualCost,
             total_cost: totalCost,

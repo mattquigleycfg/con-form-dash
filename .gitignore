@@ -38,3 +38,7 @@ dist-ssr
 temp-index.js
 live-index.js
 *.production.js
+docs/odoo-v16-reference.md
+.gitignore
+docs/odoo-api-diagnostic-summary.md
+docs/README.md

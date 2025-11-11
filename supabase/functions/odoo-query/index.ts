@@ -90,12 +90,32 @@ serve(async (req) => {
 
     const queryData = await queryResponse.json();
     const ok = queryResponse.ok && queryData && typeof queryData === 'object' && 'result' in queryData;
+    
+    console.log('Odoo query response status:', queryResponse.status);
     console.log('Odoo query result:', ok && queryData.result ? 'success' : 'failed');
 
     if (!ok || !queryData.result) {
       const errorMsg = (queryData && (queryData.error?.data?.message || queryData.error?.message)) || 'Odoo returned no result';
-      console.error('Odoo query error details:', JSON.stringify(queryData?.error || {}, null, 2));
-      return new Response(JSON.stringify({ error: errorMsg }), {
+      const errorDetails = {
+        message: errorMsg,
+        model,
+        method,
+        odooError: queryData?.error || null,
+        requestStatus: queryResponse.status,
+        hasResult: 'result' in (queryData || {}),
+        resultValue: queryData?.result
+      };
+      
+      console.error('Odoo query failed:');
+      console.error('  Model:', model);
+      console.error('  Method:', method);
+      console.error('  Args:', JSON.stringify(args));
+      console.error('  Error:', JSON.stringify(queryData?.error || {}, null, 2));
+      
+      return new Response(JSON.stringify({ 
+        error: errorMsg,
+        details: errorDetails
+      }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
