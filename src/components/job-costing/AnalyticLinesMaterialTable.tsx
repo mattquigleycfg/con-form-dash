@@ -1,15 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { AnalyticLine } from "@/hooks/useOdooAnalyticLines";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
+import { Trash2 } from "lucide-react";
 
 interface AnalyticLinesMaterialTableProps {
   materialLines: AnalyticLine[];
+  onDeleteLine?: (lineId: number) => void;
 }
 
-export function AnalyticLinesMaterialTable({ materialLines }: AnalyticLinesMaterialTableProps) {
+export function AnalyticLinesMaterialTable({ materialLines, onDeleteLine }: AnalyticLinesMaterialTableProps) {
   const totalAmount = materialLines.reduce((sum, line) => sum + Math.abs(line.amount), 0);
 
   if (materialLines.length === 0) {
@@ -43,6 +46,7 @@ export function AnalyticLinesMaterialTable({ materialLines }: AnalyticLinesMater
               <TableHead>Date</TableHead>
               <TableHead className="text-right">Quantity</TableHead>
               <TableHead className="text-right">Amount</TableHead>
+              {onDeleteLine && <TableHead className="w-[50px]"></TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -70,6 +74,21 @@ export function AnalyticLinesMaterialTable({ materialLines }: AnalyticLinesMater
                   <TableCell className="text-right font-medium">
                     {formatCurrency(Math.abs(line.amount))}
                   </TableCell>
+                  {onDeleteLine && (
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm(`Hide this analytic line?\n\n"${line.name}"\n\nNote: This will hide it from this view. The entry still exists in Odoo.`)) {
+                            onDeleteLine(line.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
@@ -78,6 +97,7 @@ export function AnalyticLinesMaterialTable({ materialLines }: AnalyticLinesMater
               <TableCell className="text-right">
                 {formatCurrency(totalAmount)}
               </TableCell>
+              {onDeleteLine && <TableCell></TableCell>}
             </TableRow>
           </TableBody>
         </Table>

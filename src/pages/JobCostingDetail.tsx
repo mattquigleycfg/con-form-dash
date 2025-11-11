@@ -70,6 +70,19 @@ export default function JobCostingDetail() {
   const { costs, isLoading: loadingCosts, createCost, createCostAsync, updateCost, deleteCost } = useJobNonMaterialCosts(id);
   const { analysis, isLoading: loadingAnalysis } = useJobCostAnalysis(job);
   const { data: saleOrderLines, isLoading: loadingSaleOrderLines, refetch: refetchSaleOrderLines } = useOdooSaleOrderLines(job?.odoo_sale_order_id);
+  
+  // Track excluded analytic line IDs (stored in localStorage per job)
+  const [excludedAnalyticLineIds, setExcludedAnalyticLineIds] = useState<Set<number>>(() => {
+    if (!id) return new Set();
+    const stored = localStorage.getItem(`excluded-analytic-lines-${id}`);
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  });
+
+  // Save excluded IDs to localStorage whenever they change
+  useEffect(() => {
+    if (!id) return;
+    localStorage.setItem(`excluded-analytic-lines-${id}`, JSON.stringify(Array.from(excludedAnalyticLineIds)));
+  }, [excludedAnalyticLineIds, id]);
   const materialPurchasePriceMap = useMemo(() => {
     const map = new Map<number, number>();
     if (saleOrderLines && saleOrderLines.length > 0) {
@@ -680,8 +693,17 @@ const handleActualSave = async (
       if (isServiceName(line.product_name)) return sum;
       return sum + resolveBomLineTotal(line);
     }, 0) || 0;
+  // Filter out excluded analytic lines
+  const filteredMaterialAnalyticLines = useMemo(() => {
+    return analysis?.materialAnalyticLines?.filter(line => !excludedAnalyticLineIds.has(line.id)) || [];
+  }, [analysis?.materialAnalyticLines, excludedAnalyticLineIds]);
+
+  const filteredNonMaterialAnalyticLines = useMemo(() => {
+    return analysis?.nonMaterialAnalyticLines?.filter(line => !excludedAnalyticLineIds.has(line.id)) || [];
+  }, [analysis?.nonMaterialAnalyticLines, excludedAnalyticLineIds]);
+
   // Include material analytic lines from Odoo (costs not yet imported to BOM)
-  const materialAnalyticTotal = analysis?.materialAnalyticLines?.reduce((sum, line) => sum + Math.abs(line.amount), 0) || 0;
+  const materialAnalyticTotal = filteredMaterialAnalyticLines.reduce((sum, line) => sum + Math.abs(line.amount), 0);
   const materialActualTotal = matchedMaterialActualTotal + unmatchedMaterialActualTotal + materialAnalyticTotal;
   const materialRemaining = materialBudgetTotal - materialActualTotal;
   const materialOverBudget = materialRemaining < 0;
@@ -690,7 +712,7 @@ const handleActualSave = async (
   const nonMaterialBudgetTotal = budgetLines?.filter(isServiceBudgetLine).reduce((sum, line) => sum + (line.subtotal ?? 0), 0) || 0;
   // Include both manually entered costs AND non-material analytic lines from Odoo
   const nonMaterialManualTotal = costs?.reduce((sum, cost) => sum + cost.amount, 0) || 0;
-  const nonMaterialAnalyticTotal = analysis?.nonMaterialAnalyticLines?.reduce((sum, line) => sum + Math.abs(line.amount), 0) || 0;
+  const nonMaterialAnalyticTotal = filteredNonMaterialAnalyticLines.reduce((sum, line) => sum + Math.abs(line.amount), 0);
   const nonMaterialActualTotal = nonMaterialManualTotal + nonMaterialAnalyticTotal;
   const nonMaterialRemaining = nonMaterialBudgetTotal - nonMaterialActualTotal;
   const nonMaterialOverBudget = nonMaterialRemaining < 0;
@@ -1313,8 +1335,14 @@ const handleActualSave = async (
                   </Card>
 
                   {/* Analytic Lines - Material Costs */}
-                  {analysis?.materialAnalyticLines && analysis.materialAnalyticLines.length > 0 && (
-                    <AnalyticLinesMaterialTable materialLines={analysis.materialAnalyticLines} />
+                  {filteredMaterialAnalyticLines.length > 0 && (
+                    <AnalyticLinesMaterialTable 
+                      materialLines={filteredMaterialAnalyticLines}
+                      onDeleteLine={(lineId) => {
+                        setExcludedAnalyticLineIds(prev => new Set(prev).add(lineId));
+                        toast.success("Analytic line hidden from view");
+                      }}
+                    />
                   )}
 
                   {/* BOM Actuals */}
