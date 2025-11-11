@@ -15,9 +15,6 @@ interface AnalyticLine {
   product_id: [number, string] | false;
   employee_id: [number, string] | false;
   category: string;
-  move_id: [number, string] | false;
-  move_type?: string;
-  journal_id: [number, string] | false;
 }
 
 interface PurchaseOrder {
@@ -70,7 +67,7 @@ Deno.serve(async (req) => {
             method: 'search_read',
             args: [
               [['account_id', '=', job.analytic_account_id]],
-              ['id', 'name', 'amount', 'unit_amount', 'date', 'product_id', 'employee_id', 'category', 'move_id', 'journal_id'],
+              ['id', 'name', 'amount', 'unit_amount', 'date', 'product_id', 'employee_id', 'category'],
             ],
           }),
         });
@@ -78,12 +75,11 @@ Deno.serve(async (req) => {
         const analyticLines = await analyticResponse.json() as AnalyticLine[];
         console.log(`Found ${analyticLines.length} analytic lines for job ${job.sale_order_name}`);
         
-        // Fetch move types to filter out customer invoices
-        const moveIds = analyticLines
-          .map(line => line.move_id && line.move_id[0])
-          .filter((id): id is number => !!id);
+        // Filter to only negative amounts (costs) - positive amounts are customer invoices
+        const costLines = analyticLines.filter(line => line.amount < 0);
+        console.log(`Filtered to ${costLines.length} cost lines (negative amounts only)`);
         
-        if (moveIds.length > 0) {
+        if (false) { // Disabled move type fetching since move_id field doesn't exist in Odoo v16
           const movesResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/odoo-query`, {
             method: 'POST',
             headers: {

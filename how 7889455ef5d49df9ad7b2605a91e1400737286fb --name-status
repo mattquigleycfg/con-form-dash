@@ -1,0 +1,237 @@
+[33mcommit 7889455ef5d49df9ad7b2605a91e1400737286fb[m
+Author: matthewjquigley <matt@con-formgroup.com.au>
+Date:   Mon Nov 10 17:08:24 2025 +1100
+
+    feat: Enhance job costing calculations and UI in JobCostingDetail
+    
+    - Added calculations for material and non-material budgets from budget_lines to improve accuracy in cost analysis.
+    - Updated material cost calculation to use unit_cost and quantity for more precise total costs.
+    - Refactored UI components to use Card structure for better organization and visual clarity in displaying actual costs and remaining budget.
+    - Improved overall layout and readability of the Job Costing Detail page.
+
+[1mdiff --git a/src/pages/JobCostingDetail.tsx b/src/pages/JobCostingDetail.tsx[m
+[1mindex 27d801d..5d91490 100644[m
+[1m--- a/src/pages/JobCostingDetail.tsx[m
+[1m+++ b/src/pages/JobCostingDetail.tsx[m
+[36m@@ -310,6 +310,19 @@[m [mconst resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num[m
+   const [productSearch, setProductSearch] = useState("");[m
+   const { data: products } = useOdooProducts(productSearch);[m
+ [m
+[32m+[m[32m  // Calculate budgets from budget_lines table (fixes donut chart source bug)[m
+[32m+[m[32m  const materialBudget = useMemo(() => {[m
+[32m+[m[32m    return budgetLines[m
+[32m+[m[32m      ?.filter(line => isMaterialBudgetLine(line))[m
+[32m+[m[32m      .reduce((sum, line) => sum + Number(line.subtotal || 0), 0) || 0;[m
+[32m+[m[32m  }, [budgetLines]);[m
+[32m+[m
+[32m+[m[32m  const nonMaterialBudget = useMemo(() => {[m
+[32m+[m[32m    return budgetLines[m
+[32m+[m[32m      ?.filter(line => isServiceBudgetLine(line))[m
+[32m+[m[32m      .reduce((sum, line) => sum + Number(line.subtotal || 0), 0) || 0;[m
+[32m+[m[32m  }, [budgetLines]);[m
+[32m+[m
+ const budgetLineByProductId = useMemo(() => {[m
+   const map = new Map<number, Database["public"]["Tables"]["job_budget_lines"]["Row"]>();[m
+   budgetLines?.forEach((line) => {[m
+[36m@@ -385,22 +398,29 @@[m [mconst recalculateJobTotals = async () => {[m
+ [m
+   const { data: allMaterial } = await supabase[m
+     .from("job_bom_lines")[m
+[31m-    .select("total_cost")[m
+[32m+[m[32m    .select("unit_cost, quantity")[m
+     .eq("job_id", id);[m
+ [m
+[31m-  const materialActual = allMaterial?.reduce((sum, line) => sum + Number(line.total_cost || 0), 0) || 0;[m
+[32m+[m[32m  const materialActual = allMaterial?.reduce([m
+[32m+[m[32m    (sum, line) => sum + (Number(line.unit_cost || 0) * Number(line.quantity || 0)),[m[41m [m
+[32m+[m[32m    0[m
+[32m+[m[32m  ) || 0;[m
+ [m
+   const { data: allNonMaterial } = await supabase[m
+     .from("job_non_material_costs")[m
+     .select("amount")[m
+     .eq("job_id", id);[m
+ [m
+[31m-  const nonMaterialActual = allNonMaterial?.reduce((sum, line) => sum + Number(line.amount || 0), 0) || 0;[m
+[32m+[m[32m  const nonMaterialActual = allNonMaterial?.reduce([m
+[32m+[m[32m    (sum, line) => sum + Number(line.amount || 0),[m[41m [m
+[32m+[m[32m    0[m
+[32m+[m[32m  ) || 0;[m
+ [m
+   await supabase[m
+     .from("jobs")[m
+     .update({[m
+       material_actual: materialActual,[m
+[32m+[m[32m      non_material_actual: nonMaterialActual,[m
+       total_actual: materialActual + nonMaterialActual,[m
+     })[m
+     .eq("id", id);[m
+[36m@@ -751,11 +771,11 @@[m [mconst handleActualSave = async ([m
+ [m
+         {/* Budget Circle Chart - Hero Section */}[m
+         <BudgetCircleChart[m
+[31m-          totalBudget={job.total_budget}[m
+[32m+[m[32m          totalBudget={materialBudget + nonMaterialBudget}[m
+           totalActual={job.total_actual}[m
+[31m-          materialBudget={job.material_budget}[m
+[32m+[m[32m          materialBudget={materialBudget}[m
+           materialActual={job.material_actual}[m
+[31m-          nonMaterialBudget={job.non_material_budget}[m
+[32m+[m[32m          nonMaterialBudget={nonMaterialBudget}[m
+           nonMaterialActual={job.non_material_actual}[m
+         />[m
+ [m
+[36m@@ -1069,9 +1089,9 @@[m [mconst handleActualSave = async ([m
+             <Card>[m
+               <CardHeader className="flex flex-row items-center justify-between">[m
+                 <div>[m
+[31m-                  <CardTitle>Material Budget & BOM</CardTitle>[m
+[32m+[m[32m                  <CardTitle>Material Costs</CardTitle>[m
+                   <p className="text-sm text-muted-foreground mt-1">[m
+[31m-                    Budget: {formatCurrency(job.material_budget)} | Actual: {formatCurrency(job.material_actual)}[m
+[32m+[m[32m                    Budget: {formatCurrency(materialBudget)} | Actual: {formatCurrency(job.material_actual)}[m
+                   </p>[m
+                 </div>[m
+                 <Dialog open={isAddBOMOpen} onOpenChange={setIsAddBOMOpen}>[m
+[36m@@ -1147,10 +1167,13 @@[m [mconst handleActualSave = async ([m
+                 </Dialog>[m
+               </CardHeader>[m
+               <CardContent>[m
+[31m-                <div className="space-y-6">[m
+[32m+[m[32m                <div className="space-y-4">[m
+                   {/* Budget Lines */}[m
+[31m-                  <div>[m
+[31m-                    <h3 className="font-semibold mb-3 text-sm">Material Budget (From Sales Order)</h3>[m
+[32m+[m[32m                  <Card className="rounded-lg border shadow-sm">[m
+[32m+[m[32m                    <CardHeader>[m
+[32m+[m[32m                      <CardTitle className="text-base">Budgeted Costs</CardTitle>[m
+[32m+[m[32m                    </CardHeader>[m
+[32m+[m[32m                    <CardContent>[m
+                     {loadingBudget ? ([m
+                       <Skeleton className="h-32 w-full" />[m
+                     ) : ([m
+[36m@@ -1252,11 +1275,15 @@[m [mconst handleActualSave = async ([m
+                         </TableBody>[m
+                       </Table>[m
+                     )}[m
+[31m-                  </div>[m
+[32m+[m[32m                    </CardContent>[m
+[32m+[m[32m                  </Card>[m
+ [m
+                   {/* BOM Actuals */}[m
+[31m-                  <div>[m
+[31m-                    <h3 className="font-semibold mb-3 text-sm">BOM and Actuals</h3>[m
+[32m+[m[32m                  <Card className="rounded-lg border shadow-sm">[m
+[32m+[m[32m                    <CardHeader>[m
+[32m+[m[32m                      <CardTitle className="text-base">Actual Costs (BOM)</CardTitle>[m
+[32m+[m[32m                    </CardHeader>[m
+[32m+[m[32m                    <CardContent>[m
+                     {loadingBOM ? ([m
+                       <Skeleton className="h-32 w-full" />[m
+                     ) : ([m
+[36m@@ -1327,11 +1354,15 @@[m [mconst handleActualSave = async ([m
+                         </TableBody>[m
+                       </Table>[m
+                     )}[m
+[31m-                  </div>[m
+[32m+[m[32m                    </CardContent>[m
+[32m+[m[32m                  </Card>[m
+ [m
+                   {/* Remaining Section */}[m
+[31m-                  <div>[m
+[31m-                    <h3 className="font-semibold mb-3 text-sm">Remaining</h3>[m
+[32m+[m[32m                  <Card className="rounded-lg border shadow-sm">[m
+[32m+[m[32m                    <CardHeader>[m
+[32m+[m[32m                      <CardTitle className="text-base">Remaining Budget</CardTitle>[m
+[32m+[m[32m                    </CardHeader>[m
+[32m+[m[32m                    <CardContent>[m
+                     <Table>[m
+                       <TableBody>[m
+                         <TableRow className={`font-semibold ${materialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>[m
+[36m@@ -1342,7 +1373,8 @@[m [mconst handleActualSave = async ([m
+                         </TableRow>[m
+                       </TableBody>[m
+                     </Table>[m
+[31m-                  </div>[m
+[32m+[m[32m                    </CardContent>[m
+[32m+[m[32m                  </Card>[m
+                 </div>[m
+               </CardContent>[m
+             </Card>[m
+[36m@@ -1352,9 +1384,9 @@[m [mconst handleActualSave = async ([m
+             <Card>[m
+               <CardHeader className="flex flex-row items-center justify-between">[m
+                 <div>[m
+[31m-                  <CardTitle>Non-Material Costs</CardTitle>[m
+[32m+[m[32m                  <CardTitle>Service Costs</CardTitle>[m
+                   <p className="text-sm text-muted-foreground mt-1">[m
+[31m-                    Budget: {formatCurrency(job.non_material_budget)} | Actual: {formatCurrency(job.non_material_actual)}[m
+[32m+[m[32m                    Budget: {formatCurrency(nonMaterialBudget)} | Actual: {formatCurrency(job.non_material_actual)}[m
+                   </p>[m
+                 </div>[m
+                 <div className="flex gap-2">[m
+[36m@@ -1411,10 +1443,13 @@[m [mconst handleActualSave = async ([m
+                 </div>[m
+               </CardHeader>[m
+               <CardContent>[m
+[31m-                <div className="space-y-6">[m
+[32m+[m[32m                <div className="space-y-4">[m
+                   {/* Budget Lines */}[m
+[31m-                  <div>[m
+[31m-                    <h3 className="font-semibold mb-3 text-sm">Budget (From Sales Order)</h3>[m
+[32m+[m[32m                  <Card className="rounded-lg border shadow-sm">[m
+[32m+[m[32m                    <CardHeader>[m
+[32m+[m[32m                      <CardTitle className="text-base">Budgeted Costs</CardTitle>[m
+[32m+[m[32m                    </CardHeader>[m
+[32m+[m[32m                    <CardContent>[m
+                     {loadingBudget ? ([m
+                       <Skeleton className="h-32 w-full" />[m
+                     ) : ([m
+[36m@@ -1455,11 +1490,15 @@[m [mconst handleActualSave = async ([m
+                         </TableBody>[m
+                       </Table>[m
+                     )}[m
+[31m-                  </div>[m
+[32m+[m[32m                    </CardContent>[m
+[32m+[m[32m                  </Card>[m
+ [m
+                   {/* Actual Costs by Category */}[m
+[31m-                  <div>[m
+[31m-                    <h3 className="font-semibold mb-3 text-sm">Actual (From Purchase Orders)</h3>[m
+[32m+[m[32m                  <Card className="rounded-lg border shadow-sm">[m
+[32m+[m[32m                    <CardHeader>[m
+[32m+[m[32m                      <CardTitle className="text-base">Actual Costs (Actuals & POs)</CardTitle>[m
+[32m+[m[32m                    </CardHeader>[m
+[32m+[m[32m                    <CardContent>[m
+                     {['installation', 'freight', 'cranage', 'accommodation', 'travel', 'other'].map((type) => {[m
+                       const typeCosts = costs?.filter(c => c.cost_type === type) || [];[m
+                       if (typeCosts.length === 0) return null;[m
+[36m@@ -1521,11 +1560,15 @@[m [mconst handleActualSave = async ([m
+                         No non-material costs added yet. Click "Add Cost" to start tracking.[m
+                       </div>[m
+                     )}[m
+[31m-                  </div>[m
+[32m+[m[32m                    </CardContent>[m
+[32m+[m[32m                  </Card>[m
+ [m
+                   {/* Remaining Section */}[m
+[31m-                  <div>[m
+[31m-                    <h3 className="font-semibold mb-3 text-sm">Remaining</h3>[m
+[32m+[m[32m                  <Card className="rounded-lg border shadow-sm">[m
+[32m+[m[32m                    <CardHeader>[m
+[32m+[m[32m                      <CardTitle className="text-base">Remaining Budget</CardTitle>[m
+[32m+[m[32m                    </CardHeader>[m
+[32m+[m[32m                    <CardContent>[m
+                     <Table>[m
+                       <TableBody>[m
+                         <TableRow className={`font-semibold ${nonMaterialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>[m
+[36m@@ -1536,7 +1579,8 @@[m [mconst handleActualSave = async ([m
+                         </TableRow>[m
+                       </TableBody>[m
+                     </Table>[m
+[31m-                  </div>[m
+[32m+[m[32m                    </CardContent>[m
+[32m+[m[32m                  </Card>[m
+                 </div>[m
+               </CardContent>[m
+             </Card>[m

@@ -67,17 +67,9 @@ export default function JobCostingDetail() {
   });
 
   const { bomLines, isLoading: loadingBOM, createBOMLineAsync, deleteBOMLineAsync, importBOMFromCSVAsync } = useJobBOM(id);
-  const { costs, isLoading: loadingCosts, createCost, updateCost, deleteCost } = useJobNonMaterialCosts(id);
+  const { costs, isLoading: loadingCosts, createCost, createCostAsync, updateCost, deleteCost } = useJobNonMaterialCosts(id);
   const { analysis, isLoading: loadingAnalysis } = useJobCostAnalysis(job);
   const { data: saleOrderLines, isLoading: loadingSaleOrderLines, refetch: refetchSaleOrderLines } = useOdooSaleOrderLines(job?.odoo_sale_order_id);
-
-  // Auto-refresh analytic lines on job load to ensure we have the latest data
-  useEffect(() => {
-    if (job?.analytic_account_id) {
-      // Invalidate the analytic lines query to trigger a fresh fetch
-      queryClient.invalidateQueries({ queryKey: ["odoo-analytic-lines", job.analytic_account_id] });
-    }
-  }, [job?.analytic_account_id, queryClient]);
   const materialPurchasePriceMap = useMemo(() => {
     const map = new Map<number, number>();
     if (saleOrderLines && saleOrderLines.length > 0) {
@@ -303,14 +295,15 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
     }
   };
   
-  // Smart sync: Auto-refresh if data is stale (> 1 hour old)
+  // Smart sync: Auto-refresh if data is stale (> 24 hours old) - only on initial load
   useEffect(() => {
     if (!job || !id) return;
     
     const lastSync = job.last_synced_at;
-    const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime()) > 3600000; // 1 hour
+    const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime()) > 86400000; // 24 hours
     
     if (isStale && !isSyncing) {
+      console.log(`Job data is stale (last sync: ${lastSync}), auto-syncing...`);
       // Auto-refresh in background
       handleSyncWithOdoo();
     }
@@ -687,13 +680,18 @@ const handleActualSave = async (
       if (isServiceName(line.product_name)) return sum;
       return sum + resolveBomLineTotal(line);
     }, 0) || 0;
-  const materialActualTotal = matchedMaterialActualTotal + unmatchedMaterialActualTotal;
+  // Include material analytic lines from Odoo (costs not yet imported to BOM)
+  const materialAnalyticTotal = analysis?.materialAnalyticLines?.reduce((sum, line) => sum + Math.abs(line.amount), 0) || 0;
+  const materialActualTotal = matchedMaterialActualTotal + unmatchedMaterialActualTotal + materialAnalyticTotal;
   const materialRemaining = materialBudgetTotal - materialActualTotal;
   const materialOverBudget = materialRemaining < 0;
 
   // Calculate non-material totals
   const nonMaterialBudgetTotal = budgetLines?.filter(isServiceBudgetLine).reduce((sum, line) => sum + (line.subtotal ?? 0), 0) || 0;
-  const nonMaterialActualTotal = costs?.reduce((sum, cost) => sum + cost.amount, 0) || 0;
+  // Include both manually entered costs AND non-material analytic lines from Odoo
+  const nonMaterialManualTotal = costs?.reduce((sum, cost) => sum + cost.amount, 0) || 0;
+  const nonMaterialAnalyticTotal = analysis?.nonMaterialAnalyticLines?.reduce((sum, line) => sum + Math.abs(line.amount), 0) || 0;
+  const nonMaterialActualTotal = nonMaterialManualTotal + nonMaterialAnalyticTotal;
   const nonMaterialRemaining = nonMaterialBudgetTotal - nonMaterialActualTotal;
   const nonMaterialOverBudget = nonMaterialRemaining < 0;
 
@@ -780,12 +778,12 @@ const handleActualSave = async (
 
         {/* Budget Circle Chart - Hero Section */}
         <BudgetCircleChart
-          totalBudget={materialBudget + nonMaterialBudget}
-          totalActual={job.total_actual}
-          materialBudget={materialBudget}
-          materialActual={job.material_actual}
-          nonMaterialBudget={nonMaterialBudget}
-          nonMaterialActual={job.non_material_actual}
+          totalBudget={materialBudgetTotal + nonMaterialBudgetTotal}
+          totalActual={materialActualTotal + nonMaterialActualTotal}
+          materialBudget={materialBudgetTotal}
+          materialActual={materialActualTotal}
+          nonMaterialBudget={nonMaterialBudgetTotal}
+          nonMaterialActual={nonMaterialActualTotal}
         />
 
         {/* Cost Analysis Overview */}
@@ -909,7 +907,15 @@ const handleActualSave = async (
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    if (!analysis?.analyticLines || !id || !job) return;
+                    if (!id || !job || !job.analytic_account_id) {
+                      toast.error("Job has no analytic account linked");
+                      return;
+                    }
+                    
+                    if (!analysis?.analyticLines || analysis.analyticLines.length === 0) {
+                      toast.info("No analytic lines found for this job");
+                      return;
+                    }
                     
                     toast.info("Importing costs from analytic account...");
                     
@@ -936,9 +942,22 @@ const handleActualSave = async (
                     // Check existing costs to avoid duplicates
                     const { data: existingCosts } = await supabase
                       .from('job_non_material_costs')
-                      .select('description')
+                      .select('id, description, amount')
                       .eq('job_id', id)
                       .eq('is_from_odoo', true);
+                    
+                    // Clean up any erroneous positive amounts that might have been imported (customer invoices)
+                    const positiveAmountCosts = existingCosts?.filter(c => c.amount > 0) || [];
+                    if (positiveAmountCosts.length > 0) {
+                      console.warn(`Found ${positiveAmountCosts.length} erroneous positive amounts (customer invoices), removing them...`);
+                      for (const cost of positiveAmountCosts) {
+                        await supabase
+                          .from('job_non_material_costs')
+                          .delete()
+                          .eq('id', cost.id);
+                      }
+                      toast.info(`Cleaned up ${positiveAmountCosts.length} erroneous invoice entries`);
+                    }
                     
                     const { data: existingBOMLines } = await supabase
                       .from('job_bom_lines')
@@ -954,8 +973,12 @@ const handleActualSave = async (
                     const nonMaterialLines: any[] = [];
                     
                     analysis.analyticLines.forEach(line => {
-                      // Skip positive amounts (invoices/revenue) - only process negative amounts (vendor bills/costs)
-                      if (line.amount >= 0) return;
+                      // CRITICAL: Only import NEGATIVE amounts from analytic accounts (costs/expenses)
+                      // Positive amounts = customer invoices (revenue), which should NOT be imported as costs
+                      if (line.amount >= 0) {
+                        console.log(`Skipping customer invoice/revenue line: ${line.name} (amount: ${line.amount})`);
+                        return;
+                      }
                       
                       const lineDescription = `${line.name} (${line.date})`;
                       if (existingDescriptions.has(lineDescription)) return;
@@ -1007,6 +1030,7 @@ const handleActualSave = async (
                             product_name: productName,
                             quantity: 1, // Default quantity
                             unit_cost: amount,
+                            total_cost: amount, // total = unit_cost * quantity (amount * 1)
                             notes: `Imported from analytic: ${line.name}`,
                           });
                         }
@@ -1028,7 +1052,7 @@ const handleActualSave = async (
                     let nonMaterialImported = 0;
                     for (const line of nonMaterialLines) {
                       try {
-                        await createCost(line);
+                        await createCostAsync(line);
                         nonMaterialImported++;
                       } catch (error) {
                         console.error('Error importing non-material line:', error);
@@ -1079,9 +1103,10 @@ const handleActualSave = async (
                       toast.info('No new costs to import (all already imported or no cost lines found)');
                     }
                   }}
-                  disabled={!analysis?.analyticLines || analysis.analyticLines.length === 0}
+                  disabled={!job?.analytic_account_id || loadingAnalysis}
+                  title={!job?.analytic_account_id ? "No analytic account linked to this job" : "Import costs from Odoo analytic account"}
                 >
-                  <RefreshCw className="mr-2 h-4 w-4" />
+                  <RefreshCw className={`mr-2 h-4 w-4 ${loadingAnalysis ? 'animate-spin' : ''}`} />
                   Import from Analytic
                 </Button>
               </div>
@@ -1314,7 +1339,7 @@ const handleActualSave = async (
                         <TableBody>
                           {bomLines?.map((line) => {
                             const unitCost = line.unit_cost ?? materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? 0;
-                            const totalCost = line.total_cost ?? unitCost * (line.quantity || 0);
+                            const totalCost = resolveBomLineTotal(line);
                             return (
                               <TableRow key={line.id}>
                                 <TableCell>

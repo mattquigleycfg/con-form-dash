@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export interface AnalyticLine {
   id: number;
@@ -11,9 +12,6 @@ export interface AnalyticLine {
   product_id: [number, string] | false;
   employee_id: [number, string] | false;
   category: string;
-  move_id: [number, string] | false;
-  move_type?: string;
-  journal_id: [number, string] | false;
   cost_category?: 'material' | 'non_material';
 }
 
@@ -28,6 +26,8 @@ export function categorizeAnalyticLine(line: AnalyticLine): 'material' | 'non_ma
     'LABOUR',
     'LABOR',
     'FREIGHT',
+    'CRANAGE',
+    'CRANE',
     'EQUIPMENT',
     'PLANT HIRE',
     'INSTALLATION',
@@ -65,7 +65,21 @@ export function categorizeAnalyticLine(line: AnalyticLine): 'material' | 'non_ma
     'M16',
     'BOLT',
     'HARDWARE',
-    'MATERIAL'
+    'MATERIAL',
+    'STUB COLUMN',
+    'POWDER COATING',
+    'GALVANIS',  // Matches GALVANISING, GALVANISED, etc.
+    'POST',
+    'RHS',  // Rectangular Hollow Section
+    'SHS',  // Square Hollow Section
+    'CHS',  // Circular Hollow Section
+    'STEEL',
+    'ALUMINIUM',
+    'ALUMINUM',
+    'PLATE',
+    'ANGLE',
+    'CHANNEL',
+    'BEAM'
   ];
   
   for (const keyword of materialKeywords) {
@@ -89,7 +103,7 @@ export const useOdooAnalyticLines = (analyticAccountId?: number) => {
     queryFn: async () => {
       if (!analyticAccountId) return [];
 
-      const { data, error } = await supabase.functions.invoke("odoo-query", {
+      const response = await supabase.functions.invoke("odoo-query", {
         body: {
           model: "account.analytic.line",
           method: "search_read",
@@ -104,56 +118,60 @@ export const useOdooAnalyticLines = (analyticAccountId?: number) => {
               "account_id", 
               "product_id", 
               "employee_id", 
-              "category",
-              "move_id",
-              "journal_id"
+              "category"
             ],
           ],
         },
       });
 
-      if (error) {
+      // Enhanced error handling to get actual Odoo error details
+      if (response.error) {
+        // When Supabase Functions return an error, we need to fetch the response body manually
+        let odooErrorDetails = null;
+        let errorMsg = response.error.message;
+        
+        try {
+          // Try to get error details from the error context
+          const errorContext = (response.error as any).context;
+          if (errorContext) {
+            // Read the response body from the error context
+            const errorBody = await errorContext.json();
+            odooErrorDetails = errorBody;
+            errorMsg = errorBody?.error || errorBody?.details?.message || errorMsg;
+            
+            console.error('📋 Odoo Error Details:', {
+              error: errorBody?.error,
+              details: errorBody?.details,
+              odooError: errorBody?.details?.odooError
+            });
+          }
+        } catch (e) {
+          console.warn('Could not parse error details from context:', e);
+        }
+
         console.error('❌ Odoo Analytic Lines Error:', {
           accountId: analyticAccountId,
-          error,
-          errorData: data,
-          message: error.message
-        });
-        throw error;
-      }
-      
-      const lines = data as AnalyticLine[];
-      
-      // If we have move_ids, fetch the move types to filter out customer invoices
-      const moveIds = lines
-        .map(line => line.move_id && line.move_id[0])
-        .filter((id): id is number => !!id);
-      
-      if (moveIds.length > 0) {
-        const { data: moves, error: movesError } = await supabase.functions.invoke("odoo-query", {
-          body: {
-            model: "account.move",
-            method: "search_read",
-            args: [
-              [["id", "in", moveIds]],
-              ["id", "move_type"],
-            ],
-          },
+          error: response.error,
+          errorData: response.data,
+          odooErrorDetails,
+          errorMessage: errorMsg,
+          model: 'account.analytic.line',
+          queryFilter: `[["account_id", "=", ${analyticAccountId}]]`,
+          rawError: (response.error as any).context
         });
         
-        if (!movesError && moves) {
-          const moveTypeMap = new Map(
-            (moves as any[]).map(m => [m.id, m.move_type])
-          );
-          
-          // Enrich analytic lines with move_type
-          lines.forEach(line => {
-            if (line.move_id && line.move_id[0]) {
-              line.move_type = moveTypeMap.get(line.move_id[0]);
-            }
-          });
-        }
+        // Show user-friendly error toast
+        toast.error(`Failed to load analytic lines for account ${analyticAccountId}`, {
+          description: errorMsg
+        });
+        
+        // Return empty array instead of throwing to prevent cascading failures
+        return [];
       }
+      
+      const { data, error } = response;
+      
+      const lines = data as AnalyticLine[];
       
       // Apply cost categorization to all lines
       lines.forEach(line => {
@@ -163,6 +181,7 @@ export const useOdooAnalyticLines = (analyticAccountId?: number) => {
       return lines;
     },
     enabled: !!analyticAccountId,
-    refetchInterval: 30000,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    retry: 1, // Only retry once on failure
   });
 };

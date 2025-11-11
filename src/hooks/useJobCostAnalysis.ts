@@ -66,25 +66,12 @@ export const useJobCostAnalysis = (job: Job | undefined) => {
 
   const costAnalyticLines = useMemo(() => {
     // Filter out customer invoices and only keep actual costs/expenses
+    // In Odoo analytic accounting:
+    // - Negative amounts = Costs (vendor bills, expenses) → Keep these
+    // - Positive amounts = Revenue (customer invoices) → Filter out
     return analyticLines.filter((line) => {
-      // 1. Exclude positive amounts (typically revenue/customer invoices)
-      if (line.amount > 0) return false;
-      
-      // 2. Exclude customer invoice types if move_type is available
-      if (line.move_type) {
-        const customerInvoiceTypes = ['out_invoice', 'out_receipt', 'out_refund'];
-        if (customerInvoiceTypes.includes(line.move_type)) {
-          return false;
-        }
-      }
-      
-      // 3. Check journal type - exclude sales journals
-      if (line.journal_id && line.journal_id[1]) {
-        const journalName = line.journal_id[1].toLowerCase();
-        if (journalName.includes('sales') || journalName.includes('customer')) {
-          return false;
-        }
-      }
+      // Only keep negative amounts (costs/expenses)
+      if (line.amount >= 0) return false;
       
       // Keep this line - it's a genuine cost/expense
       return true;

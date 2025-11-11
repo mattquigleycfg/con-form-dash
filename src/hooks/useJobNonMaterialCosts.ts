@@ -82,6 +82,7 @@ export const useJobNonMaterialCosts = (jobId?: string) => {
     costs,
     isLoading,
     createCost: createCost.mutate,
+    createCostAsync: createCost.mutateAsync, // For async/await usage
     updateCost: updateCost.mutate,
     deleteCost: deleteCost.mutate,
   };
