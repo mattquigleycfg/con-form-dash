@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import { 
   AlertTriangle, 
   TrendingUp, 
@@ -43,9 +44,11 @@ interface Insight {
 export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false }: AIInsightsProps) {
   const [dismissedInsights, setDismissedInsights] = useState<Set<string>>(new Set());
   const [expandedInsights, setExpandedInsights] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Fetch existing insights from database
-  const { data: existingInsights, isLoading: loadingExisting } = useQuery({
+  const { data: existingInsights, isLoading: loadingExisting, refetch: refetchExisting } = useQuery({
     queryKey: ['ai-insights', jobId],
     queryFn: async () => {
       let query = supabase
@@ -74,17 +77,35 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
   });
 
   // Generate new insights if needed
-  const { data: newInsights, isLoading: loadingNew, refetch } = useQuery({
+  const { data: newInsights, isLoading: loadingNew, refetch, isError, error } = useQuery({
     queryKey: ['ai-insights-analysis', jobId, analysisType],
     queryFn: async () => {
+      console.log('Starting AI insights analysis...', { jobId, analysisType });
+      
       const { data, error } = await supabase.functions.invoke('analyze-job-insights', {
         body: { job_id: jobId, analysis_type: analysisType },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('AI insights analysis error:', error);
+        throw error;
+      }
+      
+      console.log('AI insights analysis completed:', data);
+      
+      // After analysis completes, refresh the existing insights to show new results
+      await refetchExisting();
+      
+      // Show success message
+      toast({
+        title: "Analysis Complete",
+        description: `Generated ${data?.count || 0} insights for your jobs.`,
+      });
+      
       return data;
     },
     enabled: false, // Only run when manually triggered
+    retry: false,
   });
 
   const allInsights = existingInsights || [];
@@ -166,13 +187,19 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                 AI Insights
               </CardTitle>
               <CardDescription>
-                AI-powered analysis and recommendations for your jobs
+                Rule-based cost analysis and recommendations for your jobs
               </CardDescription>
             </div>
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => refetch()}
+              onClick={() => {
+                refetch();
+                toast({
+                  title: "Starting Analysis",
+                  description: "Analyzing job costs and generating insights...",
+                });
+              }}
               disabled={loadingNew}
             >
               {loadingNew ? 'Analyzing...' : 'Run Analysis'}
@@ -180,13 +207,23 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
           </div>
         </CardHeader>
         <CardContent>
-          <Alert>
-            <Sparkles className="h-4 w-4" />
-            <AlertTitle>No insights yet</AlertTitle>
-            <AlertDescription>
-              Click "Run Analysis" to generate AI-powered insights for your jobs.
-            </AlertDescription>
-          </Alert>
+          {isError ? (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Analysis Failed</AlertTitle>
+              <AlertDescription>
+                {error?.message || 'Failed to analyze jobs. Please check console for details.'}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Alert>
+              <Sparkles className="h-4 w-4" />
+              <AlertTitle>No insights yet</AlertTitle>
+              <AlertDescription>
+                Click "Run Analysis" to generate cost insights for your jobs. This analyzes budget variances, anomalies, predictions, optimization opportunities, and material waste.
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
     );
@@ -209,7 +246,13 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={() => refetch()}
+            onClick={() => {
+              refetch();
+              toast({
+                title: "Refreshing Analysis",
+                description: "Analyzing job costs and generating new insights...",
+              });
+            }}
             disabled={loadingNew}
           >
             {loadingNew ? 'Analyzing...' : 'Refresh'}
