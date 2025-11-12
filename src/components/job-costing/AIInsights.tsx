@@ -362,24 +362,22 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
 
       {/* Detail Dialog */}
       <Dialog open={!!selectedInsight} onOpenChange={() => setSelectedInsight(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col [&>button]:hidden">
           {selectedInsight && (
             <>
-              <DialogHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className={cn("p-2 rounded-lg", getTypeColor(selectedInsight.insight_type))}>
-                      {getTypeIcon(selectedInsight.insight_type, "h-6 w-6")}
-                    </div>
-                    <div>
-                      <DialogTitle className="text-xl">{selectedInsight.title}</DialogTitle>
-                      <DialogDescription className="flex items-center gap-2 mt-1">
-                        <Badge variant={getSeverityColor(selectedInsight.severity) as any}>
-                          {selectedInsight.severity}
-                        </Badge>
-                        <span className="text-sm">{getTypeLabel(selectedInsight.insight_type)}</span>
-                      </DialogDescription>
-                    </div>
+              <DialogHeader className="flex-shrink-0">
+                <div className="flex items-start gap-4">
+                  <div className={cn("p-2 rounded-lg flex-shrink-0", getTypeColor(selectedInsight.insight_type))}>
+                    {getTypeIcon(selectedInsight.insight_type, "h-6 w-6")}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <DialogTitle className="text-xl pr-8">{selectedInsight.title}</DialogTitle>
+                    <DialogDescription className="flex items-center gap-2 mt-1">
+                      <Badge variant={getSeverityColor(selectedInsight.severity) as any}>
+                        {selectedInsight.severity}
+                      </Badge>
+                      <span className="text-sm">{getTypeLabel(selectedInsight.insight_type)}</span>
+                    </DialogDescription>
                   </div>
                   <Button
                     variant="ghost"
@@ -388,13 +386,14 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                       handleDismiss(selectedInsight.id);
                       setSelectedInsight(null);
                     }}
+                    className="flex-shrink-0"
                   >
-                    <X className="h-4 w-4" />
+                    Dismiss
                   </Button>
                 </div>
               </DialogHeader>
 
-              <div className="space-y-6 mt-4">
+              <div className="space-y-6 mt-4 overflow-y-auto pr-2 scrollbar-thin">
                 {/* Description */}
                 <div>
                   <h4 className="font-semibold text-sm mb-2">Analysis</h4>
