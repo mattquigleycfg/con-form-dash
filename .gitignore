@@ -42,3 +42,5 @@ docs/odoo-v16-reference.md
 .gitignore
 docs/odoo-api-diagnostic-summary.md
 docs/README.md
+supabase/migrations/20251111000002_add_project_analytic_account.sql
+ANALYTIC_ENTRIES_IMPLEMENTATION.md

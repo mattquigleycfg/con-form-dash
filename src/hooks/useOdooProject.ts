@@ -9,6 +9,7 @@ export interface Project {
   date: string | false;
   user_id: [number, string] | false;
   task_count: number;
+  analytic_account_id: [number, string] | false;
 }
 
 export interface Task {
@@ -31,7 +32,7 @@ export const useOdooProjects = () => {
           method: "search_read",
           args: [
             [["active", "=", true]],
-            ["id", "name", "partner_id", "date_start", "date", "user_id", "task_count"],
+            ["id", "name", "partner_id", "date_start", "date", "user_id", "task_count", "analytic_account_id"],
           ],
         },
       });

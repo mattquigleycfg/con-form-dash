@@ -59,9 +59,28 @@ export interface CostAnalysis {
 }
 
 export const useJobCostAnalysis = (job: Job | undefined) => {
-  // Fetch analytic lines
+  // Collect all analytic account IDs (from sale order and project if different)
+  const analyticAccountIds = useMemo(() => {
+    const ids: number[] = [];
+    if (job?.analytic_account_id) {
+      ids.push(job.analytic_account_id);
+    }
+    // Add project analytic account if it exists and is different from sale order account
+    if (job?.project_analytic_account_id && 
+        job.project_analytic_account_id !== job?.analytic_account_id) {
+      ids.push(job.project_analytic_account_id);
+      console.log('📋 Job has separate project analytic account:', {
+        saleOrderAccount: job.analytic_account_id,
+        projectAccount: job.project_analytic_account_id,
+        jobName: job.sale_order_name
+      });
+    }
+    return ids;
+  }, [job?.analytic_account_id, job?.project_analytic_account_id, job?.sale_order_name]);
+
+  // Fetch analytic lines from all relevant accounts
   const { data: analyticLines = [], isLoading: loadingAnalytics } = useOdooAnalyticLines(
-    job?.analytic_account_id
+    analyticAccountIds.length > 0 ? analyticAccountIds : undefined
   );
 
   const costAnalyticLines = useMemo(() => {

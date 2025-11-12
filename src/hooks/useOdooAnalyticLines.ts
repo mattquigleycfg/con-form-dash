@@ -97,18 +97,37 @@ export function categorizeAnalyticLine(line: AnalyticLine): 'material' | 'non_ma
   return 'non_material';
 }
 
-export const useOdooAnalyticLines = (analyticAccountId?: number) => {
+export const useOdooAnalyticLines = (
+  analyticAccountId?: number | number[], 
+  options?: { includeProjectAccount?: boolean }
+) => {
+  // Normalize input to always work with array
+  const accountIds = Array.isArray(analyticAccountId) 
+    ? analyticAccountId.filter(id => id != null)
+    : analyticAccountId != null ? [analyticAccountId] : [];
+  
   return useQuery({
-    queryKey: ["odoo-analytic-lines", analyticAccountId],
+    queryKey: ["odoo-analytic-lines", accountIds.sort().join(',')],
     queryFn: async () => {
-      if (!analyticAccountId) return [];
+      if (accountIds.length === 0) return [];
+
+      // Build filter based on number of accounts
+      const accountFilter = accountIds.length === 1
+        ? [["account_id", "=", accountIds[0]]]
+        : [["account_id", "in", accountIds]];
+
+      console.log('🔍 Fetching analytic lines:', {
+        accountIds,
+        filter: accountFilter,
+        count: accountIds.length
+      });
 
       const response = await supabase.functions.invoke("odoo-query", {
         body: {
           model: "account.analytic.line",
           method: "search_read",
           args: [
-            [["account_id", "=", analyticAccountId]],
+            accountFilter,
             [
               "id", 
               "name", 
@@ -150,18 +169,20 @@ export const useOdooAnalyticLines = (analyticAccountId?: number) => {
         }
 
         console.error('❌ Odoo Analytic Lines Error:', {
-          accountId: analyticAccountId,
+          accountIds,
           error: response.error,
           errorData: response.data,
           odooErrorDetails,
           errorMessage: errorMsg,
           model: 'account.analytic.line',
-          queryFilter: `[["account_id", "=", ${analyticAccountId}]]`,
+          queryFilter: accountIds.length === 1 
+            ? `[["account_id", "=", ${accountIds[0]}]]`
+            : `[["account_id", "in", [${accountIds.join(', ')}]]]`,
           rawError: (response.error as any).context
         });
         
         // Show user-friendly error toast
-        toast.error(`Failed to load analytic lines for account ${analyticAccountId}`, {
+        toast.error(`Failed to load analytic lines for account(s) ${accountIds.join(', ')}`, {
           description: errorMsg
         });
         
@@ -178,9 +199,21 @@ export const useOdooAnalyticLines = (analyticAccountId?: number) => {
         line.cost_category = categorizeAnalyticLine(line);
       });
       
+      // Log summary of fetched lines grouped by account
+      if (accountIds.length > 1 && lines.length > 0) {
+        const linesByAccount = lines.reduce((acc, line) => {
+          const accountId = Array.isArray(line.account_id) ? line.account_id[0] : line.account_id;
+          acc[accountId] = (acc[accountId] || 0) + 1;
+          return acc;
+        }, {} as Record<number, number>);
+        
+        console.log('📊 Analytic lines by account:', linesByAccount);
+        console.log(`✅ Total unique analytic lines: ${lines.length}`);
+      }
+      
       return lines;
     },
-    enabled: !!analyticAccountId,
+    enabled: accountIds.length > 0,
     staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
     retry: 1, // Only retry once on failure
   });

@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     // Fetch all jobs with analytic_account_id
     const { data: jobs, error: jobsError } = await supabase
       .from('jobs')
-      .select('id, analytic_account_id, sale_order_name')
+      .select('id, analytic_account_id, project_analytic_account_id, sale_order_name')
       .not('analytic_account_id', 'is', null);
 
     if (jobsError) throw jobsError;
@@ -53,9 +53,27 @@ Deno.serve(async (req) => {
 
     for (const job of jobs || []) {
       try {
-        console.log(`Syncing costs for job ${job.sale_order_name} (analytic: ${job.analytic_account_id})`);
+        // Collect all analytic account IDs for this job
+        const analyticAccountIds: number[] = [];
+        if (job.analytic_account_id) {
+          analyticAccountIds.push(job.analytic_account_id);
+        }
+        if (job.project_analytic_account_id && job.project_analytic_account_id !== job.analytic_account_id) {
+          analyticAccountIds.push(job.project_analytic_account_id);
+          console.log(`📋 Job ${job.sale_order_name} has separate project analytic account:`, {
+            soAccount: job.analytic_account_id,
+            projectAccount: job.project_analytic_account_id
+          });
+        }
 
-        // Fetch analytic lines
+        console.log(`Syncing costs for job ${job.sale_order_name} (analytic accounts: ${analyticAccountIds.join(', ')})`);
+
+        // Build filter for analytic lines
+        const accountFilter = analyticAccountIds.length === 1
+          ? [['account_id', '=', analyticAccountIds[0]]]
+          : [['account_id', 'in', analyticAccountIds]];
+
+        // Fetch analytic lines from all relevant accounts
         const analyticResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/odoo-query`, {
           method: 'POST',
           headers: {
@@ -66,14 +84,14 @@ Deno.serve(async (req) => {
             model: 'account.analytic.line',
             method: 'search_read',
             args: [
-              [['account_id', '=', job.analytic_account_id]],
+              accountFilter,
               ['id', 'name', 'amount', 'unit_amount', 'date', 'product_id', 'employee_id', 'category'],
             ],
           }),
         });
 
         const analyticLines = await analyticResponse.json() as AnalyticLine[];
-        console.log(`Found ${analyticLines.length} analytic lines for job ${job.sale_order_name}`);
+        console.log(`Found ${analyticLines.length} analytic lines for job ${job.sale_order_name} across ${analyticAccountIds.length} account(s)`);
         
         // Filter to only negative amounts (costs) - positive amounts are customer invoices
         const costLines = analyticLines.filter(line => line.amount < 0);

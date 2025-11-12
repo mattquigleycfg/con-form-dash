@@ -249,9 +249,11 @@ export default function JobCosting() {
           salesPersonName = order.user_id[1];
         }
 
-        // Fetch project stage from Odoo if analytic account exists
+        // Fetch project stage and analytic account from Odoo if analytic account exists
         let projectStageId = null;
         let projectStageName = 'Unassigned';
+        let projectAnalyticAccountId = null;
+        let projectAnalyticAccountName = null;
         
         if (order.analytic_account_id) {
           try {
@@ -262,13 +264,29 @@ export default function JobCosting() {
                 method: "search_read",
                 args: [
                   [["analytic_account_id", "=", order.analytic_account_id[0]]],
-                  ["id", "name"],
+                  ["id", "name", "analytic_account_id"],
                 ],
               },
             });
 
             if (projects && projects.length > 0) {
-              const projectId = projects[0].id;
+              const project = projects[0];
+              const projectId = project.id;
+              
+              // Capture project's analytic account (may differ from sale order)
+              if (project.analytic_account_id) {
+                projectAnalyticAccountId = project.analytic_account_id[0];
+                projectAnalyticAccountName = project.analytic_account_id[1];
+                
+                // Log if project has different analytic account than sale order
+                if (projectAnalyticAccountId !== order.analytic_account_id[0]) {
+                  logger.info(`⚠️ Project has different analytic account than sale order`, {
+                    saleOrder: order.name,
+                    soAnalyticAccount: order.analytic_account_id,
+                    projectAnalyticAccount: project.analytic_account_id
+                  });
+                }
+              }
               
               // Find tasks for this project to get the actual task stage
               const { data: tasks } = await supabase.functions.invoke("odoo-query", {
@@ -327,6 +345,9 @@ export default function JobCosting() {
             non_material_actual: 0,
             status: 'active',
             analytic_account_id: order.analytic_account_id ? order.analytic_account_id[0] : null,
+            analytic_account_name: order.analytic_account_id ? order.analytic_account_id[1] : null,
+            project_analytic_account_id: projectAnalyticAccountId,
+            project_analytic_account_name: projectAnalyticAccountName,
             sales_person_name: salesPersonName,
             opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
             date_order: order.date_order,

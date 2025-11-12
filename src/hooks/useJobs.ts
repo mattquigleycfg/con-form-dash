@@ -12,6 +12,8 @@ export interface Job {
   sale_order_name: string;
   analytic_account_id?: number;
   analytic_account_name?: string;
+  project_analytic_account_id?: number; // Separate analytic account from project if different from sale order
+  project_analytic_account_name?: string;
   customer_name: string;
   total_budget: number;
   material_budget: number;
