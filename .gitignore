@@ -44,3 +44,5 @@ docs/odoo-api-diagnostic-summary.md
 docs/README.md
 supabase/migrations/20251111000002_add_project_analytic_account.sql
 ANALYTIC_ENTRIES_IMPLEMENTATION.md
+supabase/migrations/20251112000001_create_ai_job_insights.sql
+AI_JOB_COSTING_IMPLEMENTATION_COMPLETE.md

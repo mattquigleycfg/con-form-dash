@@ -57,6 +57,41 @@ export function AICopilot() {
       return "You are an AI assistant for the Project module. Focus on projects, tasks, and activities. When asked about data, default to showing only ACTIVE/OPEN tasks and projects unless the user specifically asks for completed items. Ask 'Would you like to include completed projects and tasks?' when appropriate.";
     } else if (path === "/helpdesk") {
       return "You are an AI assistant for the Helpdesk module. Focus on support tickets and customer inquiries. When asked about data, default to showing only OPEN tickets unless the user specifically asks for resolved/closed tickets. Ask 'Would you like to include closed tickets?' when appropriate.";
+    } else if (path.startsWith("/job-costing")) {
+      return `You are an AI assistant for Job Costing and Project Budget Management.
+      
+**Your Capabilities:**
+- Analyze budget vs actual performance with detailed variance breakdowns
+- Detect cost overruns and anomalies (duplicate entries, unusual patterns)
+- Forecast final costs based on current progress and burn rate
+- Compare similar jobs for benchmarking and best practices
+- Identify margin optimization opportunities across materials and labor
+- Track material waste and over-ordering patterns
+- Provide actionable cost reduction recommendations with expected savings
+
+**Available Actions:**
+- Query jobs with filters (over budget, status, date ranges, teams)
+- Get detailed job breakdowns (material/labor/expenses by category)
+- Analyze analytic lines for cost patterns and anomalies
+- Compare with similar historical jobs (same customer, budget range, team)
+- Identify cost trends and patterns across multiple projects
+- Review BOMs and material requirements
+
+**Default Behavior:**
+- Show only ACTIVE jobs unless user asks for completed/all
+- Highlight budget variances > 10% as significant
+- Flag unusual cost patterns automatically (duplicates, outliers)
+- Suggest corrective actions for overruns with specific savings estimates
+- Benchmark against similar jobs for context
+
+**When analyzing costs, always provide:**
+1. Current status (budget vs actual with variance %)
+2. Variance analysis (which categories are over/under)
+3. Predictions (expected final costs based on burn rate)
+4. Recommendations (specific, actionable next steps with $ impact)
+5. Similar job comparisons (what worked well before)
+
+Focus on helping users make data-driven decisions to improve margins and reduce waste.`;
     } else if (path.startsWith("/accounting")) {
       return "You are an AI assistant for the Accounting module. Focus on invoices, expenses, and financial data. When asked about data, default to showing recent/unpaid invoices unless the user specifies otherwise. Ask 'Would you like to include paid/historical invoices?' when appropriate.";
     } else {
@@ -190,6 +225,7 @@ export function AICopilot() {
               <Bot className="h-5 w-5 text-white" />
               <CardTitle className="text-white">
                 {location.pathname === "/calculator" ? "AI Estimator Assistant" :
+                 location.pathname.startsWith("/job-costing") ? "AI Job Costing Assistant" :
                  location.pathname.startsWith("/accounting") ? "AI Accounting Assistant" :
                  location.pathname === "/project" ? "AI Project Assistant" :
                  location.pathname === "/helpdesk" ? "AI Helpdesk Assistant" :
@@ -212,6 +248,7 @@ export function AICopilot() {
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-foreground">
                       {location.pathname === "/calculator" ? "Ask me about the Con-form Estimator!" :
+                       location.pathname.startsWith("/job-costing") ? "Ask me about job costs and budgets!" :
                        location.pathname.startsWith("/accounting") ? "Ask me about accounting and finances!" :
                        location.pathname === "/project" ? "Ask me about projects and tasks!" :
                        location.pathname === "/helpdesk" ? "Ask me about support tickets!" :
@@ -219,6 +256,7 @@ export function AICopilot() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {location.pathname === "/calculator" ? "I can explain formulas, inputs, pricing, and help you understand the calculations." :
+                       location.pathname.startsWith("/job-costing") ? "I can analyze variances, predict costs, find anomalies, and compare similar jobs." :
                        location.pathname.startsWith("/accounting") ? "I default to recent/open items but can search historical data on request." :
                        location.pathname === "/project" ? "I default to active tasks but can search completed projects on request." :
                        location.pathname === "/helpdesk" ? "I default to open tickets but can search resolved tickets on request." :
@@ -264,6 +302,7 @@ export function AICopilot() {
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={
                     location.pathname === "/calculator" ? "Ask about calculator..." :
+                    location.pathname.startsWith("/job-costing") ? "Ask about job costs..." :
                     location.pathname.startsWith("/accounting") ? "Ask about accounting..." :
                     location.pathname === "/project" ? "Ask about projects..." :
                     location.pathname === "/helpdesk" ? "Ask about tickets..." :

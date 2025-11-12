@@ -21,6 +21,7 @@ import { ListView } from "@/components/job-costing/ListView";
 import { useQueryClient } from "@tanstack/react-query";
 import { KanbanView } from "@/components/job-costing/KanbanView";
 import { GridView } from "@/components/job-costing/GridView";
+import { AIInsights } from "@/components/job-costing/AIInsights";
 
 export default function JobCosting() {
   const navigate = useNavigate();
@@ -891,6 +892,11 @@ export default function JobCosting() {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {/* AI Insights */}
+        {filteredJobs.length > 0 && (
+          <AIInsights jobs={filteredJobs} analysisType="all" />
         )}
 
         {/* Search */}

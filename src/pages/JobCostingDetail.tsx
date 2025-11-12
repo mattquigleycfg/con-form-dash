@@ -30,6 +30,7 @@ import { useOdooProducts } from "@/hooks/useOdooProducts";
 import { useOdooSaleOrderLines } from "@/hooks/useOdooSaleOrderLines";
 import { JobCostingSummary } from "@/components/job-costing/JobCostingSummary";
 import { BudgetCircleChart } from "@/components/job-costing/BudgetCircleChart";
+import { AIInsights } from "@/components/job-costing/AIInsights";
 import { Database } from "@/integrations/supabase/types";
 import confetti from "canvas-confetti";
 
@@ -918,6 +919,9 @@ const handleActualSave = async (
           </Card>
           )}
         </div>
+
+        {/* AI Insights */}
+        {job && <AIInsights jobId={id} analysisType="all" detailed={true} />}
 
         {/* Cost Analysis Breakdown */}
         <Card>

@@ -469,6 +469,184 @@ const tools = [
     },
   },
   
+  // ========== JOB COSTING MODULE ==========
+  {
+    type: "function",
+    function: {
+      name: "query_jobs",
+      description: "Query jobs from Supabase job costing system. Use this to analyze project budgets, track costs, and identify budget variances. Returns jobs with: id, sale_order_name, customer_name, total_budget, total_actual, material_budget, material_actual, non_material_budget, non_material_actual, status, project_stage, dates, variance calculations.",
+      parameters: {
+        type: "object",
+        properties: {
+          over_budget: {
+            type: "boolean",
+            description: "If true, only returns jobs where actual costs exceed budget (total_actual > total_budget). Default false.",
+          },
+          under_budget: {
+            type: "boolean",
+            description: "If true, only returns jobs where actual costs are under budget. Default false.",
+          },
+          variance_threshold: {
+            type: "number",
+            description: "Only return jobs with variance percentage exceeding this threshold (e.g., 10 for 10%). Can be positive (overruns) or negative (under budget).",
+          },
+          status: {
+            type: "string",
+            description: "Filter by job status. Leave empty for all statuses.",
+          },
+          project_stage: {
+            type: "string",
+            description: "Filter by project stage name (partial match). Leave empty for all stages.",
+          },
+          salesperson_name: {
+            type: "string",
+            description: "Filter by salesperson name (partial match). Leave empty for all.",
+          },
+          project_manager: {
+            type: "string",
+            description: "Filter by project manager name (partial match). Leave empty for all.",
+          },
+          customer_name: {
+            type: "string",
+            description: "Filter by customer name (partial match). Leave empty for all.",
+          },
+          date_from: {
+            type: "string",
+            description: "Filter jobs created on or after this date. Use ISO format YYYY-MM-DD.",
+          },
+          date_to: {
+            type: "string",
+            description: "Filter jobs created on or before this date. Use ISO format YYYY-MM-DD.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_job_details",
+      description: "Get comprehensive details for a specific job including full budget breakdown, actual costs by category, analytic lines summary, and project information. Use this for detailed job analysis.",
+      parameters: {
+        type: "object",
+        properties: {
+          job_id: {
+            type: "string",
+            description: "The UUID of the job to query. Required.",
+          },
+          include_analytic_lines: {
+            type: "boolean",
+            description: "If true, includes summary of analytic lines (cost entries). Default false.",
+          },
+        },
+        required: ["job_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_job_analytic_lines",
+      description: "Query analytic cost entries for a job from Odoo. Returns detailed cost lines including vendor bills, employee expenses, and time tracking. Use this to analyze specific cost entries and identify anomalies.",
+      parameters: {
+        type: "object",
+        properties: {
+          job_id: {
+            type: "string",
+            description: "The UUID of the job in Supabase. The function will resolve to the corresponding Odoo analytic account. Required.",
+          },
+          date_from: {
+            type: "string",
+            description: "Filter entries on or after this date. Use ISO format YYYY-MM-DD.",
+          },
+          date_to: {
+            type: "string",
+            description: "Filter entries on or before this date. Use ISO format YYYY-MM-DD.",
+          },
+          category: {
+            type: "string",
+            description: "Filter by cost category (e.g., 'material', 'labor', 'expense'). Leave empty for all.",
+          },
+        },
+        required: ["job_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_job_bom",
+      description: "Get Bill of Materials (BOM) data for a job. Returns BOM components, quantities, costs, and material breakdown. Use this to analyze material requirements and costs.",
+      parameters: {
+        type: "object",
+        properties: {
+          job_id: {
+            type: "string",
+            description: "The UUID of the job. The function will find the associated product's BOM. Required.",
+          },
+          sale_order_id: {
+            type: "number",
+            description: "Alternative: Query BOM by Odoo sale order ID instead of job_id.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "compare_similar_jobs",
+      description: "Find and compare similar jobs based on various criteria. Returns comparative metrics like budget accuracy, margins, and timelines. Use this for benchmarking and learning from past projects.",
+      parameters: {
+        type: "object",
+        properties: {
+          job_id: {
+            type: "string",
+            description: "The UUID of the reference job to compare against. Required.",
+          },
+          match_criteria: {
+            type: "array",
+            items: { type: "string" },
+            description: "Criteria for matching: 'customer' (same customer), 'budget_range' (similar budget ±30%), 'salesperson' (same sales person). Default: all criteria.",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum number of similar jobs to return. Default 5.",
+          },
+        },
+        required: ["job_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "analyze_cost_trends",
+      description: "Analyze cost patterns and trends across multiple jobs. Returns aggregated metrics like average margins, budget accuracy rates, and common cost categories. Use this for high-level insights and identifying patterns.",
+      parameters: {
+        type: "object",
+        properties: {
+          date_from: {
+            type: "string",
+            description: "Analyze jobs created on or after this date. Use ISO format YYYY-MM-DD.",
+          },
+          date_to: {
+            type: "string",
+            description: "Analyze jobs created on or before this date. Use ISO format YYYY-MM-DD.",
+          },
+          group_by: {
+            type: "string",
+            description: "Group results by: 'customer', 'salesperson', 'project_manager', 'month'. Default: overall summary.",
+          },
+          customer_name: {
+            type: "string",
+            description: "Filter to specific customer (partial match).",
+          },
+        },
+      },
+    },
+  },
+  
   // ========== GENERAL ==========
   {
     type: "function",
@@ -1224,6 +1402,473 @@ async function executeToolCall(toolName: string, toolArgs: any) {
       return JSON.stringify(results);
     }
 
+    // ========== JOB COSTING MODULE ==========
+    if (toolName === "query_jobs") {
+      const { data: jobs, error } = await supabase
+        .from('jobs')
+        .select('*');
+
+      if (error) throw error;
+
+      let results = jobs || [];
+      
+      // Apply filters
+      if (toolArgs.over_budget) {
+        results = results.filter((job: any) => job.total_actual > job.total_budget);
+      }
+      
+      if (toolArgs.under_budget) {
+        results = results.filter((job: any) => job.total_actual < job.total_budget);
+      }
+      
+      if (toolArgs.variance_threshold !== undefined) {
+        results = results.filter((job: any) => {
+          const variance = ((job.total_actual - job.total_budget) / job.total_budget) * 100;
+          return Math.abs(variance) >= Math.abs(toolArgs.variance_threshold);
+        });
+      }
+      
+      if (toolArgs.status) {
+        const searchStatus = toolArgs.status.toLowerCase();
+        results = results.filter((job: any) => 
+          job.status && job.status.toLowerCase().includes(searchStatus)
+        );
+      }
+      
+      if (toolArgs.project_stage) {
+        const searchStage = toolArgs.project_stage.toLowerCase();
+        results = results.filter((job: any) => 
+          job.project_stage_name && job.project_stage_name.toLowerCase().includes(searchStage)
+        );
+      }
+      
+      if (toolArgs.salesperson_name) {
+        const searchName = toolArgs.salesperson_name.toLowerCase();
+        results = results.filter((job: any) => 
+          job.sales_person_name && job.sales_person_name.toLowerCase().includes(searchName)
+        );
+      }
+      
+      if (toolArgs.project_manager) {
+        const searchPM = toolArgs.project_manager.toLowerCase();
+        results = results.filter((job: any) => 
+          job.project_manager_name && job.project_manager_name.toLowerCase().includes(searchPM)
+        );
+      }
+      
+      if (toolArgs.customer_name) {
+        const searchCustomer = toolArgs.customer_name.toLowerCase();
+        results = results.filter((job: any) => 
+          job.customer_name && job.customer_name.toLowerCase().includes(searchCustomer)
+        );
+      }
+      
+      if (toolArgs.date_from) {
+        results = results.filter((job: any) => job.created_at >= toolArgs.date_from);
+      }
+      
+      if (toolArgs.date_to) {
+        results = results.filter((job: any) => job.created_at <= toolArgs.date_to);
+      }
+      
+      // Add variance calculations
+      results = results.map((job: any) => ({
+        ...job,
+        variance: job.total_actual - job.total_budget,
+        variance_percent: job.total_budget > 0 
+          ? ((job.total_actual - job.total_budget) / job.total_budget) * 100 
+          : 0,
+        material_variance: job.material_actual - job.material_budget,
+        material_variance_percent: job.material_budget > 0 
+          ? ((job.material_actual - job.material_budget) / job.material_budget) * 100 
+          : 0,
+        non_material_variance: job.non_material_actual - job.non_material_budget,
+        non_material_variance_percent: job.non_material_budget > 0 
+          ? ((job.non_material_actual - job.non_material_budget) / job.non_material_budget) * 100 
+          : 0,
+      }));
+      
+      console.log(`Found ${results.length} jobs`);
+      return JSON.stringify(results);
+    }
+
+    if (toolName === "query_job_details") {
+      const { data: job, error } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('id', toolArgs.job_id)
+        .single();
+
+      if (error) throw error;
+      if (!job) return JSON.stringify({ error: 'Job not found' });
+      
+      // Add variance calculations
+      const jobDetails = {
+        ...job,
+        variance: job.total_actual - job.total_budget,
+        variance_percent: job.total_budget > 0 
+          ? ((job.total_actual - job.total_budget) / job.total_budget) * 100 
+          : 0,
+        material_variance: job.material_actual - job.material_budget,
+        material_variance_percent: job.material_budget > 0 
+          ? ((job.material_actual - job.material_budget) / job.material_budget) * 100 
+          : 0,
+        non_material_variance: job.non_material_actual - job.non_material_budget,
+        non_material_variance_percent: job.non_material_budget > 0 
+          ? ((job.non_material_actual - job.non_material_budget) / job.non_material_budget) * 100 
+          : 0,
+      };
+      
+      // Optionally include analytic lines summary
+      if (toolArgs.include_analytic_lines && job.analytic_account_id) {
+        try {
+          const accountIds = [job.analytic_account_id];
+          if (job.project_analytic_account_id && job.project_analytic_account_id !== job.analytic_account_id) {
+            accountIds.push(job.project_analytic_account_id);
+          }
+          
+          const accountFilter = accountIds.length === 1
+            ? [['account_id', '=', accountIds[0]]]
+            : [['account_id', 'in', accountIds]];
+          
+          const analyticResponse = await supabase.functions.invoke('odoo-query', {
+            body: {
+              model: 'account.analytic.line',
+              method: 'search_read',
+              args: [
+                accountFilter,
+                ['id', 'name', 'amount', 'unit_amount', 'date', 'product_id', 'employee_id', 'category']
+              ]
+            }
+          });
+          
+          if (!analyticResponse.error && analyticResponse.data) {
+            const lines = analyticResponse.data;
+            jobDetails.analytic_lines_count = lines.length;
+            jobDetails.analytic_lines_sample = lines.slice(0, 10); // First 10 lines
+          }
+        } catch (err) {
+          console.error('Error fetching analytic lines:', err);
+        }
+      }
+      
+      console.log(`Retrieved details for job: ${job.sale_order_name}`);
+      return JSON.stringify(jobDetails);
+    }
+
+    if (toolName === "query_job_analytic_lines") {
+      const { data: job, error: jobError } = await supabase
+        .from('jobs')
+        .select('analytic_account_id, project_analytic_account_id, sale_order_name')
+        .eq('id', toolArgs.job_id)
+        .single();
+
+      if (jobError) throw jobError;
+      if (!job || !job.analytic_account_id) {
+        return JSON.stringify({ error: 'Job not found or no analytic account' });
+      }
+      
+      // Collect all analytic account IDs
+      const accountIds = [job.analytic_account_id];
+      if (job.project_analytic_account_id && job.project_analytic_account_id !== job.analytic_account_id) {
+        accountIds.push(job.project_analytic_account_id);
+      }
+      
+      const filters: any[] = accountIds.length === 1
+        ? [['account_id', '=', accountIds[0]]]
+        : [['account_id', 'in', accountIds]];
+      
+      if (toolArgs.date_from) {
+        filters.push(['date', '>=', toolArgs.date_from]);
+      }
+      if (toolArgs.date_to) {
+        filters.push(['date', '<=', toolArgs.date_to]);
+      }
+      
+      const { data, error } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'account.analytic.line',
+          method: 'search_read',
+          args: [
+            filters,
+            ['id', 'name', 'amount', 'unit_amount', 'date', 'account_id', 'product_id', 'employee_id', 'category']
+          ]
+        }
+      });
+      
+      if (error) throw error;
+      
+      let results = data || [];
+      
+      // Filter by category if specified
+      if (toolArgs.category && results.length > 0) {
+        const searchCategory = toolArgs.category.toLowerCase();
+        results = results.filter((line: any) => 
+          line.category && line.category.toLowerCase().includes(searchCategory)
+        );
+      }
+      
+      console.log(`Found ${results.length} analytic lines for job ${job.sale_order_name}`);
+      return JSON.stringify(results);
+    }
+
+    if (toolName === "query_job_bom") {
+      let saleOrderId = toolArgs.sale_order_id;
+      
+      // If job_id provided, resolve to sale_order_id
+      if (toolArgs.job_id) {
+        const { data: job, error: jobError } = await supabase
+          .from('jobs')
+          .select('odoo_sale_order_id')
+          .eq('id', toolArgs.job_id)
+          .single();
+        
+        if (jobError) throw jobError;
+        if (!job) return JSON.stringify({ error: 'Job not found' });
+        saleOrderId = job.odoo_sale_order_id;
+      }
+      
+      if (!saleOrderId) {
+        return JSON.stringify({ error: 'No sale order ID provided or found' });
+      }
+      
+      // Get sale order lines to find products
+      const { data: orderLines, error: linesError } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'sale.order.line',
+          method: 'search_read',
+          args: [
+            [['order_id', '=', saleOrderId]],
+            ['product_id', 'product_uom_qty', 'price_unit']
+          ]
+        }
+      });
+      
+      if (linesError) throw linesError;
+      
+      // Get BOMs for products
+      const bomResults = [];
+      if (orderLines && orderLines.length > 0) {
+        for (const line of orderLines) {
+          if (!line.product_id) continue;
+          
+          try {
+            const productId = Array.isArray(line.product_id) ? line.product_id[0] : line.product_id;
+            const { data: boms, error: bomError } = await supabase.functions.invoke('odoo-query', {
+              body: {
+                model: 'mrp.bom',
+                method: 'search_read',
+                args: [
+                  [['product_id', '=', productId]],
+                  ['id', 'product_id', 'product_tmpl_id', 'product_qty', 'bom_line_ids']
+                ]
+              }
+            });
+            
+            if (!bomError && boms && boms.length > 0) {
+              // Get BOM lines
+              for (const bom of boms) {
+                if (bom.bom_line_ids && bom.bom_line_ids.length > 0) {
+                  const { data: bomLines } = await supabase.functions.invoke('odoo-query', {
+                    body: {
+                      model: 'mrp.bom.line',
+                      method: 'search_read',
+                      args: [
+                        [['id', 'in', bom.bom_line_ids]],
+                        ['product_id', 'product_qty', 'product_uom_id']
+                      ]
+                    }
+                  });
+                  
+                  bomResults.push({
+                    bom_id: bom.id,
+                    product: line.product_id,
+                    lines: bomLines || []
+                  });
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Error fetching BOM:', err);
+          }
+        }
+      }
+      
+      console.log(`Found ${bomResults.length} BOMs`);
+      return JSON.stringify(bomResults);
+    }
+
+    if (toolName === "compare_similar_jobs") {
+      const { data: referenceJob, error: refError } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('id', toolArgs.job_id)
+        .single();
+
+      if (refError) throw refError;
+      if (!referenceJob) return JSON.stringify({ error: 'Reference job not found' });
+      
+      const { data: allJobs, error } = await supabase
+        .from('jobs')
+        .select('*')
+        .neq('id', toolArgs.job_id);
+      
+      if (error) throw error;
+      
+      let matchedJobs = allJobs || [];
+      const criteria = toolArgs.match_criteria || ['customer', 'budget_range', 'salesperson'];
+      
+      // Apply matching criteria
+      matchedJobs = matchedJobs.filter((job: any) => {
+        let matches = 0;
+        const requiredMatches = criteria.length;
+        
+        if (criteria.includes('customer') && job.customer_name === referenceJob.customer_name) {
+          matches++;
+        }
+        
+        if (criteria.includes('budget_range')) {
+          const budgetDiff = Math.abs(job.total_budget - referenceJob.total_budget);
+          const threshold = referenceJob.total_budget * 0.3; // ±30%
+          if (budgetDiff <= threshold) {
+            matches++;
+          }
+        }
+        
+        if (criteria.includes('salesperson') && job.sales_person_name === referenceJob.sales_person_name) {
+          matches++;
+        }
+        
+        return matches >= Math.ceil(requiredMatches / 2); // At least half criteria must match
+      });
+      
+      // Calculate comparative metrics
+      matchedJobs = matchedJobs.map((job: any) => ({
+        ...job,
+        variance: job.total_actual - job.total_budget,
+        variance_percent: job.total_budget > 0 
+          ? ((job.total_actual - job.total_budget) / job.total_budget) * 100 
+          : 0,
+        similarity_score: criteria.filter(c => {
+          if (c === 'customer') return job.customer_name === referenceJob.customer_name;
+          if (c === 'salesperson') return job.sales_person_name === referenceJob.sales_person_name;
+          if (c === 'budget_range') {
+            const diff = Math.abs(job.total_budget - referenceJob.total_budget);
+            return diff <= referenceJob.total_budget * 0.3;
+          }
+          return false;
+        }).length / criteria.length,
+      }));
+      
+      // Sort by similarity score
+      matchedJobs.sort((a: any, b: any) => b.similarity_score - a.similarity_score);
+      
+      // Limit results
+      const limit = toolArgs.limit || 5;
+      matchedJobs = matchedJobs.slice(0, limit);
+      
+      console.log(`Found ${matchedJobs.length} similar jobs to ${referenceJob.sale_order_name}`);
+      return JSON.stringify({
+        reference_job: referenceJob,
+        similar_jobs: matchedJobs,
+      });
+    }
+
+    if (toolName === "analyze_cost_trends") {
+      let query = supabase.from('jobs').select('*');
+      
+      if (toolArgs.date_from) {
+        query = query.gte('created_at', toolArgs.date_from);
+      }
+      if (toolArgs.date_to) {
+        query = query.lte('created_at', toolArgs.date_to);
+      }
+      if (toolArgs.customer_name) {
+        query = query.ilike('customer_name', `%${toolArgs.customer_name}%`);
+      }
+      
+      const { data: jobs, error } = await query;
+      
+      if (error) throw error;
+      if (!jobs || jobs.length === 0) {
+        return JSON.stringify({ message: 'No jobs found for the specified criteria' });
+      }
+      
+      // Calculate overall metrics
+      const totalJobs = jobs.length;
+      const overBudget = jobs.filter((j: any) => j.total_actual > j.total_budget).length;
+      const underBudget = jobs.filter((j: any) => j.total_actual < j.total_budget).length;
+      
+      const avgBudget = jobs.reduce((sum: number, j: any) => sum + j.total_budget, 0) / totalJobs;
+      const avgActual = jobs.reduce((sum: number, j: any) => sum + j.total_actual, 0) / totalJobs;
+      const avgVariance = ((avgActual - avgBudget) / avgBudget) * 100;
+      
+      const avgMaterialMargin = jobs.reduce((sum: number, j: any) => {
+        if (j.material_budget > 0) {
+          return sum + ((j.material_budget - j.material_actual) / j.material_budget) * 100;
+        }
+        return sum;
+      }, 0) / totalJobs;
+      
+      const results: any = {
+        summary: {
+          total_jobs: totalJobs,
+          jobs_over_budget: overBudget,
+          jobs_under_budget: underBudget,
+          budget_accuracy_rate: (underBudget / totalJobs) * 100,
+          avg_budget: avgBudget,
+          avg_actual: avgActual,
+          avg_variance_percent: avgVariance,
+          avg_material_margin_percent: avgMaterialMargin,
+        }
+      };
+      
+      // Group by criteria if specified
+      if (toolArgs.group_by) {
+        const groups: any = {};
+        
+        jobs.forEach((job: any) => {
+          let groupKey = '';
+          
+          if (toolArgs.group_by === 'customer') {
+            groupKey = job.customer_name || 'Unknown';
+          } else if (toolArgs.group_by === 'salesperson') {
+            groupKey = job.sales_person_name || 'Unknown';
+          } else if (toolArgs.group_by === 'project_manager') {
+            groupKey = job.project_manager_name || 'Unknown';
+          } else if (toolArgs.group_by === 'month') {
+            const date = new Date(job.created_at);
+            groupKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          }
+          
+          if (!groups[groupKey]) {
+            groups[groupKey] = [];
+          }
+          groups[groupKey].push(job);
+        });
+        
+        // Calculate metrics for each group
+        results.groups = Object.entries(groups).map(([key, groupJobs]: [string, any]) => {
+          const count = groupJobs.length;
+          const groupAvgBudget = groupJobs.reduce((sum: number, j: any) => sum + j.total_budget, 0) / count;
+          const groupAvgActual = groupJobs.reduce((sum: number, j: any) => sum + j.total_actual, 0) / count;
+          const groupAvgVariance = ((groupAvgActual - groupAvgBudget) / groupAvgBudget) * 100;
+          
+          return {
+            group_name: key,
+            job_count: count,
+            avg_budget: groupAvgBudget,
+            avg_actual: groupAvgActual,
+            avg_variance_percent: groupAvgVariance,
+            jobs_over_budget: groupJobs.filter((j: any) => j.total_actual > j.total_budget).length,
+          };
+        });
+      }
+      
+      console.log(`Analyzed ${totalJobs} jobs`);
+      return JSON.stringify(results);
+    }
+
     return JSON.stringify({ error: `Unknown tool: ${toolName}` });
   } catch (error) {
     console.error(`Tool execution error for ${toolName}:`, error);
@@ -1319,8 +1964,39 @@ AVAILABLE DATA & TOOLS:
 - query_manufacturing_orders: Production orders with quantities, schedules, and status
 - query_work_orders: Detailed work orders by work center with durations and progress
 
+**JOB COSTING & PROJECT MANAGEMENT:**
+- query_jobs: Search jobs with filters for budget status, variance, dates, teams
+- query_job_details: Get comprehensive job breakdown with budget vs actual
+- query_job_analytic_lines: Analyze cost entries, vendor bills, time tracking for a job
+- query_job_bom: Review bill of materials and component costs
+- compare_similar_jobs: Benchmark against similar historical projects
+- analyze_cost_trends: Identify patterns across multiple jobs
+
 **GENERAL:**
 - query_customers: Customer/partner information with contact details
+
+**INTELLIGENT JOB COST ANALYSIS:**
+When analyzing job costs:
+1. Calculate variance % = (actual - budget) / budget * 100
+2. Flag variances > 10% as significant
+3. Identify cost categories with largest overruns (material vs non-material)
+4. Compare run rate vs remaining budget for predictions
+5. Predict final costs = actual + (remaining_work * historical_burn_rate)
+6. Check for duplicate analytic entries (same date, amount, description within 3 days)
+7. Compare material ordered vs consumed for waste analysis
+8. Benchmark margins against similar jobs (same customer, budget range, salesperson)
+
+**COST OPTIMIZATION STRATEGIES:**
+- Material: Identify over-ordering (>20% waste), suggest bulk discounts, flag unusual pricing
+- Labor: Compare estimated vs actual hours, identify inefficiencies, track overtime
+- Subcontractor: Compare quotes across jobs, flag premium pricing anomalies
+- Overhead: Check allocation accuracy, suggest cost reductions based on patterns
+
+When providing recommendations:
+- Be specific with numbers ($XX,XXX savings expected)
+- Reference similar jobs as benchmarks
+- Prioritize by impact (high savings first)
+- Include implementation steps
 
 EXAMPLE QUERIES:
 - "Show me overdue activities" → Use query_activities with overdue_only: true
@@ -1335,6 +2011,11 @@ EXAMPLE QUERIES:
 - "Employee expenses this month" → Use query_expenses with current month date filter
 - "Stock movements today" → Use query_stock_moves with today's date
 - "Deliveries scheduled this week" → Use query_stock_pickings with this week's date range
+- "Jobs over budget" → Use query_jobs with over_budget: true
+- "Show me job SO12345 details" → Use query_job_details with specific job_id
+- "Compare this job to similar ones" → Use compare_similar_jobs with job_id
+- "Analyze costs for Q3" → Use analyze_cost_trends with Q3 date range
+- "What are the cost entries for this job?" → Use query_job_analytic_lines with job_id
 
 CROSS-MODULE ANALYSIS:
 - Revenue vs Costs: Combine query_sales_orders (revenue) with query_vendor_bills or query_expenses (costs)
