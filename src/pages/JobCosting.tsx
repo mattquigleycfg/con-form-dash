@@ -22,6 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { KanbanView } from "@/components/job-costing/KanbanView";
 import { GridView } from "@/components/job-costing/GridView";
 import { AIInsights } from "@/components/job-costing/AIInsights";
+import { processBatched, retryWithBackoff, RateLimiter } from "@/utils/rateLimit";
 
 export default function JobCosting() {
   const navigate = useNavigate();
@@ -483,7 +484,7 @@ export default function JobCosting() {
         }
       }
       
-      // Step 2: Update costs for all jobs (from handleSyncCosts)
+      // Step 2: Update costs for all jobs (from handleSyncCosts) with rate limiting
       const { data: currentJobs } = await supabase
         .from("jobs")
         .select("*")
@@ -492,115 +493,131 @@ export default function JobCosting() {
       if (currentJobs && currentJobs.length > 0) {
         toast.info(`Step 2/3: Updating costs for ${currentJobs.length} jobs...`);
         
-        for (const job of currentJobs) {
-        try {
-          // Fetch order lines with cost fields from Odoo
-          const { data: orderLines, error: linesError } = await supabase.functions.invoke("odoo-query", {
-            body: {
-              model: "sale.order.line",
-              method: "search_read",
-              args: [
-                [["order_id", "=", job.odoo_sale_order_id]],
-                ["id", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal", "purchase_price", "margin", "margin_percent"],
-              ],
-            },
-          });
+        // Create a rate limiter to prevent overwhelming the Edge Function
+        const rateLimiter = new RateLimiter(5, 200); // Max 5 concurrent, 200ms between requests
+        
+        // Process jobs in batches with progress updates
+        await processBatched(
+          currentJobs,
+          5, // Batch size: process 5 jobs at a time
+          1000, // Wait 1 second between batches
+          async (job, index) => {
+            try {
+              // Use rate limiter and retry logic for Odoo API calls
+              const orderLines = await rateLimiter.execute(() =>
+                retryWithBackoff(async () => {
+                  const { data, error } = await supabase.functions.invoke("odoo-query", {
+                    body: {
+                      model: "sale.order.line",
+                      method: "search_read",
+                      args: [
+                        [["order_id", "=", job.odoo_sale_order_id]],
+                        ["id", "order_id", "product_id", "product_uom_qty", "price_unit", "price_subtotal", "purchase_price", "margin", "margin_percent"],
+                      ],
+                    },
+                  });
 
-          if (linesError) {
-            logger.error(`Error fetching lines for job ${job.sale_order_name}:`, linesError);
-            continue;
-          }
+                  if (error) throw error;
+                  return data;
+                }, 3, 1000, 5000) // Retry up to 3 times with exponential backoff
+              );
 
-          if (!orderLines || orderLines.length === 0) continue;
+              if (!orderLines || orderLines.length === 0) return;
 
-          // Filter out lines with no product_id, zero sale price, or "DESCRIPTION OF WORKS"
-          const lines = (orderLines as any[]).filter(line => {
-            if (!line.product_id || !line.product_id[0]) return false;
-            if (!line.price_subtotal || line.price_subtotal === 0) return false;
-            
-            const productName = line.product_id[1] || '';
-            if (productName.toLowerCase().includes('description of works')) return false;
-            
-            return true;
-          });
+              // Filter out lines with no product_id, zero sale price, or "DESCRIPTION OF WORKS"
+              const lines = (orderLines as any[]).filter(line => {
+                if (!line.product_id || !line.product_id[0]) return false;
+                if (!line.price_subtotal || line.price_subtotal === 0) return false;
+                
+                const productName = line.product_id[1] || '';
+                if (productName.toLowerCase().includes('description of works')) return false;
+                
+                return true;
+              });
 
-          if (lines.length === 0) continue;
+              if (lines.length === 0) return;
 
-          // Calculate costs using same priority as initial sync
-          const updatedBudgetLines = lines.map(line => {
-            // Calculate cost price with proper priority
-            let costPrice = 0;
-            
-            if (line.purchase_price !== undefined && line.purchase_price !== null && line.purchase_price !== false && line.purchase_price > 0) {
-              // Priority 1: Direct purchase_price from Odoo
-              costPrice = Number(line.purchase_price);
-            } else if (line.margin !== undefined && line.margin !== null && line.margin !== false && line.margin > 0) {
-              // Priority 2: Calculate from margin
-              costPrice = line.price_unit - line.margin;
-            } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
-              // Priority 3: Calculate from margin percentage
-              costPrice = line.price_unit * (1 - line.margin_percent / 100);
-            } else if (line.price_subtotal && line.product_uom_qty > 0) {
-              // Priority 4: Use price as fallback
-              costPrice = line.price_subtotal / line.product_uom_qty;
-            } else {
-              costPrice = line.price_unit;
+              // Calculate costs using same priority as initial sync
+              const updatedBudgetLines = lines.map(line => {
+                // Calculate cost price with proper priority
+                let costPrice = 0;
+                
+                if (line.purchase_price !== undefined && line.purchase_price !== null && line.purchase_price !== false && line.purchase_price > 0) {
+                  // Priority 1: Direct purchase_price from Odoo
+                  costPrice = Number(line.purchase_price);
+                } else if (line.margin !== undefined && line.margin !== null && line.margin !== false && line.margin > 0) {
+                  // Priority 2: Calculate from margin
+                  costPrice = line.price_unit - line.margin;
+                } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
+                  // Priority 3: Calculate from margin percentage
+                  costPrice = line.price_unit * (1 - line.margin_percent / 100);
+                } else if (line.price_subtotal && line.product_uom_qty > 0) {
+                  // Priority 4: Use price as fallback
+                  costPrice = line.price_subtotal / line.product_uom_qty;
+                } else {
+                  costPrice = line.price_unit;
+                }
+                
+                costPrice = Math.max(0, costPrice);
+                const quantity = line.product_uom_qty;
+                const costSubtotal = costPrice * quantity;
+
+                return {
+                  odoo_line_id: line.id,
+                  unit_price: costPrice,
+                  subtotal: costSubtotal,
+                };
+              });
+
+              // Update existing budget lines
+              for (const updatedLine of updatedBudgetLines) {
+                const { error: updateError } = await supabase
+                  .from("job_budget_lines")
+                  .update({
+                    unit_price: updatedLine.unit_price,
+                    subtotal: updatedLine.subtotal,
+                  })
+                  .eq("job_id", job.id)
+                  .eq("odoo_line_id", updatedLine.odoo_line_id);
+
+                if (updateError) {
+                  logger.error(`Error updating budget line:`, updateError);
+                }
+              }
+
+              // Recalculate job totals
+              const materialBudget = updatedBudgetLines
+                .reduce((sum, line) => sum + line.subtotal, 0);
+
+              const { error: jobUpdateError } = await supabase
+                .from("jobs")
+                .update({
+                  material_budget: materialBudget,
+                  last_synced_at: new Date().toISOString(),
+                  last_synced_by_user_id: user.id,
+                })
+                .eq("id", job.id);
+
+              if (jobUpdateError) {
+                logger.error(`Error updating job totals:`, jobUpdateError);
+              } else {
+                updatedCostsCount++;
+              }
+
+            } catch (error) {
+              logger.error(`Error syncing costs for job ${job.sale_order_name}:`, error);
             }
-            
-            costPrice = Math.max(0, costPrice);
-            const quantity = line.product_uom_qty;
-            const costSubtotal = costPrice * quantity;
-
-            return {
-              odoo_line_id: line.id,
-              unit_price: costPrice,
-              subtotal: costSubtotal,
-            };
-          });
-
-          // Update existing budget lines
-          for (const updatedLine of updatedBudgetLines) {
-            const { error: updateError } = await supabase
-              .from("job_budget_lines")
-              .update({
-                unit_price: updatedLine.unit_price,
-                subtotal: updatedLine.subtotal,
-              })
-              .eq("job_id", job.id)
-              .eq("odoo_line_id", updatedLine.odoo_line_id);
-
-            if (updateError) {
-              logger.error(`Error updating budget line:`, updateError);
+          },
+          (completed, total) => {
+            // Progress callback - update toast every 10 jobs
+            if (completed % 10 === 0) {
+              toast.info(`Step 2/3: Updated ${completed}/${total} jobs...`);
             }
           }
-
-          // Recalculate job totals
-          const materialBudget = updatedBudgetLines
-            .reduce((sum, line) => sum + line.subtotal, 0);
-
-          const { error: jobUpdateError } = await supabase
-            .from("jobs")
-            .update({
-              material_budget: materialBudget,
-              last_synced_at: new Date().toISOString(),
-              last_synced_by_user_id: user.id,
-            })
-            .eq("id", job.id);
-
-          if (jobUpdateError) {
-            logger.error(`Error updating job totals:`, jobUpdateError);
-          } else {
-            updatedCostsCount++;
-          }
-
-        } catch (error) {
-          logger.error(`Error syncing costs for job ${job.sale_order_name}:`, error);
-          continue;
-        }
-      }
+        );
       }
       
-      // Step 3: Update project stages for all jobs (from handleRefreshStages)
+      // Step 3: Update project stages for all jobs (from handleRefreshStages) with rate limiting
       const { data: jobsWithAnalytic } = await supabase
         .from("jobs")
         .select("*")
@@ -609,40 +626,62 @@ export default function JobCosting() {
       if (jobsWithAnalytic && jobsWithAnalytic.length > 0) {
         toast.info(`Step 3/3: Refreshing stages for ${jobsWithAnalytic.length} jobs...`);
         
-        for (const job of jobsWithAnalytic) {
-          try {
-            // Find project linked to this analytic account
-            const { data: projects } = await supabase.functions.invoke("odoo-query", {
-              body: {
-                model: "project.project",
-                method: "search_read",
-                args: [
-                  [["analytic_account_id", "=", job.analytic_account_id]],
-                  ["id", "name", "stage_id"],
-                ],
-              },
-            });
+        // Create a rate limiter for stage updates
+        const stageRateLimiter = new RateLimiter(5, 200);
+        
+        // Process jobs in batches
+        await processBatched(
+          jobsWithAnalytic,
+          5, // Batch size
+          1000, // Wait between batches
+          async (job) => {
+            try {
+              // Find project linked to this analytic account with retry logic
+              const projects = await stageRateLimiter.execute(() =>
+                retryWithBackoff(async () => {
+                  const { data, error } = await supabase.functions.invoke("odoo-query", {
+                    body: {
+                      model: "project.project",
+                      method: "search_read",
+                      args: [
+                        [["analytic_account_id", "=", job.analytic_account_id]],
+                        ["id", "name", "stage_id"],
+                      ],
+                    },
+                  });
 
-            if (!projects || projects.length === 0) {
-              continue;
+                  if (error) throw error;
+                  return data;
+                }, 3, 1000, 5000)
+              );
+
+              if (!projects || projects.length === 0) {
+                return;
+              }
+
+              const project = projects[0];
+              const stageName = project.stage_id?.[1] || null;
+
+              // Update job with project stage
+              await supabase
+                .from("jobs")
+                .update({
+                  project_stage_name: stageName,
+                })
+                .eq("id", job.id);
+
+              updatedStagesCount++;
+            } catch (error) {
+              logger.error(`Error refreshing stage for job ${job.sale_order_name}:`, error);
             }
-
-            const project = projects[0];
-            const stageName = project.stage_id?.[1] || null;
-
-            // Update job with project stage
-            await supabase
-              .from("jobs")
-              .update({
-                project_stage_name: stageName,
-              })
-              .eq("id", job.id);
-
-            updatedStagesCount++;
-          } catch (error) {
-            logger.error(`Error refreshing stage for job ${job.sale_order_name}:`, error);
+          },
+          (completed, total) => {
+            // Progress callback
+            if (completed % 10 === 0) {
+              toast.info(`Step 3/3: Refreshed ${completed}/${total} job stages...`);
+            }
           }
-        }
+        );
       }
 
       // Final summary

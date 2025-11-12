@@ -2,17 +2,26 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useJobs } from "@/hooks/useJobs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import { exportToCSV, exportToExcel, formatCurrencyForExport } from "@/utils/exportData";
+import { useToast } from "@/hooks/use-toast";
 
 export default function JobCostingReports() {
   const navigate = useNavigate();
   const { jobs, isLoading } = useJobs();
+  const { toast } = useToast();
 
   const totalBudget = jobs?.reduce((sum, job) => sum + job.total_budget, 0) || 0;
   const totalActual = jobs?.reduce((sum, job) => sum + job.total_actual, 0) || 0;
@@ -24,6 +33,87 @@ export default function JobCostingReports() {
   const overallPercentage = totalBudget > 0 ? (totalActual / totalBudget) * 100 : 0;
   const materialPercentage = totalMaterialBudget > 0 ? (totalMaterialActual / totalMaterialBudget) * 100 : 0;
   const nonMaterialPercentage = totalNonMaterialBudget > 0 ? (totalNonMaterialActual / totalNonMaterialBudget) * 100 : 0;
+
+  const handleExport = (format: 'csv' | 'excel') => {
+    if (!jobs || jobs.length === 0) {
+      toast({
+        title: "No data to export",
+        description: "There are no jobs to export.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Prepare export data with calculated fields
+    const exportData = jobs.map(job => ({
+      sale_order_name: job.sale_order_name,
+      customer_name: job.customer_name,
+      total_budget: job.total_budget,
+      total_actual: job.total_actual,
+      material_budget: job.material_budget,
+      material_actual: job.material_actual,
+      non_material_budget: job.non_material_budget,
+      non_material_actual: job.non_material_actual,
+      variance: job.total_budget - job.total_actual,
+      variance_status: (job.total_budget - job.total_actual) >= 0 ? 'Under Budget' : 'Over Budget',
+    }));
+
+    // Add totals row
+    exportData.push({
+      sale_order_name: 'TOTALS',
+      customer_name: '',
+      total_budget: totalBudget,
+      total_actual: totalActual,
+      material_budget: totalMaterialBudget,
+      material_actual: totalMaterialActual,
+      non_material_budget: totalNonMaterialBudget,
+      non_material_actual: totalNonMaterialActual,
+      variance: totalBudget - totalActual,
+      variance_status: (totalBudget - totalActual) >= 0 ? 'Under Budget' : 'Over Budget',
+    });
+
+    const exportOptions = {
+      filename: 'job_costing_report',
+      sheetName: 'Job Costing Report',
+      columns: [
+        { key: 'sale_order_name', label: 'Job' },
+        { key: 'customer_name', label: 'Customer' },
+        { key: 'total_budget', label: 'Total Budget', format: formatCurrencyForExport },
+        { key: 'total_actual', label: 'Total Actual', format: formatCurrencyForExport },
+        { key: 'material_budget', label: 'Material Budget', format: formatCurrencyForExport },
+        { key: 'material_actual', label: 'Material Actual', format: formatCurrencyForExport },
+        { key: 'non_material_budget', label: 'Non-Material Budget', format: formatCurrencyForExport },
+        { key: 'non_material_actual', label: 'Non-Material Actual', format: formatCurrencyForExport },
+        { key: 'variance', label: 'Variance', format: formatCurrencyForExport },
+        { key: 'variance_status', label: 'Status' },
+      ],
+      data: exportData,
+      includeTimestamp: true,
+    };
+
+    try {
+      if (format === 'csv') {
+        exportToCSV(exportOptions);
+        toast({
+          title: "Export successful",
+          description: "Job costing report exported to CSV.",
+        });
+      } else {
+        exportToExcel(exportOptions);
+        toast({
+          title: "Export successful",
+          description: "Job costing report exported to Excel.",
+        });
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export failed",
+        description: "An error occurred while exporting the report.",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -43,14 +133,35 @@ export default function JobCostingReports() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/job-costing")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Job Costing Reports</h1>
-            <p className="text-muted-foreground mt-1">Consolidated view of all jobs</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/job-costing")}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">Job Costing Reports</h1>
+              <p className="text-muted-foreground mt-1">Consolidated view of all jobs</p>
+            </div>
           </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport('csv')} className="gap-2">
+                <FileSpreadsheet className="h-4 w-4" />
+                Export to CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-2">
+                <FileSpreadsheet className="h-4 w-4" />
+                Export to Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">

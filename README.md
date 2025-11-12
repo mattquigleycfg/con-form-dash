@@ -61,6 +61,7 @@ This project is built with:
 - Tailwind CSS
 - Supabase (Backend & Database)
 - Odoo Integration (via Edge Functions)
+- XLSX (Excel export functionality)
 
 ## 🤖 AI-Powered Development with MCP
 
@@ -84,6 +85,25 @@ This project includes **MCP (Model Context Protocol)** support for Supabase, ena
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/d5056f6f-e114-4e35-a8da-e68395a164c6) and click on Share -> Publish.
+
+## Key Features
+
+### Job Costing Reports with Export
+The Job Costing Reports page includes comprehensive export functionality:
+- **Export to CSV**: Universal format for data processing and analysis
+- **Export to Excel**: Formatted spreadsheets with proper column widths
+- Automatic timestamping of exported files
+- Includes all job details: budgets, actuals, variances, and status
+- Totals row for quick summary analysis
+
+For detailed documentation, see [Export Feature Documentation](./docs/EXPORT_FEATURE.md)
+
+### Other Features
+- Real-time sales analytics dashboard
+- Odoo ERP integration
+- Job costing and project management
+- AI-powered copilot assistance
+- Dark mode support
 
 ## Can I connect a custom domain to my Lovable project?
 
