@@ -4,12 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Download, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { logger } from "@/utils/logger";
 
 interface Target {
   id: string;
@@ -17,6 +20,16 @@ interface Target {
   target_value: number;
   period: string;
   metric: string;
+}
+
+interface ImportProgress {
+  total: number;
+  processed: number;
+  created: number;
+  skipped: number;
+  errors: number;
+  status: 'idle' | 'running' | 'completed' | 'error';
+  errorMessages: string[];
 }
 
 export default function Settings() {
@@ -29,6 +42,16 @@ export default function Settings() {
     targetValue: 0,
     period: "This Quarter",
     metric: "revenue"
+  });
+
+  const [importProgress, setImportProgress] = useState<ImportProgress>({
+    total: 0,
+    processed: 0,
+    created: 0,
+    skipped: 0,
+    errors: 0,
+    status: 'idle',
+    errorMessages: []
   });
 
   // Fetch targets from database
@@ -121,6 +144,232 @@ export default function Settings() {
 
   const handleDeleteTarget = (id: string) => {
     deleteTargetMutation.mutate(id);
+  };
+
+  const handleBulkImportJobs = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to import jobs",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setImportProgress({
+      total: 0,
+      processed: 0,
+      created: 0,
+      skipped: 0,
+      errors: 0,
+      status: 'running',
+      errorMessages: []
+    });
+
+    toast({
+      title: "Import Started",
+      description: "Fetching sales orders from Odoo...",
+    });
+
+    try {
+      // Step 1: Fetch ALL confirmed sales orders with analytic accounts
+      const { data: salesOrders, error: fetchError } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'sale.order',
+          method: 'search_read',
+          args: [
+            [
+              ['state', 'in', ['sale', 'done']],
+              ['analytic_account_id', '!=', false]
+            ],
+            ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state', 'user_id', 'team_id', 'analytic_account_id', 'opportunity_id']
+          ]
+        }
+      });
+
+      if (fetchError) throw fetchError;
+
+      const total = salesOrders?.length || 0;
+      logger.info(`Found ${total} sales orders with analytic accounts`);
+
+      setImportProgress(prev => ({ ...prev, total }));
+
+      if (total === 0) {
+        setImportProgress(prev => ({ ...prev, status: 'completed' }));
+        toast({
+          title: "No Orders Found",
+          description: "No confirmed sales orders with analytic accounts were found.",
+        });
+        return;
+      }
+
+      // Step 2: Check which jobs already exist
+      const { data: existingJobs } = await supabase
+        .from('jobs')
+        .select('odoo_sale_order_id')
+        .eq('user_id', user.id);
+
+      const existingOrderIds = new Set(existingJobs?.map(j => j.odoo_sale_order_id) || []);
+
+      // Step 3: Process each order (in background)
+      let created = 0, skipped = 0, errors = 0;
+      const errorMessages: string[] = [];
+
+      for (const [index, order] of (salesOrders || []).entries()) {
+        try {
+          // Skip if already exists
+          if (existingOrderIds.has(order.id)) {
+            skipped++;
+            setImportProgress(prev => ({
+              ...prev,
+              processed: index + 1,
+              skipped
+            }));
+            continue;
+          }
+
+          // Fetch sale order lines for this order
+          const { data: orderLines } = await supabase.functions.invoke('odoo-query', {
+            body: {
+              model: 'sale.order.line',
+              method: 'search_read',
+              args: [
+                [['order_id', '=', order.id]],
+                ['id', 'product_id', 'product_uom_qty', 'price_unit', 'price_subtotal', 'purchase_price']
+              ]
+            }
+          });
+
+          // Calculate budgets
+          const materialLines = (orderLines || []).filter((line: any) => {
+            const productName = line.product_id?.[1] || '';
+            const serviceKeywords = ['INSTALLATION', 'FREIGHT', 'CRANAGE', 'ACCOMMODATION', 'TRAVEL'];
+            return !serviceKeywords.some(keyword => productName.toUpperCase().includes(keyword));
+          });
+
+          const nonMaterialLines = (orderLines || []).filter((line: any) => {
+            const productName = line.product_id?.[1] || '';
+            const serviceKeywords = ['INSTALLATION', 'FREIGHT', 'CRANAGE', 'ACCOMMODATION', 'TRAVEL'];
+            return serviceKeywords.some(keyword => productName.toUpperCase().includes(keyword));
+          });
+
+          const materialBudget = materialLines.reduce((sum: number, line: any) => sum + (line.price_subtotal || 0), 0);
+          const nonMaterialBudget = nonMaterialLines.reduce((sum: number, line: any) => sum + (line.price_subtotal || 0), 0);
+
+          // Get project info if exists
+          let projectAnalyticAccountId = null;
+          let projectAnalyticAccountName = null;
+          let projectStageId = null;
+          let projectStageName = null;
+
+          if (order.analytic_account_id) {
+            const { data: projects } = await supabase.functions.invoke("odoo-query", {
+              body: {
+                model: "project.project",
+                method: "search_read",
+                args: [
+                  [["analytic_account_id", "=", order.analytic_account_id[0]]],
+                  ["id", "name", "analytic_account_id", "stage_id"],
+                ],
+              },
+            });
+
+            if (projects && projects.length > 0) {
+              const project = projects[0];
+              projectAnalyticAccountId = project.analytic_account_id?.[0] || null;
+              projectAnalyticAccountName = project.analytic_account_id?.[1] || null;
+              projectStageId = project.stage_id?.[0] || null;
+              projectStageName = project.stage_id?.[1] || null;
+            }
+          }
+
+          // Create job
+          const { data: job, error: jobError } = await supabase
+            .from("jobs")
+            .insert([{
+              user_id: user.id,
+              created_by_user_id: user.id,
+              last_synced_at: new Date().toISOString(),
+              last_synced_by_user_id: user.id,
+              odoo_sale_order_id: order.id,
+              sale_order_name: order.name,
+              customer_name: order.partner_id[1],
+              total_budget: order.amount_total,
+              material_budget: materialBudget,
+              non_material_budget: nonMaterialBudget,
+              total_actual: 0,
+              material_actual: 0,
+              non_material_actual: 0,
+              status: 'active',
+              analytic_account_id: order.analytic_account_id ? order.analytic_account_id[0] : null,
+              analytic_account_name: order.analytic_account_id ? order.analytic_account_id[1] : null,
+              project_analytic_account_id: projectAnalyticAccountId,
+              project_analytic_account_name: projectAnalyticAccountName,
+              sales_person_name: order.user_id ? order.user_id[1] : null,
+              opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
+              date_order: order.date_order,
+              project_stage_id: projectStageId,
+              project_stage_name: projectStageName,
+            }])
+            .select()
+            .single();
+
+          if (jobError) throw jobError;
+
+          created++;
+          logger.info(`Created job for ${order.name}`);
+
+          setImportProgress(prev => ({
+            ...prev,
+            processed: index + 1,
+            created
+          }));
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+        } catch (error) {
+          errors++;
+          const errorMsg = `${order.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          errorMessages.push(errorMsg);
+          logger.error(`Error importing ${order.name}`, error);
+          
+          setImportProgress(prev => ({
+            ...prev,
+            processed: index + 1,
+            errors,
+            errorMessages
+          }));
+        }
+      }
+
+      // Completed
+      setImportProgress(prev => ({
+        ...prev,
+        status: errors > 0 ? 'error' : 'completed'
+      }));
+
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+
+      toast({
+        title: "Import Complete",
+        description: `Created ${created} jobs, skipped ${skipped} existing, ${errors} errors.`,
+        variant: errors > 0 ? 'destructive' : 'default'
+      });
+
+    } catch (error) {
+      logger.error('Bulk import failed', error);
+      setImportProgress(prev => ({
+        ...prev,
+        status: 'error',
+        errorMessages: [error instanceof Error ? error.message : 'Unknown error']
+      }));
+      toast({
+        title: "Import Failed",
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -249,6 +498,111 @@ export default function Settings() {
                 <Plus className="mr-2 h-4 w-4" />
                 {addTargetMutation.isPending ? "Adding..." : "Add Target"}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Bulk Job Import</CardTitle>
+            <CardDescription>
+              Import all sales orders with analytic accounts from Odoo as jobs
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                This will fetch all confirmed sales orders (state: Sale/Done) that have analytic accounts linked and create corresponding jobs in the Job Costing module. Existing jobs will be skipped automatically.
+              </AlertDescription>
+            </Alert>
+
+            {importProgress.status === 'running' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">Importing jobs...</span>
+                  <span className="text-muted-foreground">
+                    {importProgress.processed} / {importProgress.total}
+                  </span>
+                </div>
+                <Progress 
+                  value={importProgress.total > 0 ? (importProgress.processed / importProgress.total) * 100 : 0} 
+                  className="h-2"
+                />
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Created:</span>{" "}
+                    <span className="font-medium text-green-600 dark:text-green-400">
+                      {importProgress.created}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Skipped:</span>{" "}
+                    <span className="font-medium">{importProgress.skipped}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Errors:</span>{" "}
+                    <span className="font-medium text-red-600 dark:text-red-400">
+                      {importProgress.errors}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {importProgress.status === 'completed' && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription>
+                  Import completed successfully! Created {importProgress.created} jobs, 
+                  skipped {importProgress.skipped} existing jobs.
+                  {importProgress.errors > 0 && ` ${importProgress.errors} errors occurred.`}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {importProgress.status === 'error' && importProgress.errorMessages.length > 0 && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="space-y-1">
+                    <p className="font-medium">Import encountered errors:</p>
+                    <ul className="list-disc list-inside text-xs space-y-1 max-h-32 overflow-y-auto scrollbar-thin">
+                      {importProgress.errorMessages.slice(0, 10).map((msg, i) => (
+                        <li key={i}>{msg}</li>
+                      ))}
+                      {importProgress.errorMessages.length > 10 && (
+                        <li>...and {importProgress.errorMessages.length - 10} more errors</li>
+                      )}
+                    </ul>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Button 
+              onClick={handleBulkImportJobs}
+              disabled={importProgress.status === 'running'}
+              className="w-full"
+            >
+              {importProgress.status === 'running' ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importing... ({importProgress.processed}/{importProgress.total})
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Import All Jobs from Odoo
+                </>
+              )}
+            </Button>
+
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>• This process runs in the background and may take several minutes for large datasets</p>
+              <p>• Jobs are linked to analytic accounts for cost tracking</p>
+              <p>• Duplicate jobs (same sale order) will be automatically skipped</p>
+              <p>• Progress updates in real-time as jobs are created</p>
             </div>
           </CardContent>
         </Card>
