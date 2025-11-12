@@ -172,7 +172,13 @@ export default function Settings() {
     });
 
     try {
-      // Step 1: Fetch ALL confirmed sales orders with analytic accounts
+      // Step 1: Fetch confirmed sales orders with analytic accounts from the last year
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const dateFilter = oneYearAgo.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+      
+      logger.info(`Fetching sales orders from ${dateFilter} onwards`);
+      
       const { data: salesOrders, error: fetchError } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'sale.order',
@@ -180,7 +186,8 @@ export default function Settings() {
           args: [
             [
               ['state', 'in', ['sale', 'done']],
-              ['analytic_account_id', '!=', false]
+              ['analytic_account_id', '!=', false],
+              ['date_order', '>=', dateFilter]
             ],
             ['id', 'name', 'partner_id', 'date_order', 'amount_total', 'state', 'user_id', 'team_id', 'analytic_account_id', 'opportunity_id']
           ]
@@ -513,7 +520,7 @@ export default function Settings() {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                This will fetch all confirmed sales orders (state: Sale/Done) that have analytic accounts linked and create corresponding jobs in the Job Costing module. Existing jobs will be skipped automatically.
+                This will fetch confirmed sales orders (state: Sale/Done) from the <strong>last 12 months</strong> that have analytic accounts linked and create corresponding jobs in the Job Costing module. Existing jobs will be skipped automatically.
               </AlertDescription>
             </Alert>
 
@@ -599,7 +606,8 @@ export default function Settings() {
             </Button>
 
             <div className="text-xs text-muted-foreground space-y-1">
-              <p>• This process runs in the background and may take several minutes for large datasets</p>
+              <p>• Only imports sales orders from the last 12 months</p>
+              <p>• This process runs in the background and may take several minutes</p>
               <p>• Jobs are linked to analytic accounts for cost tracking</p>
               <p>• Duplicate jobs (same sale order) will be automatically skipped</p>
               <p>• Progress updates in real-time as jobs are created</p>
