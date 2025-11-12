@@ -38,11 +38,15 @@ dist-ssr
 temp-index.js
 live-index.js
 *.production.js
+
+# Documentation files (local use only - not committed)
 docs/odoo-v16-reference.md
-.gitignore
 docs/odoo-api-diagnostic-summary.md
 docs/README.md
+DEPLOYMENT_INSTRUCTIONS.md
+IMPLEMENTATION_SUMMARY.md
+
+# Migration backups (already applied)
 supabase/migrations/20251111000002_add_project_analytic_account.sql
-ANALYTIC_ENTRIES_IMPLEMENTATION.md
 supabase/migrations/20251112000001_create_ai_job_insights.sql
-AI_JOB_COSTING_IMPLEMENTATION_COMPLETE.md
+README.md
