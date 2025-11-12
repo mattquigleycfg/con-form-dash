@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Download, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
@@ -26,6 +27,7 @@ interface ImportProgress {
   total: number;
   processed: number;
   created: number;
+  updated: number;
   skipped: number;
   errors: number;
   status: 'idle' | 'running' | 'completed' | 'error';
@@ -48,11 +50,14 @@ export default function Settings() {
     total: 0,
     processed: 0,
     created: 0,
+    updated: 0,
     skipped: 0,
     errors: 0,
     status: 'idle',
     errorMessages: []
   });
+
+  const [updateExisting, setUpdateExisting] = useState(false);
 
   // Fetch targets from database
   const { data: targets = [], isLoading } = useQuery({
@@ -160,6 +165,7 @@ export default function Settings() {
       total: 0,
       processed: 0,
       created: 0,
+      updated: 0,
       skipped: 0,
       errors: 0,
       status: 'running',
@@ -219,13 +225,16 @@ export default function Settings() {
       const existingOrderIds = new Set(existingJobs?.map(j => j.odoo_sale_order_id) || []);
 
       // Step 3: Process each order (in background)
-      let created = 0, skipped = 0, errors = 0;
+      let created = 0, skipped = 0, updated = 0, errors = 0;
       const errorMessages: string[] = [];
 
       for (const [index, order] of (salesOrders || []).entries()) {
         try {
-          // Skip if already exists
-          if (existingOrderIds.has(order.id)) {
+          // Check if already exists
+          const alreadyExists = existingOrderIds.has(order.id);
+          
+          // Skip if already exists and not updating
+          if (alreadyExists && !updateExisting) {
             skipped++;
             setImportProgress(prev => ({
               ...prev,
@@ -290,46 +299,91 @@ export default function Settings() {
             }
           }
 
-          // Create job
-          const { data: job, error: jobError } = await supabase
-            .from("jobs")
-            .insert([{
-              user_id: user.id,
-              created_by_user_id: user.id,
-              last_synced_at: new Date().toISOString(),
-              last_synced_by_user_id: user.id,
-              odoo_sale_order_id: order.id,
-              sale_order_name: order.name,
-              customer_name: order.partner_id[1],
-              total_budget: order.amount_total,
-              material_budget: materialBudget,
-              non_material_budget: nonMaterialBudget,
-              total_actual: 0,
-              material_actual: 0,
-              non_material_actual: 0,
-              status: 'active',
-              analytic_account_id: order.analytic_account_id ? order.analytic_account_id[0] : null,
-              analytic_account_name: order.analytic_account_id ? order.analytic_account_id[1] : null,
-              project_analytic_account_id: projectAnalyticAccountId,
-              project_analytic_account_name: projectAnalyticAccountName,
-              sales_person_name: order.user_id ? order.user_id[1] : null,
-              opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
-              date_order: order.date_order,
-              project_stage_id: projectStageId,
-              project_stage_name: projectStageName,
-            }])
-            .select()
-            .single();
+          // Create or update job
+          let job;
+          let jobError;
+          
+          if (alreadyExists) {
+            // Update existing job
+            const { data, error } = await supabase
+              .from("jobs")
+              .update({
+                last_synced_at: new Date().toISOString(),
+                last_synced_by_user_id: user.id,
+                customer_name: order.partner_id[1],
+                total_budget: order.amount_total,
+                material_budget: materialBudget,
+                non_material_budget: nonMaterialBudget,
+                analytic_account_id: order.analytic_account_id ? order.analytic_account_id[0] : null,
+                analytic_account_name: order.analytic_account_id ? order.analytic_account_id[1] : null,
+                project_analytic_account_id: projectAnalyticAccountId,
+                project_analytic_account_name: projectAnalyticAccountName,
+                sales_person_name: order.user_id ? order.user_id[1] : null,
+                opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
+                date_order: order.date_order,
+                project_stage_id: projectStageId,
+                project_stage_name: projectStageName,
+              })
+              .eq('odoo_sale_order_id', order.id)
+              .eq('user_id', user.id)
+              .select()
+              .single();
+            
+            job = data;
+            jobError = error;
+            
+            if (!jobError) {
+              updated++;
+              logger.info(`Updated job for ${order.name}`);
+            }
+          } else {
+            // Create new job
+            const { data, error } = await supabase
+              .from("jobs")
+              .insert([{
+                user_id: user.id,
+                created_by_user_id: user.id,
+                last_synced_at: new Date().toISOString(),
+                last_synced_by_user_id: user.id,
+                odoo_sale_order_id: order.id,
+                sale_order_name: order.name,
+                customer_name: order.partner_id[1],
+                total_budget: order.amount_total,
+                material_budget: materialBudget,
+                non_material_budget: nonMaterialBudget,
+                total_actual: 0,
+                material_actual: 0,
+                non_material_actual: 0,
+                status: 'active',
+                analytic_account_id: order.analytic_account_id ? order.analytic_account_id[0] : null,
+                analytic_account_name: order.analytic_account_id ? order.analytic_account_id[1] : null,
+                project_analytic_account_id: projectAnalyticAccountId,
+                project_analytic_account_name: projectAnalyticAccountName,
+                sales_person_name: order.user_id ? order.user_id[1] : null,
+                opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
+                date_order: order.date_order,
+                project_stage_id: projectStageId,
+                project_stage_name: projectStageName,
+              }])
+              .select()
+              .single();
+
+            job = data;
+            jobError = error;
+            
+            if (!jobError) {
+              created++;
+              logger.info(`Created job for ${order.name}`);
+            }
+          }
 
           if (jobError) throw jobError;
-
-          created++;
-          logger.info(`Created job for ${order.name}`);
 
           setImportProgress(prev => ({
             ...prev,
             processed: index + 1,
-            created
+            created,
+            updated
           }));
 
           // Small delay to avoid rate limiting
@@ -360,7 +414,7 @@ export default function Settings() {
 
       toast({
         title: "Import Complete",
-        description: `Created ${created} jobs, skipped ${skipped} existing, ${errors} errors.`,
+        description: `Created ${created} jobs${updated > 0 ? `, updated ${updated}` : ''}, skipped ${skipped}, ${errors} errors.`,
         variant: errors > 0 ? 'destructive' : 'default'
       });
 
@@ -520,9 +574,29 @@ export default function Settings() {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                This will fetch confirmed sales orders (state: Sale/Done) from the <strong>last 12 months</strong> that have analytic accounts linked and create corresponding jobs in the Job Costing module. Existing jobs will be skipped automatically.
+                This will fetch confirmed sales orders (state: Sale/Done) from the <strong>last 12 months</strong> that have analytic accounts linked and create corresponding jobs in the Job Costing module.
               </AlertDescription>
             </Alert>
+
+            <div className="flex items-center space-x-2 p-4 rounded-lg border bg-muted/50">
+              <Checkbox 
+                id="update-existing" 
+                checked={updateExisting}
+                onCheckedChange={(checked) => setUpdateExisting(checked as boolean)}
+                disabled={importProgress.status === 'running'}
+              />
+              <div className="flex-1">
+                <Label 
+                  htmlFor="update-existing" 
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Update existing jobs
+                </Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  If enabled, jobs that already exist will be updated with fresh data from Odoo including analytic account references. If disabled, existing jobs will be skipped.
+                </p>
+              </div>
+            </div>
 
             {importProgress.status === 'running' && (
               <div className="space-y-3">
@@ -536,11 +610,17 @@ export default function Settings() {
                   value={importProgress.total > 0 ? (importProgress.processed / importProgress.total) * 100 : 0} 
                   className="h-2"
                 />
-                <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="grid grid-cols-4 gap-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Created:</span>{" "}
                     <span className="font-medium text-green-600 dark:text-green-400">
                       {importProgress.created}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Updated:</span>{" "}
+                    <span className="font-medium text-blue-600 dark:text-blue-400">
+                      {importProgress.updated}
                     </span>
                   </div>
                   <div>
@@ -561,8 +641,9 @@ export default function Settings() {
               <Alert>
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                 <AlertDescription>
-                  Import completed successfully! Created {importProgress.created} jobs, 
-                  skipped {importProgress.skipped} existing jobs.
+                  Import completed successfully! Created {importProgress.created} jobs
+                  {importProgress.updated > 0 && `, updated ${importProgress.updated}`}, 
+                  skipped {importProgress.skipped}.
                   {importProgress.errors > 0 && ` ${importProgress.errors} errors occurred.`}
                 </AlertDescription>
               </Alert>
@@ -607,10 +688,10 @@ export default function Settings() {
 
             <div className="text-xs text-muted-foreground space-y-1">
               <p>• Only imports sales orders from the last 12 months</p>
+              <p>• Jobs are linked to analytic accounts for real-time cost tracking</p>
+              <p>• Update mode refreshes existing jobs with latest analytic account references</p>
               <p>• This process runs in the background and may take several minutes</p>
-              <p>• Jobs are linked to analytic accounts for cost tracking</p>
-              <p>• Duplicate jobs (same sale order) will be automatically skipped</p>
-              <p>• Progress updates in real-time as jobs are created</p>
+              <p>• Progress updates in real-time as jobs are processed</p>
             </div>
           </CardContent>
         </Card>
