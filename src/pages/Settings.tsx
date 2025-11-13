@@ -151,6 +151,79 @@ export default function Settings() {
     deleteTargetMutation.mutate(id);
   };
 
+  // Helper function to calculate actual costs from analytic lines
+  const calculateJobActuals = async (
+    analyticAccountIds: number[]
+  ): Promise<{ material: number; nonMaterial: number }> => {
+    if (analyticAccountIds.length === 0) return { material: 0, nonMaterial: 0 };
+    
+    try {
+      // Fetch analytic lines from Odoo
+      const accountFilter = analyticAccountIds.length === 1
+        ? [['account_id', '=', analyticAccountIds[0]]]
+        : [['account_id', 'in', analyticAccountIds]];
+      
+      const { data: analyticLines, error } = await supabase.functions.invoke('odoo-query', {
+        body: {
+          model: 'account.analytic.line',
+          method: 'search_read',
+          args: [accountFilter, ['id', 'name', 'amount', 'product_id']]
+        }
+      });
+
+      if (error || !analyticLines) {
+        logger.error('Failed to fetch analytic lines', error);
+        return { material: 0, nonMaterial: 0 };
+      }
+      
+      // Filter to costs only (negative amounts = expenses/costs)
+      const costLines = analyticLines.filter((line: any) => line.amount < 0);
+      
+      // Categorize as material or non-material using keyword matching
+      const material = costLines.filter((line: any) => {
+        const text = `${line.name || ''} ${line.product_id?.[1] || ''}`.toUpperCase();
+        
+        // Non-Material keywords take priority
+        const nonMaterialKeywords = ['LABOUR', 'LABOR', 'FREIGHT', 'CRANAGE', 'CRANE', 
+          'EQUIPMENT', 'PLANT HIRE', 'INSTALLATION', 'SILICON', 'SEALANT', 'CFG TRUCK',
+          '[CFGEPH]', '[WC]', 'SERVICE', 'HIRE', 'TRAVEL', 'ACCOMMODATION'];
+        
+        for (const keyword of nonMaterialKeywords) {
+          if (text.includes(keyword)) return false;
+        }
+        
+        // Material keywords
+        const materialKeywords = ['RAW', 'HEX BOLT', 'WASHER', 'NUT GAL', 'SCREW', 
+          'BRACKET', 'FIXING', 'STANDARD LADDER', 'STANDARD NUT', 'WALKWAY', 'M10', 
+          'M12', 'M16', 'BOLT', 'HARDWARE', 'MATERIAL', 'STUB COLUMN', 'POWDER COATING',
+          'GALVANIS', 'POST', 'RHS', 'SHS', 'CHS', 'STEEL', 'ALUMINIUM', 'ALUMINUM', 
+          'PLATE', 'ANGLE', 'CHANNEL', 'BEAM'];
+        
+        for (const keyword of materialKeywords) {
+          if (text.includes(keyword)) return true;
+        }
+        
+        // PO lines without LABOUR are usually material
+        if (text.startsWith('PO') && !text.includes('LABOUR')) {
+          return true;
+        }
+        
+        // Default to non-material
+        return false;
+      });
+      
+      const materialTotal = Math.abs(material.reduce((sum: number, l: any) => sum + l.amount, 0));
+      const nonMaterialTotal = Math.abs(costLines.reduce((sum: number, l: any) => sum + l.amount, 0)) - materialTotal;
+      
+      logger.info(`Calculated actuals - Material: $${materialTotal.toFixed(2)}, Non-Material: $${nonMaterialTotal.toFixed(2)}`);
+      
+      return { material: materialTotal, nonMaterial: nonMaterialTotal };
+    } catch (error) {
+      logger.error('Error calculating job actuals', error);
+      return { material: 0, nonMaterial: 0 };
+    }
+  };
+
   const handleBulkImportJobs = async () => {
     if (!user) {
       toast({
@@ -379,6 +452,32 @@ export default function Settings() {
 
           if (jobError) throw jobError;
 
+          // Calculate actual costs from analytic lines
+          const analyticAccountIds = [];
+          if (order.analytic_account_id) {
+            analyticAccountIds.push(order.analytic_account_id[0]);
+          }
+          if (projectAnalyticAccountId && projectAnalyticAccountId !== order.analytic_account_id?.[0]) {
+            analyticAccountIds.push(projectAnalyticAccountId);
+          }
+
+          if (analyticAccountIds.length > 0) {
+            logger.info(`Calculating actuals for ${order.name} from ${analyticAccountIds.length} analytic account(s)`);
+            const { material, nonMaterial } = await calculateJobActuals(analyticAccountIds);
+            
+            // Update job with calculated actuals
+            await supabase
+              .from('jobs')
+              .update({
+                material_actual: material,
+                non_material_actual: nonMaterial,
+                total_actual: material + nonMaterial,
+              })
+              .eq('id', job.id);
+            
+            logger.info(`Updated actuals for ${order.name}: Material=$${material.toFixed(2)}, Non-Material=$${nonMaterial.toFixed(2)}`);
+          }
+
           setImportProgress(prev => ({
             ...prev,
             processed: index + 1,
@@ -387,7 +486,7 @@ export default function Settings() {
           }));
 
           // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 150));
 
         } catch (error) {
           errors++;
