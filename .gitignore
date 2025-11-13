@@ -8,7 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-# dist - commented out for Netlify deployment (Netlify builds from source)
+dist
 dist-ssr
 *.local
 
@@ -50,3 +50,4 @@ IMPLEMENTATION_SUMMARY.md
 supabase/migrations/20251111000002_add_project_analytic_account.sql
 supabase/migrations/20251112000001_create_ai_job_insights.sql
 README.md
+DEPLOYMENT_DIAGNOSIS.md
