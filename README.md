@@ -1,114 +1,207 @@
-# Welcome to your Lovable project
+# Con-form Dashboard
 
-## Project info
+**Production Sales Analytics Dashboard** for Con-form Group
 
-**URL**: https://lovable.dev/projects/d5056f6f-e114-4e35-a8da-e68395a164c6
+## Project Info
 
-## How can I edit this code?
+- **GitHub Repository**: https://github.com/mattquigleycfg/con-form-dash
+- **Hosting**: Netlify (auto-deploys from `main` branch)
+- **Backend**: Supabase (Project: `ibqgwakjmsnjtvwpkdns`)
+- **Database**: Supabase PostgreSQL
+- **ERP Integration**: Odoo 16 (con-formgroup.odoo.com)
 
-There are several ways of editing your application.
+## Local Development
 
-**Use Lovable**
+### Prerequisites
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/d5056f6f-e114-4e35-a8da-e68395a164c6) and start prompting.
+- Node.js 20+ and npm (install with [nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
+- Git
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### Setup Steps
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# 1. Clone the repository
+git clone https://github.com/mattquigleycfg/con-form-dash.git
+cd con-form-dash
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# 2. Install dependencies
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
+# 3. Create environment file
+cp env.example .env
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# 4. Configure environment variables in .env
+# VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
+# VITE_SUPABASE_PUBLISHABLE_KEY=<your-key>
+
+# 5. Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at `http://localhost:8080`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Development with Docker
 
-**Use GitHub Codespaces**
+```sh
+# Development environment with hot reload
+npm run docker:dev
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+# Production build locally
+npm run docker:prod
+```
 
-## What technologies are used for this project?
+## Technology Stack
 
-This project is built with:
+### Frontend
+- **Build Tool**: Vite 5.4.19
+- **Framework**: React 18.3.1 with TypeScript 5.8.3
+- **UI Components**: shadcn/ui (Radix UI primitives)
+- **Styling**: Tailwind CSS 3.4.17
+- **Charts**: Recharts 2.15.4
+- **State Management**: TanStack Query 5.83.0, React Context API
+- **Routing**: React Router 6.30.1
+- **Forms**: React Hook Form 7.61.1 + Zod 3.25.76
+- **Themes**: next-themes 0.3.0 (Dark mode support)
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-- Supabase (Backend & Database)
-- Odoo Integration (via Edge Functions)
-- XLSX (Excel export functionality)
+### Backend & Integration
+- **Backend as a Service**: Supabase
+  - PostgreSQL Database
+  - Edge Functions (Deno runtime)
+  - Authentication
+  - Real-time subscriptions
+- **ERP Integration**: Odoo 16 (via Supabase Edge Functions proxy)
+  - Models: sale.order, crm.lead, project.project, account.move, mrp.bom
+  - Database: con-formgroup-main-10348162
+- **Export**: XLSX 0.18.5 (Excel export functionality)
 
-## 🤖 AI-Powered Development with MCP
+### Deployment
+- **Hosting**: Netlify
+- **Build Command**: `npm run build`
+- **Publish Directory**: `dist`
+- **Auto-Deploy**: Enabled on `main` branch push
 
-This project includes **MCP (Model Context Protocol)** support for Supabase, enabling AI assistants in Cursor to directly interact with your database!
+## Environment Variables
 
-### Quick Setup
-1. Get your Supabase service role key from the [API settings](https://supabase.com/dashboard/project/ibqgwakjmsnjtvwpkdns/settings/api)
-2. Set as environment variable: `SUPABASE_SERVICE_ROLE_KEY`
-3. Restart Cursor
-4. Start asking AI to query, modify, and manage your database!
+### Required Variables
 
-📖 **[Read the MCP Quickstart Guide](./MCP_QUICKSTART.md)** for detailed setup instructions.
+Create a `.env` file in the project root:
 
-### What You Can Do
-- Query your database with natural language
-- Create and modify tables
-- Analyze data and generate reports
-- Set up migrations and schema changes
-- All without leaving your AI chat!
+```env
+# Supabase Configuration
+VITE_SUPABASE_URL=https://ibqgwakjmsnjtvwpkdns.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<your-anon-key>
+```
 
-## How can I deploy this project?
+### Supabase Edge Functions Environment
 
-Simply open [Lovable](https://lovable.dev/projects/d5056f6f-e114-4e35-a8da-e68395a164c6) and click on Share -> Publish.
+Configure these in the Supabase Dashboard → Edge Functions → Secrets:
+
+```env
+# Odoo Integration
+ODOO_URL=https://con-formgroup.odoo.com
+ODOO_USERNAME=admin@waoconnect.com.au
+ODOO_PASSWORD=<odoo-password>
+ODOO_API_KEY=<optional-api-key>
+```
+
+**Security Note**: Never commit `.env` files or credentials to git. Use Supabase Secrets for Edge Functions.
+
+## Deployment
+
+### Automatic Deployment (Netlify)
+
+The project automatically deploys to Netlify when you push to the `main` branch:
+
+1. **Push changes to GitHub**:
+   ```sh
+   git add .
+   git commit -m "feat: your changes"
+   git push origin main
+   ```
+
+2. **Netlify automatically**:
+   - Detects the push via webhook
+   - Runs `npm run build`
+   - Publishes the `dist` folder
+   - Usually completes in 2-5 minutes
+
+3. **Verify deployment**:
+   - Check Netlify dashboard for build logs
+   - Clear browser cache (Ctrl+Shift+R / Cmd+Shift+R)
+   - Test the production site
+
+### Manual Deployment Trigger
+
+If auto-deploy doesn't work:
+
+1. Go to your Netlify dashboard
+2. Click **"Trigger deploy"** → **"Deploy site"**
+3. Or click **"Clear cache and deploy site"** to force a fresh build
+
+### Troubleshooting Deployment Issues
+
+**Changes not appearing in production?**
+- Verify commit is pushed to GitHub: `git log origin/main`
+- Check Netlify build logs for errors
+- Clear browser cache completely
+- Verify environment variables are set in Netlify dashboard
+- Try "Clear cache and deploy site" in Netlify
+
+**Build failures:**
+- Check that all environment variables are set in Netlify
+- Verify `netlify.toml` configuration
+- Review build logs for specific errors
 
 ## Key Features
 
-### Job Costing Reports with Export
-The Job Costing Reports page includes comprehensive export functionality:
-- **Export to CSV**: Universal format for data processing and analysis
-- **Export to Excel**: Formatted spreadsheets with proper column widths
-- Automatic timestamping of exported files
-- Includes all job details: budgets, actuals, variances, and status
-- Totals row for quick summary analysis
+### 📊 Sales Analytics Dashboard
+- **Real-time metrics**: Expected Revenue, Deals Closed, Conversion Rate, Active Customers
+- **Revenue & Pipeline Charts**: Interactive charts using Recharts
+- **Australia Sales Map**: Regional sales visualization
+- **Sankey Flow Diagram**: Visual pipeline flow analysis
+- **YTD Performance Tracking**: Year-to-date metrics and trends
+- **Performance Tables**: Sales rep statistics and rankings
+- **Advanced Filtering**: Save filter templates, date ranges, multi-select
 
-For detailed documentation, see [Export Feature Documentation](./docs/EXPORT_FEATURE.md)
+### 💰 Job Costing Module
+- **Multiple Views**: Kanban board, Grid view, List view
+- **Cost Analysis**: BOM breakdown, Material vs Non-Material costs
+- **Real-time Sync**: Direct integration with Odoo analytic accounts
+- **Budget Tracking**: Compare budgets vs actuals with variance analysis
+- **Bulk Import**: Import all sales orders from Odoo with one click
+- **Excel Export**: Export job costing reports to Excel/CSV
 
-### Other Features
-- Real-time sales analytics dashboard
-- Odoo ERP integration
-- Job costing and project management
-- AI-powered copilot assistance
-- Dark mode support
+### 🤖 AI-Powered Features
+- **AI Copilot**: Chat interface for data insights and analysis
+- **Job Insights**: AI-generated recommendations and cost optimization
+- **Natural Language Queries**: Ask questions about your data
 
-## Can I connect a custom domain to my Lovable project?
+### 🎨 User Experience
+- **Dark Mode**: Built-in theme switching
+- **Responsive Design**: Works on desktop, tablet, and mobile
+- **Real-time Updates**: Live data sync with Odoo ERP
+- **Confetti Celebrations**: Visual feedback for achievements
 
-Yes, you can!
+### 🔐 Security & Performance
+- **Authentication**: Supabase Auth with email/password
+- **Row Level Security**: Database-level access control
+- **Optimized Queries**: TanStack Query for efficient data fetching
+- **Rate Limiting**: Built-in rate limiting for API calls
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Project Structure
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```
+con-form-dash/
+├── src/
+│   ├── components/        # React components (UI, filters, job costing)
+│   ├── contexts/          # React Context (Auth, Filters)
+│   ├── hooks/             # Custom hooks (useOdoo*, useJob*)
+│   ├── pages/             # Route pages
+│   ├── integrations/      # Supabase client setup
+│   ├── utils/             # Utilities (logger, rate limiter, export)
+│   └── lib/               # Shared libraries
+├── supabase/
+│   ├── functions/         # Edge Functions (Odoo integration, AI)
+│   └── migrations/        # Database migrations
+├── public/                # Static assets
+└── dist/                  # Build output (generated)
