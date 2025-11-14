@@ -245,7 +245,8 @@ export default function Settings() {
       errorMessages: []
     });
 
-    toast({
+    // Create a single persistent toast that we'll update throughout the process
+    const progressToast = toast({
       title: "Import Started",
       description: "Fetching sales orders from Odoo...",
     });
@@ -282,12 +283,17 @@ export default function Settings() {
 
       if (total === 0) {
         setImportProgress(prev => ({ ...prev, status: 'completed' }));
-        toast({
+        progressToast.update({
           title: "No Orders Found",
           description: "No confirmed sales orders with analytic accounts were found.",
         });
         return;
       }
+      
+      progressToast.update({
+        title: "Processing Jobs",
+        description: `Found ${total} sales orders. Starting import...`,
+      });
 
       // Step 2: Check which jobs already exist
       const { data: existingJobs } = await supabase
@@ -303,6 +309,14 @@ export default function Settings() {
 
       for (const [index, order] of (salesOrders || []).entries()) {
         try {
+          // Update progress toast every 10 jobs or on first/last job
+          if (index === 0 || (index + 1) % 10 === 0 || (index + 1) === total) {
+            progressToast.update({
+              title: "Importing Jobs",
+              description: `Processing ${index + 1} of ${total} jobs... (${created} created, ${updated} updated, ${skipped} skipped, ${errors} errors)`,
+            });
+          }
+
           // Check if already exists
           const alreadyExists = existingOrderIds.has(order.id);
           
@@ -511,9 +525,9 @@ export default function Settings() {
 
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
 
-      toast({
+      progressToast.update({
         title: "Import Complete",
-        description: `Created ${created} jobs${updated > 0 ? `, updated ${updated}` : ''}, skipped ${skipped}, ${errors} errors.`,
+        description: `Created ${created} jobs${updated > 0 ? `, updated ${updated}` : ''}, skipped ${skipped}${errors > 0 ? `, ${errors} errors` : ''}. Actual costs have been calculated from analytic lines.`,
         variant: errors > 0 ? 'destructive' : 'default'
       });
 
@@ -524,7 +538,7 @@ export default function Settings() {
         status: 'error',
         errorMessages: [error instanceof Error ? error.message : 'Unknown error']
       }));
-      toast({
+      progressToast.update({
         title: "Import Failed",
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: "destructive"
@@ -788,9 +802,10 @@ export default function Settings() {
             <div className="text-xs text-muted-foreground space-y-1">
               <p>• Only imports sales orders from the last 12 months</p>
               <p>• Jobs are linked to analytic accounts for real-time cost tracking</p>
-              <p>• Update mode refreshes existing jobs with latest analytic account references</p>
+              <p>• <strong>Actual costs are calculated automatically</strong> from account.analytic.line entries during import</p>
+              <p>• Update mode refreshes existing jobs with latest analytic account references and recalculates actual costs</p>
               <p>• This process runs in the background and may take several minutes</p>
-              <p>• Progress updates in real-time as jobs are processed</p>
+              <p>• After import completes, navigate to Job Costing page to see updated actual costs</p>
             </div>
           </CardContent>
         </Card>
