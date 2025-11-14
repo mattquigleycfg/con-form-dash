@@ -13,6 +13,7 @@ export interface JobFilters {
   dateRange: DateRange | null;
   budgetSort: BudgetSort;
   searchTerm: string;
+  projectManager: string | null;
 }
 
 export const useJobFiltering = (jobs: Job[] | undefined, filters: JobFilters): Job[] => {
@@ -30,7 +31,14 @@ export const useJobFiltering = (jobs: Job[] | undefined, filters: JobFilters): J
       });
     }
     
-    // 2. Search filter
+    // 2. Project Manager filter
+    if (filters.projectManager) {
+      filtered = filtered.filter(job => 
+        job.project_manager_name === filters.projectManager
+      );
+    }
+    
+    // 3. Search filter
     if (filters.searchTerm) {
       const search = filters.searchTerm.toLowerCase();
       filtered = filtered.filter(job => 
@@ -41,7 +49,7 @@ export const useJobFiltering = (jobs: Job[] | undefined, filters: JobFilters): J
       );
     }
     
-    // 3. Budget sort
+    // 4. Budget sort
     filtered.sort((a, b) => {
       const budgetA = a.total_budget || 0;
       const budgetB = b.total_budget || 0;
@@ -49,5 +57,5 @@ export const useJobFiltering = (jobs: Job[] | undefined, filters: JobFilters): J
     });
     
     return filtered;
-  }, [jobs, filters.dateRange, filters.searchTerm, filters.budgetSort]);
+  }, [jobs, filters.dateRange, filters.projectManager, filters.searchTerm, filters.budgetSort]);
 };

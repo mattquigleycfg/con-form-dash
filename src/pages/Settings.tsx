@@ -364,6 +364,7 @@ export default function Settings() {
           let projectAnalyticAccountName = null;
           let projectStageId = null;
           let projectStageName = null;
+          let projectManagerName = null;
 
           if (order.analytic_account_id) {
             const { data: projects } = await supabase.functions.invoke("odoo-query", {
@@ -372,7 +373,7 @@ export default function Settings() {
                 method: "search_read",
                 args: [
                   [["analytic_account_id", "=", order.analytic_account_id[0]]],
-                  ["id", "name", "analytic_account_id", "stage_id"],
+                  ["id", "name", "analytic_account_id", "stage_id", "user_id"],
                 ],
               },
             });
@@ -383,6 +384,7 @@ export default function Settings() {
               projectAnalyticAccountName = project.analytic_account_id?.[1] || null;
               projectStageId = project.stage_id?.[0] || null;
               projectStageName = project.stage_id?.[1] || null;
+              projectManagerName = project.user_id?.[1] || null;
             }
           }
 
@@ -406,6 +408,7 @@ export default function Settings() {
                 project_analytic_account_id: projectAnalyticAccountId,
                 project_analytic_account_name: projectAnalyticAccountName,
                 sales_person_name: order.user_id ? order.user_id[1] : null,
+                project_manager_name: projectManagerName,
                 opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
                 date_order: order.date_order,
                 project_stage_id: projectStageId,
@@ -447,6 +450,7 @@ export default function Settings() {
                 project_analytic_account_id: projectAnalyticAccountId,
                 project_analytic_account_name: projectAnalyticAccountName,
                 sales_person_name: order.user_id ? order.user_id[1] : null,
+                project_manager_name: projectManagerName,
                 opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
                 date_order: order.date_order,
                 project_stage_id: projectStageId,

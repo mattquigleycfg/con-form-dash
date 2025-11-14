@@ -32,6 +32,7 @@ export default function JobCosting() {
   const queryClient = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [projectManager, setProjectManager] = useState<string | null>(null);
   
   // View and filter state with localStorage persistence
   const [view, setView] = useState<ViewMode>(
@@ -63,7 +64,7 @@ export default function JobCosting() {
   });
 
   // Apply all filters using the filtering hook
-  const filteredJobs = useJobFiltering(jobs, { dateRange, budgetSort, searchTerm });
+  const filteredJobs = useJobFiltering(jobs, { dateRange, budgetSort, searchTerm, projectManager });
 
   // Auto-sync on mount and when sales orders change (only run once)
   const [hasAutoSynced, setHasAutoSynced] = useState(false);
@@ -256,6 +257,7 @@ export default function JobCosting() {
         let projectStageName = 'Unassigned';
         let projectAnalyticAccountId = null;
         let projectAnalyticAccountName = null;
+        let projectManagerName = null;
         
         if (order.analytic_account_id) {
           try {
@@ -266,7 +268,7 @@ export default function JobCosting() {
                 method: "search_read",
                 args: [
                   [["analytic_account_id", "=", order.analytic_account_id[0]]],
-                  ["id", "name", "analytic_account_id"],
+                  ["id", "name", "analytic_account_id", "user_id"],
                 ],
               },
             });
@@ -274,6 +276,12 @@ export default function JobCosting() {
             if (projects && projects.length > 0) {
               const project = projects[0];
               const projectId = project.id;
+              
+              // Capture project manager (user_id from project.project)
+              if (project.user_id && project.user_id[1]) {
+                projectManagerName = project.user_id[1];
+                logger.info(`Found project manager for SO ${order.name}: ${projectManagerName}`);
+              }
               
               // Capture project's analytic account (may differ from sale order)
               if (project.analytic_account_id) {
@@ -351,6 +359,7 @@ export default function JobCosting() {
             project_analytic_account_id: projectAnalyticAccountId,
             project_analytic_account_name: projectAnalyticAccountName,
             sales_person_name: salesPersonName,
+            project_manager_name: projectManagerName,
             opportunity_name: order.opportunity_id ? order.opportunity_id[1] : null,
             date_order: order.date_order,
             project_stage_id: projectStageId,
@@ -843,6 +852,9 @@ export default function JobCosting() {
           onBudgetSortChange={setBudgetSort}
           view={view}
           onViewChange={setView}
+          projectManager={projectManager}
+          onProjectManagerChange={setProjectManager}
+          jobs={jobs}
         />
 
         {/* Summary Dashboard */}

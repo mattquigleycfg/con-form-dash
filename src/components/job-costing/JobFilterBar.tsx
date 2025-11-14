@@ -1,7 +1,9 @@
 import { DateRangeFilterComponent } from "./DateRangeFilterComponent";
 import { BudgetSortDropdown } from "./BudgetSortDropdown";
 import { ViewSwitcher } from "./ViewSwitcher";
+import { ProjectManagerFilter } from "./ProjectManagerFilter";
 import { DateRange, ViewMode, BudgetSort } from "@/hooks/useJobFilters";
+import { Job } from "@/hooks/useJobs";
 
 interface JobFilterBarProps {
   dateRange: DateRange | null;
@@ -10,6 +12,9 @@ interface JobFilterBarProps {
   onBudgetSortChange: (sort: BudgetSort) => void;
   view: ViewMode;
   onViewChange: (view: ViewMode) => void;
+  projectManager: string | null;
+  onProjectManagerChange: (manager: string | null) => void;
+  jobs: Job[] | undefined;
 }
 
 export function JobFilterBar({
@@ -19,6 +24,9 @@ export function JobFilterBar({
   onBudgetSortChange,
   view,
   onViewChange,
+  projectManager,
+  onProjectManagerChange,
+  jobs,
 }: JobFilterBarProps) {
   return (
     <div className="flex flex-wrap gap-4 items-start">
@@ -27,6 +35,15 @@ export function JobFilterBar({
         <DateRangeFilterComponent
           dateRange={dateRange}
           onChange={onDateRangeChange}
+        />
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium mb-2 block">Project Manager</label>
+        <ProjectManagerFilter
+          jobs={jobs}
+          value={projectManager}
+          onChange={onProjectManagerChange}
         />
       </div>
       
