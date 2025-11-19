@@ -713,7 +713,8 @@ const handleActualSave = async (
   // Calculate non-material totals
   const nonMaterialBudgetTotal = budgetLines?.filter(isServiceBudgetLine).reduce((sum, line) => sum + (line.subtotal ?? 0), 0) || 0;
   // Include both manually entered costs AND non-material analytic lines from Odoo
-  const nonMaterialManualTotal = costs?.reduce((sum, cost) => sum + cost.amount, 0) || 0;
+  // NOTE: Only count manual costs (not imported from Odoo) to avoid double-counting
+  const nonMaterialManualTotal = costs?.filter(c => !c.is_from_odoo).reduce((sum, cost) => sum + cost.amount, 0) || 0;
   const nonMaterialAnalyticTotal = filteredNonMaterialAnalyticLines.reduce((sum, line) => sum + Math.abs(line.amount), 0);
   const nonMaterialActualTotal = nonMaterialManualTotal + nonMaterialAnalyticTotal;
   const nonMaterialRemaining = nonMaterialBudgetTotal - nonMaterialActualTotal;
