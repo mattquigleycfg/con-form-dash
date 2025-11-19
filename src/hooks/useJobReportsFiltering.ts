@@ -11,6 +11,8 @@ export interface JobReportsFilters {
   subcontractor: string | null;
   customers: string[]; // Changed to array for multi-select
   productCategory: string | null; // Changed to support specific products
+  showOnlyInvoicedPOs: boolean; // Filter for jobs with invoiced purchase orders
+  jobIdsWithInvoicedPOs?: Set<string>; // Set of job IDs that have invoiced POs
 }
 
 export const useJobReportsFiltering = (
@@ -74,7 +76,12 @@ export const useJobReportsFiltering = (
       // For now, we'll skip specific product filtering at this level
     }
 
-    // 7. Search filter
+    // 7. Invoiced POs filter
+    if (filters.showOnlyInvoicedPOs && filters.jobIdsWithInvoicedPOs) {
+      filtered = filtered.filter((job) => filters.jobIdsWithInvoicedPOs!.has(job.id));
+    }
+
+    // 8. Search filter
     if (filters.searchTerm) {
       const search = filters.searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -88,7 +95,7 @@ export const useJobReportsFiltering = (
       );
     }
 
-    // 8. Budget sort
+    // 9. Budget sort
     filtered.sort((a, b) => {
       const budgetA = a.total_budget || 0;
       const budgetB = b.total_budget || 0;
@@ -104,6 +111,8 @@ export const useJobReportsFiltering = (
     filters.subcontractor,
     filters.customers,
     filters.productCategory,
+    filters.showOnlyInvoicedPOs,
+    filters.jobIdsWithInvoicedPOs,
     filters.searchTerm,
     filters.budgetSort,
   ]);

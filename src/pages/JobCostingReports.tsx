@@ -30,6 +30,7 @@ import { ProductCategoryFilter } from "@/components/job-costing/ProductCategoryF
 import { ProductSummaryCell } from "@/components/job-costing/ProductSummaryCell";
 import { VarianceAnalysisCard } from "@/components/job-costing/VarianceAnalysisCard";
 import { CostCategoryChart } from "@/components/job-costing/CostCategoryChart";
+import { useJobsWithInvoicedPOs } from "@/hooks/useJobsWithInvoicedPOs";
 
 export default function JobCostingReports() {
   const navigate = useNavigate();
@@ -50,6 +51,10 @@ export default function JobCostingReports() {
   const [customers, setCustomers] = useState<string[]>([]); // Changed to array
   const [productCategory, setProductCategory] = useState<string | null>(null); // Changed to string | null
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
+  const [showOnlyInvoicedPOs, setShowOnlyInvoicedPOs] = useState(false);
+
+  // Fetch jobs with invoiced POs
+  const { data: invoicedPOsData, isLoading: loadingInvoicedPOs } = useJobsWithInvoicedPOs(jobs);
 
   // Apply filters
   const filteredJobs = useJobReportsFiltering(jobs, {
@@ -61,6 +66,8 @@ export default function JobCostingReports() {
     subcontractor,
     customers, // Changed from customer
     productCategory,
+    showOnlyInvoicedPOs,
+    jobIdsWithInvoicedPOs: invoicedPOsData?.jobIdsWithInvoicedPOs,
   });
 
   // Selection helpers
@@ -303,6 +310,25 @@ export default function JobCostingReports() {
                 value={productCategory}
                 onChange={setProductCategory}
               />
+            </div>
+
+            <div className="flex items-center space-x-2 pt-6">
+              <Checkbox
+                id="invoiced-pos"
+                checked={showOnlyInvoicedPOs}
+                onCheckedChange={(checked) => setShowOnlyInvoicedPOs(checked as boolean)}
+              />
+              <label
+                htmlFor="invoiced-pos"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              >
+                Show only jobs with invoiced POs
+                {showOnlyInvoicedPOs && invoicedPOsData && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    ({invoicedPOsData.jobIdsWithInvoicedPOs.size} jobs)
+                  </span>
+                )}
+              </label>
             </div>
           </div>
 
