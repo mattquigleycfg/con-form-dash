@@ -800,6 +800,16 @@ const handleActualSave = async (
           </Button>
         </div>
 
+        {/* Budget Circle Chart - Hero Section */}
+        <BudgetCircleChart
+          totalBudget={materialBudgetTotal + nonMaterialBudgetTotal}
+          totalActual={materialActualTotal + nonMaterialActualTotal}
+          materialBudget={materialBudgetTotal}
+          materialActual={materialActualTotal}
+          nonMaterialBudget={nonMaterialBudgetTotal}
+          nonMaterialActual={nonMaterialActualTotal}
+        />
+
         {/* Subcontractor Card */}
         <Card>
           <CardHeader>
@@ -841,16 +851,6 @@ const handleActualSave = async (
             />
           </CardContent>
         </Card>
-
-        {/* Budget Circle Chart - Hero Section */}
-        <BudgetCircleChart
-          totalBudget={materialBudgetTotal + nonMaterialBudgetTotal}
-          totalActual={materialActualTotal + nonMaterialActualTotal}
-          materialBudget={materialBudgetTotal}
-          materialActual={materialActualTotal}
-          nonMaterialBudget={nonMaterialBudgetTotal}
-          nonMaterialActual={nonMaterialActualTotal}
-        />
 
         {/* Cost Analysis Overview */}
         <Card>
