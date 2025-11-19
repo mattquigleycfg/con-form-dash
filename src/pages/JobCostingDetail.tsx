@@ -733,13 +733,6 @@ const handleActualSave = async (
     return budgetLines?.filter(isMaterialBudgetLine).reduce((sum, line) => sum + Number(line.quantity || 0), 0) || 0;
   }, [budgetLines]);
 
-  const materialBomQtyTotal = useMemo(() => {
-    return bomLines?.reduce((sum, line) => sum + Number(line.quantity || 0), 0) || 0;
-  }, [bomLines]);
-
-  const materialBomCostTotal = useMemo(() => {
-    return bomLines?.reduce((sum, line) => sum + resolveBomLineTotal(line), 0) || 0;
-  }, [bomLines]);
 
   const nonMaterialBudgetQtyTotal = useMemo(() => {
     return budgetLines?.filter(isServiceBudgetLine).reduce((sum, line) => sum + Number(line.quantity || 0), 0) || 0;
@@ -1391,85 +1384,6 @@ const handleActualSave = async (
                       }}
                     />
                   )}
-
-                  {/* BOM Actuals */}
-                  <Card className="rounded-lg border shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="text-base">Actual Costs (BOM)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                    {loadingBOM ? (
-                      <Skeleton className="h-32 w-full" />
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Product</TableHead>
-                            <TableHead className="text-right">Quantity</TableHead>
-                            <TableHead className="text-right">Unit Cost</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                            <TableHead className="w-[50px]"></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {bomLines?.map((line) => {
-                            const unitCost = line.unit_cost ?? materialPurchasePriceMap.get(line.odoo_product_id || -1) ?? 0;
-                            const totalCost = resolveBomLineTotal(line);
-                            return (
-                              <TableRow key={line.id}>
-                                <TableCell>
-                                  <div className="font-medium">{line.product_name}</div>
-                                  {line.notes && (
-                                    <div className="text-xs text-muted-foreground">{line.notes}</div>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right">{line.quantity}</TableCell>
-                                <TableCell className="text-right">
-                                  {formatNumber(unitCost)}
-                                </TableCell>
-                                <TableCell className="text-right font-medium">
-                                  {formatNumber(totalCost)}
-                                </TableCell>
-                                <TableCell>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      if (!confirm("Delete this BOM line?")) return;
-                                      try {
-                                        await deleteBOMLineAsync(line.id);
-                                        await recalculateJobTotals();
-                                        queryClient.invalidateQueries({ queryKey: ["job-bom", id] });
-                                        queryClient.invalidateQueries({ queryKey: ["job", id] });
-                                        queryClient.invalidateQueries({ queryKey: ["jobs"] });
-                                        toast.success("BOM line removed");
-                                      } catch (error) {
-                                        console.error(error);
-                                        toast.error("Failed to delete BOM line");
-                                      }
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                          {bomLines && bomLines.length > 0 && (
-                            <TableRow className="font-semibold bg-muted/50">
-                              <TableCell>Total</TableCell>
-                              <TableCell className="text-right">{materialBomQtyTotal}</TableCell>
-                              <TableCell className="text-right">-</TableCell>
-                              <TableCell className="text-right">{formatNumber(materialBomCostTotal)}</TableCell>
-                              <TableCell></TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    )}
-                    </CardContent>
-                  </Card>
 
                   {/* Remaining Section */}
                   <Card className="rounded-lg border shadow-sm">
