@@ -7,9 +7,11 @@ import { formatCurrency } from "@/lib/utils";
 interface CostAnalysisCardProps {
   analysis: CostAnalysis;
   job: Job;
+  materialActualTotal?: number; // Optional: pass calculated material actual
+  nonMaterialActualTotal?: number; // Optional: pass calculated non-material actual
 }
 
-export function CostAnalysisCard({ analysis, job }: CostAnalysisCardProps) {
+export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMaterialActualTotal }: CostAnalysisCardProps) {
   // Color coding: green for negative variances <100% (under budget), red for positive (over budget)
   const getVarianceClass = (variancePercent: number) => {
     if (variancePercent < 0 && Math.abs(variancePercent) < 100) {
@@ -21,9 +23,9 @@ export function CostAnalysisCard({ analysis, job }: CostAnalysisCardProps) {
     return "";
   };
 
-  // Use job actuals (which include imported analytic entries)
-  const actualMaterialCost = job.material_actual;
-  const actualNonMaterialCost = job.non_material_actual;
+  // Use calculated actuals if provided, otherwise fall back to job database values
+  const actualMaterialCost = materialActualTotal ?? job.material_actual;
+  const actualNonMaterialCost = nonMaterialActualTotal ?? job.non_material_actual;
   const totalActualCost = actualMaterialCost + actualNonMaterialCost;
 
   // Variance = Actual - Budget (negative = under budget/good, positive = over budget/bad)

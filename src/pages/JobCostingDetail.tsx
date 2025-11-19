@@ -425,13 +425,13 @@ const recalculateJobTotals = async () => {
 
   const { data: allNonMaterial } = await supabase
     .from("job_non_material_costs")
-    .select("amount")
+    .select("amount, is_from_odoo")
     .eq("job_id", id);
 
-  const nonMaterialActual = allNonMaterial?.reduce(
-    (sum, line) => sum + Number(line.amount || 0), 
-    0
-  ) || 0;
+  // Only count manual costs (not imported from Odoo) to avoid double-counting with analytic lines
+  const nonMaterialActual = allNonMaterial
+    ?.filter(line => !line.is_from_odoo)
+    .reduce((sum, line) => sum + Number(line.amount || 0), 0) || 0;
 
   await supabase
     .from("jobs")
@@ -862,7 +862,14 @@ const handleActualSave = async (
                 <Skeleton className="h-40 w-full" />
               </div>
             ) : (
-              costAnalysisOverview && <CostAnalysisCard analysis={costAnalysisOverview} job={job} />
+              costAnalysisOverview && (
+                <CostAnalysisCard 
+                  analysis={costAnalysisOverview} 
+                  job={job}
+                  materialActualTotal={materialActualTotal}
+                  nonMaterialActualTotal={nonMaterialActualTotal}
+                />
+              )
             )}
           </CardContent>
         </Card>
