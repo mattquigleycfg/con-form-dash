@@ -892,7 +892,6 @@ export default function JobCosting() {
           onViewChange={setView}
           projectManager={projectManager}
           onProjectManagerChange={setProjectManager}
-          jobs={jobs}
         />
 
         {/* Summary Dashboard */}

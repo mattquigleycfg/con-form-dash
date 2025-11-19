@@ -3,7 +3,8 @@ import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Download, FileSpreadsheet, Search } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, Search, Minus } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useNavigate } from "react-router-dom";
 import { useJobs } from "@/hooks/useJobs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,8 +47,9 @@ export default function JobCostingReports() {
   const [budgetSort, setBudgetSort] = useState<BudgetSort>("high-low");
   const [salesPerson, setSalesPerson] = useState<string | null>(null);
   const [subcontractor, setSubcontractor] = useState<string | null>(null);
-  const [customer, setCustomer] = useState<string | null>(null);
-  const [productCategory, setProductCategory] = useState<"all" | "material" | "service">("all");
+  const [customers, setCustomers] = useState<string[]>([]); // Changed to array
+  const [productCategory, setProductCategory] = useState<string | null>(null); // Changed to string | null
+  const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
 
   // Apply filters
   const filteredJobs = useJobReportsFiltering(jobs, {
@@ -57,9 +59,31 @@ export default function JobCostingReports() {
     projectManager,
     salesPerson,
     subcontractor,
-    customer,
+    customers, // Changed from customer
     productCategory,
   });
+
+  // Selection helpers
+  const toggleAllJobs = () => {
+    if (selectedJobs.size === filteredJobs.length) {
+      setSelectedJobs(new Set());
+    } else {
+      setSelectedJobs(new Set(filteredJobs.map((job) => job.id)));
+    }
+  };
+
+  const toggleJob = (jobId: string) => {
+    const newSelection = new Set(selectedJobs);
+    if (newSelection.has(jobId)) {
+      newSelection.delete(jobId);
+    } else {
+      newSelection.add(jobId);
+    }
+    setSelectedJobs(newSelection);
+  };
+
+  const allJobsSelected = filteredJobs.length > 0 && selectedJobs.size === filteredJobs.length;
+  const someJobsSelected = selectedJobs.size > 0 && selectedJobs.size < filteredJobs.length;
 
   const totalBudget = filteredJobs?.reduce((sum, job) => sum + job.total_budget, 0) || 0;
   const totalActual = filteredJobs?.reduce((sum, job) => sum + job.total_actual, 0) || 0;
@@ -73,17 +97,22 @@ export default function JobCostingReports() {
   const nonMaterialPercentage = totalNonMaterialBudget > 0 ? (totalNonMaterialActual / totalNonMaterialBudget) * 100 : 0;
 
   const handleExport = (format: 'csv' | 'excel') => {
-    if (!filteredJobs || filteredJobs.length === 0) {
+    // Determine which jobs to export
+    const jobsToExport = selectedJobs.size > 0
+      ? filteredJobs.filter((job) => selectedJobs.has(job.id))
+      : filteredJobs;
+
+    if (!jobsToExport || jobsToExport.length === 0) {
       toast({
         title: "No data to export",
-        description: "There are no jobs to export.",
+        description: selectedJobs.size > 0 ? "No jobs selected." : "There are no jobs to export.",
         variant: "destructive",
       });
       return;
     }
 
     // Prepare export data with calculated fields and new columns
-    const exportData = filteredJobs.map(job => ({
+    const exportData = jobsToExport.map(job => ({
       sale_order_name: job.sale_order_name,
       customer_name: job.customer_name,
       sales_person: job.sales_person_name || '-',
@@ -99,6 +128,14 @@ export default function JobCostingReports() {
       variance_status: (job.total_budget - job.total_actual) >= 0 ? 'Under Budget' : 'Over Budget',
     }));
 
+    // Calculate totals for export
+    const exportTotalBudget = jobsToExport.reduce((sum, job) => sum + job.total_budget, 0);
+    const exportTotalActual = jobsToExport.reduce((sum, job) => sum + job.total_actual, 0);
+    const exportMaterialBudget = jobsToExport.reduce((sum, job) => sum + job.material_budget, 0);
+    const exportMaterialActual = jobsToExport.reduce((sum, job) => sum + job.material_actual, 0);
+    const exportNonMaterialBudget = jobsToExport.reduce((sum, job) => sum + job.non_material_budget, 0);
+    const exportNonMaterialActual = jobsToExport.reduce((sum, job) => sum + job.non_material_actual, 0);
+
     // Add totals row
     exportData.push({
       sale_order_name: 'TOTALS',
@@ -106,14 +143,14 @@ export default function JobCostingReports() {
       sales_person: '',
       project_manager: '',
       subcontractor: '',
-      total_budget: totalBudget,
-      total_actual: totalActual,
-      material_budget: totalMaterialBudget,
-      material_actual: totalMaterialActual,
-      non_material_budget: totalNonMaterialBudget,
-      non_material_actual: totalNonMaterialActual,
-      variance: totalBudget - totalActual,
-      variance_status: (totalBudget - totalActual) >= 0 ? 'Under Budget' : 'Over Budget',
+      total_budget: exportTotalBudget,
+      total_actual: exportTotalActual,
+      material_budget: exportMaterialBudget,
+      material_actual: exportMaterialActual,
+      non_material_budget: exportNonMaterialBudget,
+      non_material_actual: exportNonMaterialActual,
+      variance: exportTotalBudget - exportTotalActual,
+      variance_status: (exportTotalBudget - exportTotalActual) >= 0 ? 'Under Budget' : 'Over Budget',
     });
 
     const exportOptions = {
@@ -143,13 +180,13 @@ export default function JobCostingReports() {
         exportToCSV(exportOptions);
         toast({
           title: "Export successful",
-          description: "Job costing report exported to CSV.",
+          description: `${jobsToExport.length} job(s) exported to CSV.`,
         });
       } else {
         exportToExcel(exportOptions);
         toast({
           title: "Export successful",
-          description: "Job costing report exported to Excel.",
+          description: `${jobsToExport.length} job(s) exported to Excel.`,
         });
       }
     } catch (error) {
@@ -191,24 +228,31 @@ export default function JobCostingReports() {
             </div>
           </div>
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <Download className="h-4 w-4" />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExport('csv')} className="gap-2">
-                <FileSpreadsheet className="h-4 w-4" />
-                Export to CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-2">
-                <FileSpreadsheet className="h-4 w-4" />
-                Export to Excel
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-2">
+            {selectedJobs.size > 0 && (
+              <span className="text-sm text-muted-foreground">
+                {selectedJobs.size} job(s) selected
+              </span>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  {selectedJobs.size > 0 ? `Export Selected (${selectedJobs.size})` : 'Export All'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport('csv')} className="gap-2">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Export to CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-2">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Export to Excel
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         {/* Filter Bars */}
@@ -223,7 +267,6 @@ export default function JobCostingReports() {
             onViewChange={() => {}}
             projectManager={projectManager}
             onProjectManagerChange={setProjectManager}
-            jobs={jobs}
           />
 
           {/* Additional report-specific filters */}
@@ -241,15 +284,14 @@ export default function JobCostingReports() {
               <label className="text-sm font-medium mb-2 block">Customer</label>
               <CustomerFilter
                 jobs={jobs}
-                value={customer}
-                onChange={setCustomer}
+                value={customers}
+                onChange={setCustomers}
               />
             </div>
 
             <div>
               <label className="text-sm font-medium mb-2 block">Subcontractor</label>
               <SubcontractorFilter
-                jobs={jobs}
                 value={subcontractor}
                 onChange={setSubcontractor}
               />
@@ -355,10 +397,20 @@ export default function JobCostingReports() {
               </div>
             ) : (
               <div className="relative overflow-x-auto">
-                <Table className="min-w-[1600px]">
+                <Table className="min-w-[1700px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="sticky left-0 z-10 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                      <TableHead className="w-12 sticky left-0 z-10 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                        <Checkbox
+                          checked={allJobsSelected}
+                          onCheckedChange={toggleAllJobs}
+                          aria-label="Select all jobs"
+                          className={someJobsSelected ? "data-[state=checked]:bg-primary" : ""}
+                        >
+                          {someJobsSelected && !allJobsSelected && <Minus className="h-3 w-3" />}
+                        </Checkbox>
+                      </TableHead>
+                      <TableHead className="sticky left-12 z-10 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                         Job
                       </TableHead>
                       <TableHead>Customer</TableHead>
@@ -378,13 +430,24 @@ export default function JobCostingReports() {
                   <TableBody>
                     {filteredJobs.map((job) => {
                       const variance = job.total_budget - job.total_actual;
+                      const isSelected = selectedJobs.has(job.id);
                       return (
                         <TableRow 
                           key={job.id}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => navigate(`/job-costing/${job.id}`)}
+                          className={`hover:bg-muted/50 ${isSelected ? 'bg-muted/30' : ''}`}
                         >
-                          <TableCell className="font-medium sticky left-0 z-10 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                          <TableCell className="sticky left-0 z-10 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleJob(job.id)}
+                              aria-label={`Select ${job.sale_order_name}`}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </TableCell>
+                          <TableCell 
+                            className="font-medium sticky left-12 z-10 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] cursor-pointer"
+                            onClick={() => navigate(`/job-costing/${job.id}`)}
+                          >
                             {job.sale_order_name}
                           </TableCell>
                           <TableCell>{job.customer_name}</TableCell>
@@ -408,9 +471,11 @@ export default function JobCostingReports() {
                     })}
                     <TableRow className="font-bold bg-muted/50">
                       <TableCell className="sticky left-0 z-10 bg-muted/50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                      </TableCell>
+                      <TableCell className="sticky left-12 z-10 bg-muted/50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                         TOTALS
                       </TableCell>
-                      <TableCell colSpan={5}></TableCell>
+                      <TableCell colSpan={4}></TableCell>
                       <TableCell className="text-right">{formatCurrency(totalBudget)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(totalActual)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(totalMaterialBudget)}</TableCell>
