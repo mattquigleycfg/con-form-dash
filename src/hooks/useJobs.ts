@@ -30,6 +30,8 @@ export interface Job {
   date_order?: string;
   project_stage_id?: number | null;
   project_stage_name?: string | null;
+  subcontractor_id?: number | null;
+  subcontractor_name?: string | null;
 }
 
 export const useJobs = () => {

@@ -33,6 +33,7 @@ import { BudgetCircleChart } from "@/components/job-costing/BudgetCircleChart";
 import { AIInsights } from "@/components/job-costing/AIInsights";
 import { Database } from "@/integrations/supabase/types";
 import confetti from "canvas-confetti";
+import { SubcontractorSelector } from "@/components/job-costing/SubcontractorSelector";
 
 export default function JobCostingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -798,6 +799,48 @@ const handleActualSave = async (
             {isSyncing ? 'Syncing...' : 'Sync with Odoo'}
           </Button>
         </div>
+
+        {/* Subcontractor Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Subcontractor</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SubcontractorSelector
+              value={
+                job.subcontractor_id && job.subcontractor_name
+                  ? { id: job.subcontractor_id, name: job.subcontractor_name }
+                  : null
+              }
+              onChange={async (vendor) => {
+                if (!id) return;
+                try {
+                  const { error } = await supabase
+                    .from("jobs")
+                    .update({
+                      subcontractor_id: vendor?.id || null,
+                      subcontractor_name: vendor?.name || null,
+                    })
+                    .eq("id", id);
+
+                  if (error) throw error;
+
+                  queryClient.invalidateQueries({ queryKey: ["job", id] });
+                  queryClient.invalidateQueries({ queryKey: ["jobs"] });
+
+                  toast.success(
+                    vendor
+                      ? `Subcontractor set to ${vendor.name}`
+                      : "Subcontractor removed"
+                  );
+                } catch (error) {
+                  console.error("Error updating subcontractor:", error);
+                  toast.error("Failed to update subcontractor");
+                }
+              }}
+            />
+          </CardContent>
+        </Card>
 
         {/* Budget Circle Chart - Hero Section */}
         <BudgetCircleChart

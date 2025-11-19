@@ -4,6 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { Job } from "@/hooks/useJobs";
 import { format } from "date-fns";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import { Truck } from "lucide-react";
 
 interface JobCardProps {
   job: Job;
@@ -53,6 +54,12 @@ export function JobCard({ job, onClick, compact = false }: JobCardProps) {
             <p className="text-xs text-muted-foreground truncate">
               {job.customer_name}
             </p>
+            {job.subcontractor_name && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1 truncate mt-1">
+                <Truck className="h-3 w-3 shrink-0" />
+                {job.subcontractor_name}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {/* Mini Donut Chart */}

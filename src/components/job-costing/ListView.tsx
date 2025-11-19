@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Job } from "@/hooks/useJobs";
 import { format } from "date-fns";
+import { Truck } from "lucide-react";
 
 interface ListViewProps {
   jobs: Job[];
@@ -18,6 +19,7 @@ export function ListView({ jobs, onJobClick }: ListViewProps) {
             <TableHead>Order</TableHead>
             <TableHead>Opportunity</TableHead>
             <TableHead>Customer</TableHead>
+            <TableHead>Subcontractor</TableHead>
             <TableHead>Stage</TableHead>
             <TableHead>Confirmed Date</TableHead>
             <TableHead className="text-right">Budget</TableHead>
@@ -62,6 +64,16 @@ export function ListView({ jobs, onJobClick }: ListViewProps) {
                   {job.opportunity_name || '-'}
                 </TableCell>
                 <TableCell>{job.customer_name}</TableCell>
+                <TableCell>
+                  {job.subcontractor_name ? (
+                    <Badge variant="outline" className="text-xs gap-1">
+                      <Truck className="h-3 w-3" />
+                      {job.subcontractor_name}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <Badge variant="outline" className="text-xs">
                     {job.project_stage_name || 'Unassigned'}

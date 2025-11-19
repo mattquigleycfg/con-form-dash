@@ -258,6 +258,8 @@ export default function JobCosting() {
         let projectAnalyticAccountId = null;
         let projectAnalyticAccountName = null;
         let projectManagerName = null;
+        let subcontractorId = null;
+        let subcontractorName = null;
         
         if (order.analytic_account_id) {
           try {
@@ -334,6 +336,40 @@ export default function JobCosting() {
           } catch (error) {
             logger.error(`Error fetching task stage for SO ${order.name}:`, error);
           }
+          
+          // Try to auto-detect subcontractor from purchase orders linked to this analytic account
+          try {
+            const { data: purchaseOrders } = await supabase.functions.invoke("odoo-query", {
+              body: {
+                model: "purchase.order",
+                method: "search_read",
+                args: [
+                  [
+                    ["analytic_account_id", "=", order.analytic_account_id[0]],
+                    ["state", "in", ["purchase", "done"]],
+                  ],
+                  ["id", "name", "partner_id", "amount_total", "order_line"],
+                  0,
+                  5, // Get first 5 POs
+                ],
+              },
+            });
+
+            if (purchaseOrders && purchaseOrders.length > 0) {
+              // Find PO with installation/service items by checking order lines
+              for (const po of purchaseOrders) {
+                // Simple heuristic: use the first confirmed PO's vendor as subcontractor
+                if (po.partner_id && po.partner_id[0]) {
+                  subcontractorId = po.partner_id[0];
+                  subcontractorName = po.partner_id[1];
+                  logger.info(`Auto-detected subcontractor for SO ${order.name}: ${subcontractorName}`);
+                  break;
+                }
+              }
+            }
+          } catch (error) {
+            logger.error(`Error auto-detecting subcontractor for SO ${order.name}:`, error);
+          }
         }
 
         // Create job with additional search fields and date_order
@@ -364,6 +400,8 @@ export default function JobCosting() {
             date_order: order.date_order,
             project_stage_id: projectStageId,
             project_stage_name: projectStageName,
+            subcontractor_id: subcontractorId,
+            subcontractor_name: subcontractorName,
           }])
           .select()
           .single();
