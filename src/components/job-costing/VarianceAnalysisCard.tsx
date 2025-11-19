@@ -75,7 +75,7 @@ export function VarianceAnalysisCard({ jobs }: VarianceAnalysisCardProps) {
           </div>
           <div className="text-center p-3 bg-yellow-50 dark:bg-yellow-950 rounded-lg">
             <div className="text-2xl font-bold text-yellow-600">{atRiskJobs.length}</div>
-            <div className="text-xs text-muted-foreground">At Risk (>80%)</div>
+            <div className="text-xs text-muted-foreground">At Risk (&gt;80%)</div>
           </div>
           <div className="text-center p-3 bg-green-50 dark:bg-green-950 rounded-lg">
             <div className="text-2xl font-bold text-green-600">{underBudgetJobs.length}</div>
