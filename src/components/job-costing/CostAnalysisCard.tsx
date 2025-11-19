@@ -28,6 +28,17 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
   const actualNonMaterialCost = nonMaterialActualTotal ?? job.non_material_actual;
   const totalActualCost = actualMaterialCost + actualNonMaterialCost;
 
+  // Debug logging
+  console.log('🔍 CostAnalysisCard Debug:', {
+    materialActualTotal_prop: materialActualTotal,
+    job_material_actual_db: job.material_actual,
+    actualMaterialCost_used: actualMaterialCost,
+    nonMaterialActualTotal_prop: nonMaterialActualTotal,
+    job_non_material_actual_db: job.non_material_actual,
+    actualNonMaterialCost_used: actualNonMaterialCost,
+    totalActualCost
+  });
+
   // Variance = Actual - Budget (negative = under budget/good, positive = over budget/bad)
   const materialVariance = actualMaterialCost - analysis.materialBudget;
   const materialVariancePercent = analysis.materialBudget > 0 ? (materialVariance / analysis.materialBudget) * 100 : 0;
