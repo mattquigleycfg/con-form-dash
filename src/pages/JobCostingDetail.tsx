@@ -18,6 +18,7 @@ import { useJobCostAnalysis } from "@/hooks/useJobCostAnalysis";
 import { CostAnalysisCard } from "@/components/job-costing/CostAnalysisCard";
 import { AnalyticLinesTable } from "@/components/job-costing/AnalyticLinesTable";
 import { AnalyticLinesMaterialTable } from "@/components/job-costing/AnalyticLinesMaterialTable";
+import { categorizeAnalyticLine, AnalyticLine } from "@/hooks/useOdooAnalyticLines";
 import { BomBreakdownCard } from "@/components/job-costing/BomBreakdownCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -411,27 +412,59 @@ const handleActualInputChange = (productId: number, value: string) => {
 };
 
 const recalculateJobTotals = async () => {
-  if (!id) return;
+  if (!id || !job?.analytic_account_id) return;
 
+  // Get BOM material costs
   const { data: allMaterial } = await supabase
     .from("job_bom_lines")
     .select("unit_cost, quantity")
     .eq("job_id", id);
 
-  const materialActual = allMaterial?.reduce(
+  const bomMaterialActual = allMaterial?.reduce(
     (sum, line) => sum + (Number(line.unit_cost || 0) * Number(line.quantity || 0)), 
     0
   ) || 0;
 
+  // Get analytic lines from Odoo
+  const { data: analyticResponse } = await supabase.functions.invoke("odoo-query", {
+    body: {
+      model: "account.analytic.line",
+      method: "search_read",
+      domain: [["account_id", "=", job.analytic_account_id]],
+      fields: ["id", "name", "amount", "product_id", "unit_amount", "date", "account_id"],
+    },
+  });
+
+  // Filter and categorize analytic lines (costs only)
+  let analyticMaterialTotal = 0;
+  let analyticNonMaterialTotal = 0;
+  
+  if (analyticResponse?.result) {
+    const costLines = analyticResponse.result.filter((line: any) => line.amount < 0);
+    costLines.forEach((line: any) => {
+      const category = categorizeAnalyticLine(line as AnalyticLine);
+      const amount = Math.abs(line.amount);
+      if (category === 'material') {
+        analyticMaterialTotal += amount;
+      } else {
+        analyticNonMaterialTotal += amount;
+      }
+    });
+  }
+
+  // Get manual non-material costs (excluding Odoo imports)
   const { data: allNonMaterial } = await supabase
     .from("job_non_material_costs")
     .select("amount, is_from_odoo")
     .eq("job_id", id);
 
-  // Only count manual costs (not imported from Odoo) to avoid double-counting with analytic lines
-  const nonMaterialActual = allNonMaterial
+  const manualNonMaterialActual = allNonMaterial
     ?.filter(line => !line.is_from_odoo)
     .reduce((sum, line) => sum + Number(line.amount || 0), 0) || 0;
+
+  // Total actuals including analytic lines
+  const materialActual = bomMaterialActual + analyticMaterialTotal;
+  const nonMaterialActual = manualNonMaterialActual + analyticNonMaterialTotal;
 
   await supabase
     .from("jobs")
@@ -703,6 +736,62 @@ const handleActualSave = async (
   const filteredNonMaterialAnalyticLines = useMemo(() => {
     return analysis?.nonMaterialAnalyticLines?.filter(line => !excludedAnalyticLineIds.has(line.id)) || [];
   }, [analysis?.nonMaterialAnalyticLines, excludedAnalyticLineIds]);
+
+  // Group costs by category including analytic lines
+  const costsByCategory = useMemo(() => {
+    const categories: Record<string, Array<{
+      id: string;
+      description: string;
+      amount: number;
+      is_from_odoo: boolean;
+      is_analytic: boolean;
+      analytic_line_id?: number;
+    }>> = {
+      installation: [],
+      freight: [],
+      cranage: [],
+      accommodation: [],
+      travel: [],
+      other: []
+    };
+
+    // Add manual costs
+    costs?.forEach(cost => {
+      const category = cost.cost_type || 'other';
+      if (categories[category]) {
+        categories[category].push({
+          id: `manual-${cost.id}`,
+          description: cost.description || '-',
+          amount: cost.amount,
+          is_from_odoo: cost.is_from_odoo || false,
+          is_analytic: false,
+        });
+      }
+    });
+
+    // Add analytic lines
+    filteredNonMaterialAnalyticLines.forEach(line => {
+      const desc = line.name.toUpperCase();
+      let category = 'other';
+      
+      if (desc.includes('INSTALLATION')) category = 'installation';
+      else if (desc.includes('FREIGHT') || desc.includes('CFG TRUCK')) category = 'freight';
+      else if (desc.includes('CRANAGE') || desc.includes('CRANE')) category = 'cranage';
+      else if (desc.includes('ACCOMMODATION')) category = 'accommodation';
+      else if (desc.includes('TRAVEL')) category = 'travel';
+      
+      categories[category].push({
+        id: `analytic-${line.id}`,
+        description: line.name,
+        amount: Math.abs(line.amount),
+        is_from_odoo: true,
+        is_analytic: true,
+        analytic_line_id: line.id,
+      });
+    });
+
+    return categories;
+  }, [costs, filteredNonMaterialAnalyticLines]);
 
   // Include material analytic lines from Odoo (costs not yet imported to BOM)
   const materialAnalyticTotal = filteredMaterialAnalyticLines.reduce((sum, line) => sum + Math.abs(line.amount), 0);
@@ -1541,7 +1630,7 @@ const handleActualSave = async (
                     </CardHeader>
                     <CardContent>
                     {['installation', 'freight', 'cranage', 'accommodation', 'travel', 'other'].map((type) => {
-                      const typeCosts = costs?.filter(c => c.cost_type === type) || [];
+                      const typeCosts = costsByCategory[type] || [];
                       if (typeCosts.length === 0) return null;
 
                       const typeTotal = typeCosts.reduce((sum, cost) => sum + cost.amount, 0);
@@ -1561,27 +1650,40 @@ const handleActualSave = async (
                               {typeCosts.map((cost) => (
                                 <TableRow key={cost.id}>
                                   <TableCell>
-                                    {cost.description || "-"}
+                                    {cost.description}
                                     {cost.is_from_odoo && (
                                       <Badge variant="outline" className="ml-2 text-xs">Odoo</Badge>
                                     )}
                                   </TableCell>
                                   <TableCell className="text-right font-medium">{formatCurrency(cost.amount)}</TableCell>
                                   <TableCell>
-                                    {!cost.is_from_odoo && (
+                                    {cost.is_analytic ? (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          if (confirm(`Hide this analytic line?\n\n"${cost.description}"\n\nNote: This will hide it from this view. The entry still exists in Odoo.`)) {
+                                            setExcludedAnalyticLineIds(prev => new Set(prev).add(cost.analytic_line_id!));
+                                            toast.success("Analytic line hidden from view");
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    ) : !cost.is_from_odoo ? (
                                       <Button
                                         variant="ghost"
                                         size="icon"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (confirm("Delete this cost?")) {
-                                            deleteCost(cost.id);
+                                            deleteCost(parseInt(cost.id.replace('manual-', '')));
                                           }
                                         }}
                                       >
                                         <Trash2 className="h-4 w-4" />
                                       </Button>
-                                    )}
+                                    ) : null}
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -1596,7 +1698,7 @@ const handleActualSave = async (
                       );
                     })}
 
-                    {(!costs || costs.length === 0) && (!analysis?.nonMaterialAnalyticLines || analysis.nonMaterialAnalyticLines.length === 0) && (
+                    {Object.values(costsByCategory).every(arr => arr.length === 0) && (
                       <div className="text-center py-8 text-muted-foreground">
                         No non-material costs added yet. Click "Add Cost" to start tracking.
                       </div>
