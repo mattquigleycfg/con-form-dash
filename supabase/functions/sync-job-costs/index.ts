@@ -141,8 +141,11 @@ Deno.serve(async (req) => {
 
         // Import new analytic lines - filter out customer invoices
         for (const line of analyticLines) {
+          // Get product name first (we'll need it for description and cost type)
+          const productName = line.product_id ? line.product_id[1] : line.name;
+          const lineDescription = `${productName} (${line.date})`;
+          
           // Skip if already imported
-          const lineDescription = `${line.name} (${line.date})`;
           if (existingDescriptions.has(lineDescription)) continue;
 
           // Only import if there's a cost (amount !== 0)
@@ -170,7 +173,6 @@ Deno.serve(async (req) => {
             }
           }
 
-          const productName = line.product_id ? line.product_id[1] : '';
           const amount = Math.abs(line.amount); // Always use absolute value
 
           // Determine cost type based on product name or category
