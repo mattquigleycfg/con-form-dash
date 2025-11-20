@@ -755,8 +755,8 @@ const handleActualSave = async (
       other: []
     };
 
-    // Add manual costs
-    costs?.forEach(cost => {
+    // Add manual costs (excluding is_from_odoo to prevent double-counting with analytic lines)
+    costs?.filter(c => !c.is_from_odoo).forEach(cost => {
       const category = cost.cost_type || 'other';
       if (categories[category]) {
         categories[category].push({
