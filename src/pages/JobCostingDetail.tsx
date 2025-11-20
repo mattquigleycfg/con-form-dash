@@ -908,15 +908,26 @@ const handleActualSave = async (
               onChange={async (vendor) => {
                 if (!id) return;
                 try {
-                  const { error } = await supabase
+                  const { data, error } = await supabase
                     .from("jobs")
                     .update({
                       subcontractor_id: vendor?.id || null,
                       subcontractor_name: vendor?.name || null,
                     })
-                    .eq("id", id);
+                    .eq("id", id)
+                    .select();
 
-                  if (error) throw error;
+                  if (error) {
+                    console.error("Supabase error details:", {
+                      message: error.message,
+                      details: error.details,
+                      hint: error.hint,
+                      code: error.code,
+                    });
+                    throw error;
+                  }
+
+                  console.log("Subcontractor update successful:", data);
 
                   queryClient.invalidateQueries({ queryKey: ["job", id] });
                   queryClient.invalidateQueries({ queryKey: ["jobs"] });
@@ -926,9 +937,10 @@ const handleActualSave = async (
                       ? `Subcontractor set to ${vendor.name}`
                       : "Subcontractor removed"
                   );
-                } catch (error) {
+                } catch (error: any) {
                   console.error("Error updating subcontractor:", error);
-                  toast.error("Failed to update subcontractor");
+                  const errorMessage = error?.message || "Failed to update subcontractor";
+                  toast.error(`Failed to update subcontractor: ${errorMessage}`);
                 }
               }}
             />
