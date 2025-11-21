@@ -795,7 +795,19 @@ const handleActualSave = async (
 
   // Include material analytic lines from Odoo (costs not yet imported to BOM)
   const materialAnalyticTotal = filteredMaterialAnalyticLines.reduce((sum, line) => sum + Math.abs(line.amount), 0);
-  const materialActualTotal = matchedMaterialActualTotal + unmatchedMaterialActualTotal + materialAnalyticTotal;
+  
+  // DEBUG: Log material cost components
+  console.log('🔍 Material Cost Breakdown:', {
+    matchedMaterialActualTotal,
+    unmatchedMaterialActualTotal,
+    materialAnalyticTotal,
+    bomLinesCount: bomLines?.length || 0,
+    analyticLinesCount: filteredMaterialAnalyticLines.length,
+  });
+  
+  // CRITICAL FIX: Don't add analytic lines to BOM lines (double-counting)
+  // Use ONLY analytic lines as source of truth (manufacturing order components)
+  const materialActualTotal = materialAnalyticTotal;
   const materialRemaining = materialBudgetTotal - materialActualTotal;
   const materialOverBudget = materialRemaining < 0;
 
@@ -808,6 +820,15 @@ const handleActualSave = async (
   const nonMaterialActualTotal = nonMaterialManualTotal + nonMaterialAnalyticTotal;
   const nonMaterialRemaining = nonMaterialBudgetTotal - nonMaterialActualTotal;
   const nonMaterialOverBudget = nonMaterialRemaining < 0;
+  
+  // DEBUG: Log non-material cost components
+  console.log('🔍 Non-Material Cost Breakdown:', {
+    nonMaterialManualTotal,
+    nonMaterialAnalyticTotal,
+    nonMaterialActualTotal,
+    manualCostsCount: costs?.filter(c => !c.is_from_odoo).length || 0,
+    analyticLinesCount: filteredNonMaterialAnalyticLines.length,
+  });
 
   const costAnalysisOverview = useMemo(() => {
     if (!analysis) return null;
