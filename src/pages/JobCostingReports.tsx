@@ -30,7 +30,8 @@ import { ProductCategoryFilter } from "@/components/job-costing/ProductCategoryF
 import { ProductSummaryCell } from "@/components/job-costing/ProductSummaryCell";
 import { VarianceAnalysisCard } from "@/components/job-costing/VarianceAnalysisCard";
 import { CostCategoryChart } from "@/components/job-costing/CostCategoryChart";
-import { useJobsWithInvoicedPOs } from "@/hooks/useJobsWithInvoicedPOs";
+import { useJobsByPOInvoiceStatus } from "@/hooks/useJobsByPOInvoiceStatus";
+import { POInvoiceStatusFilter } from "@/components/job-costing/POInvoiceStatusFilter";
 
 export default function JobCostingReports() {
   const navigate = useNavigate();
@@ -51,10 +52,10 @@ export default function JobCostingReports() {
   const [customers, setCustomers] = useState<string[]>([]); // Changed to array
   const [productCategory, setProductCategory] = useState<string | null>(null); // Changed to string | null
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
-  const [showOnlyInvoicedPOs, setShowOnlyInvoicedPOs] = useState(false);
+  const [poInvoiceStatusFilter, setPoInvoiceStatusFilter] = useState<string | null>(null);
 
-  // Fetch jobs with invoiced POs
-  const { data: invoicedPOsData, isLoading: loadingInvoicedPOs } = useJobsWithInvoicedPOs(jobs);
+  // Fetch jobs grouped by PO invoice status
+  const { data: poInvoiceStatusData, isLoading: loadingPOInvoiceStatus } = useJobsByPOInvoiceStatus(jobs);
 
   // Apply filters
   const filteredJobs = useJobReportsFiltering(jobs, {
@@ -66,8 +67,8 @@ export default function JobCostingReports() {
     subcontractor,
     customers, // Changed from customer
     productCategory,
-    showOnlyInvoicedPOs,
-    jobIdsWithInvoicedPOs: invoicedPOsData?.jobIdsWithInvoicedPOs,
+    poInvoiceStatusFilter,
+    jobIdsByPOInvoiceStatus: poInvoiceStatusData?.jobIdsByStatus,
   });
 
   // Selection helpers
@@ -312,23 +313,20 @@ export default function JobCostingReports() {
               />
             </div>
 
-            <div className="flex items-center space-x-2 pt-6">
-              <Checkbox
-                id="invoiced-pos"
-                checked={showOnlyInvoicedPOs}
-                onCheckedChange={(checked) => setShowOnlyInvoicedPOs(checked as boolean)}
+            <div>
+              <POInvoiceStatusFilter
+                value={poInvoiceStatusFilter}
+                onChange={setPoInvoiceStatusFilter}
+                jobCounts={
+                  poInvoiceStatusData
+                    ? {
+                        no: poInvoiceStatusData.jobIdsByStatus.no.size,
+                        toInvoice: poInvoiceStatusData.jobIdsByStatus.toInvoice.size,
+                        invoiced: poInvoiceStatusData.jobIdsByStatus.invoiced.size,
+                      }
+                    : undefined
+                }
               />
-              <label
-                htmlFor="invoiced-pos"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-              >
-                Show only jobs with invoiced POs
-                {showOnlyInvoicedPOs && invoicedPOsData && (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    ({invoicedPOsData.jobIdsWithInvoicedPOs.size} jobs)
-                  </span>
-                )}
-              </label>
             </div>
           </div>
 

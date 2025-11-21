@@ -11,8 +11,12 @@ export interface JobReportsFilters {
   subcontractor: string | null;
   customers: string[]; // Changed to array for multi-select
   productCategory: string | null; // Changed to support specific products
-  showOnlyInvoicedPOs: boolean; // Filter for jobs with invoiced purchase orders
-  jobIdsWithInvoicedPOs?: Set<string>; // Set of job IDs that have invoiced POs
+  poInvoiceStatusFilter: string | null; // Filter by PO invoice status: 'no', 'to invoice', 'invoiced', or null for all
+  jobIdsByPOInvoiceStatus?: {
+    no: Set<string>;
+    toInvoice: Set<string>;
+    invoiced: Set<string>;
+  }; // Sets of job IDs grouped by PO invoice status
 }
 
 export const useJobReportsFiltering = (
@@ -76,9 +80,16 @@ export const useJobReportsFiltering = (
       // For now, we'll skip specific product filtering at this level
     }
 
-    // 7. Invoiced POs filter
-    if (filters.showOnlyInvoicedPOs && filters.jobIdsWithInvoicedPOs) {
-      filtered = filtered.filter((job) => filters.jobIdsWithInvoicedPOs!.has(job.id));
+    // 7. PO Invoice Status filter
+    if (filters.poInvoiceStatusFilter && filters.jobIdsByPOInvoiceStatus) {
+      const statusKey = filters.poInvoiceStatusFilter === 'to invoice' 
+        ? 'toInvoice' 
+        : filters.poInvoiceStatusFilter as 'no' | 'invoiced';
+      
+      const jobIdsForStatus = filters.jobIdsByPOInvoiceStatus[statusKey];
+      if (jobIdsForStatus) {
+        filtered = filtered.filter((job) => jobIdsForStatus.has(job.id));
+      }
     }
 
     // 8. Search filter
@@ -111,8 +122,8 @@ export const useJobReportsFiltering = (
     filters.subcontractor,
     filters.customers,
     filters.productCategory,
-    filters.showOnlyInvoicedPOs,
-    filters.jobIdsWithInvoicedPOs,
+    filters.poInvoiceStatusFilter,
+    filters.jobIdsByPOInvoiceStatus,
     filters.searchTerm,
     filters.budgetSort,
   ]);
