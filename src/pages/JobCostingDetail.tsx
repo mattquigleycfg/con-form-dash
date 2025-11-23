@@ -771,7 +771,27 @@ const handleActualSave = async (
 
     // Add analytic lines
     filteredNonMaterialAnalyticLines.forEach(line => {
+      // CRITICAL SAFETY CHECK: Only include negative amounts (costs/expenses)
+      // Skip any positive amounts (customer invoices/revenue) that may have slipped through
+      if (line.amount >= 0) {
+        console.warn(`Skipping positive amount analytic line in non-material costs: ${line.name} (${line.amount})`);
+        return;
+      }
+      
+      // Additional check: Filter out invoice-related descriptions
       const desc = line.name.toUpperCase();
+      const isInvoiceRelated = desc.includes('INVOICE') || 
+                               desc.includes('PROGRESS PAYMENT') || 
+                               desc.includes('PAYMENT RECEIVED') ||
+                               desc.includes('CUSTOMER INVOICE') ||
+                               desc.includes('DOWN PAYMENT') ||
+                               desc.includes('DEPOSIT');
+      
+      if (isInvoiceRelated) {
+        console.warn(`Skipping invoice-related analytic line: ${line.name}`);
+        return;
+      }
+      
       let category = 'other';
       
       if (desc.includes('INSTALLATION')) category = 'installation';
@@ -1169,6 +1189,20 @@ const handleActualSave = async (
                       // Positive amounts = customer invoices (revenue), which should NOT be imported as costs
                       if (line.amount >= 0) {
                         console.log(`Skipping customer invoice/revenue line: ${line.name} (amount: ${line.amount})`);
+                        return;
+                      }
+                      
+                      // Additional check: Filter out invoice-related descriptions
+                      const lineNameUpper = (line.name || '').toUpperCase();
+                      const isInvoiceRelated = lineNameUpper.includes('INVOICE') || 
+                                               lineNameUpper.includes('PROGRESS PAYMENT') || 
+                                               lineNameUpper.includes('PAYMENT RECEIVED') ||
+                                               lineNameUpper.includes('CUSTOMER INVOICE') ||
+                                               lineNameUpper.includes('DOWN PAYMENT') ||
+                                               lineNameUpper.includes('DEPOSIT');
+                      
+                      if (isInvoiceRelated) {
+                        console.log(`Skipping invoice-related line: ${line.name}`);
                         return;
                       }
                       

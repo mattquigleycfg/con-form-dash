@@ -21,6 +21,25 @@ export function categorizeAnalyticLine(line: AnalyticLine): 'material' | 'non_ma
   const productName = line.product_id ? line.product_id[1].toUpperCase() : '';
   const fullText = `${description} ${productName}`;
   
+  // CRITICAL: First check if this is a customer invoice/revenue item (should be filtered out upstream)
+  // These patterns indicate revenue items, not costs
+  const revenueKeywords = [
+    'INVOICE',
+    'PROGRESS PAYMENT',
+    'PAYMENT RECEIVED',
+    'CUSTOMER INVOICE',
+    'DOWN PAYMENT',
+    'DEPOSIT'
+  ];
+  
+  for (const keyword of revenueKeywords) {
+    if (fullText.includes(keyword)) {
+      // This is revenue, not a cost - categorize as material to be filtered out
+      // (should already be filtered by amount >= 0 check upstream)
+      return 'material';
+    }
+  }
+  
   // Non-Material patterns (check first - higher priority)
   const nonMaterialKeywords = [
     'LABOUR',
