@@ -19,6 +19,30 @@ import { CostAnalysisCard } from "@/components/job-costing/CostAnalysisCard";
 import { AnalyticLinesTable } from "@/components/job-costing/AnalyticLinesTable";
 import { AnalyticLinesMaterialTable } from "@/components/job-costing/AnalyticLinesMaterialTable";
 import { categorizeAnalyticLine, AnalyticLine } from "@/hooks/useOdooAnalyticLines";
+import { isRevenueAnalyticEntry } from "@/lib/analyticRevenue";
+
+const SERVICE_KEYWORDS = [
+  "INSTALLATION",
+  "FREIGHT",
+  "CRANAGE",
+  "ACCOMMODATION",
+  "TRAVEL",
+  "TRANSPORT",
+  "DELIVERY",
+  "LABOUR",
+  "SERVICE",
+  "SITE INSPECTION",
+  "WORKSHOP LABOUR",
+  "SHOP DRAWING",
+  "MAN DAY",
+  "EXPENSES",
+  "SITE LABOUR"
+];
+
+const isServiceName = (name?: string | null) => {
+  const upper = name?.toUpperCase() || "";
+  return SERVICE_KEYWORDS.some((keyword) => upper.includes(keyword));
+};
 import { BomBreakdownCard } from "@/components/job-costing/BomBreakdownCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -149,29 +173,6 @@ export default function JobCostingDetail() {
     }
     return map;
   }, [saleOrderLines]);
-
-  const SERVICE_KEYWORDS = [
-    "INSTALLATION",
-    "FREIGHT",
-    "CRANAGE",
-    "ACCOMMODATION",
-    "TRAVEL",
-    "TRANSPORT",
-    "DELIVERY",
-    "LABOUR",
-    "SERVICE",
-    "SITE INSPECTION",
-    "WORKSHOP LABOUR",
-    "SHOP DRAWING",
-    "MAN DAY",
-    "EXPENSES",
-    "SITE LABOUR"
-  ];
-
-  const isServiceName = (name?: string | null) => {
-    const upper = name?.toUpperCase() || "";
-    return SERVICE_KEYWORDS.some((keyword) => upper.includes(keyword));
-  };
 
 const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: number | null; quantity?: number | null }) => {
     if (line.total_cost !== undefined && line.total_cost !== null) {
@@ -771,27 +772,17 @@ const handleActualSave = async (
 
     // Add analytic lines
     filteredNonMaterialAnalyticLines.forEach(line => {
-      // CRITICAL SAFETY CHECK: Only include negative amounts (costs/expenses)
-      // Skip any positive amounts (customer invoices/revenue) that may have slipped through
       if (line.amount >= 0) {
-        console.warn(`Skipping positive amount analytic line in non-material costs: ${line.name} (${line.amount})`);
+        console.warn(`Skipping non-material analytic line with positive amount: ${line.name} (${line.amount})`);
         return;
       }
-      
-      // Additional check: Filter out invoice-related descriptions
+
+      if (isRevenueAnalyticEntry(line)) {
+        console.warn(`Skipping revenue analytic line in non-material costs: ${line.name}`);
+        return;
+      }
+
       const desc = line.name.toUpperCase();
-      const isInvoiceRelated = desc.includes('INVOICE') || 
-                               desc.includes('PROGRESS PAYMENT') || 
-                               desc.includes('PAYMENT RECEIVED') ||
-                               desc.includes('CUSTOMER INVOICE') ||
-                               desc.includes('DOWN PAYMENT') ||
-                               desc.includes('DEPOSIT');
-      
-      if (isInvoiceRelated) {
-        console.warn(`Skipping invoice-related analytic line: ${line.name}`);
-        return;
-      }
-      
       let category = 'other';
       
       if (desc.includes('INSTALLATION')) category = 'installation';
@@ -1185,24 +1176,14 @@ const handleActualSave = async (
                     const nonMaterialLines: any[] = [];
                     
                     analysis.analyticLines.forEach(line => {
-                      // CRITICAL: Only import NEGATIVE amounts from analytic accounts (costs/expenses)
-                      // Positive amounts = customer invoices (revenue), which should NOT be imported as costs
+                      // CRITICAL: Only import negative costs and skip invoice related lines
                       if (line.amount >= 0) {
                         console.log(`Skipping customer invoice/revenue line: ${line.name} (amount: ${line.amount})`);
                         return;
                       }
-                      
-                      // Additional check: Filter out invoice-related descriptions
-                      const lineNameUpper = (line.name || '').toUpperCase();
-                      const isInvoiceRelated = lineNameUpper.includes('INVOICE') || 
-                                               lineNameUpper.includes('PROGRESS PAYMENT') || 
-                                               lineNameUpper.includes('PAYMENT RECEIVED') ||
-                                               lineNameUpper.includes('CUSTOMER INVOICE') ||
-                                               lineNameUpper.includes('DOWN PAYMENT') ||
-                                               lineNameUpper.includes('DEPOSIT');
-                      
-                      if (isInvoiceRelated) {
-                        console.log(`Skipping invoice-related line: ${line.name}`);
+
+                      if (isRevenueAnalyticEntry(line)) {
+                        console.log(`Skipping revenue keyword analytic line: ${line.name}`);
                         return;
                       }
                       

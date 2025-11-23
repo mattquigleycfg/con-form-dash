@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Job } from "./useJobs";
 import { AnalyticLine, useOdooAnalyticLines } from "./useOdooAnalyticLines";
 import { useOdooMRP } from "./useOdooMRP";
+import { isRevenueAnalyticEntry } from "@/lib/analyticRevenue";
 
 export interface ComponentCost {
   productId: number;
@@ -58,6 +59,7 @@ export interface CostAnalysis {
   nonMaterialAnalyticLines: AnalyticLine[];
 }
 
+
 export const useJobCostAnalysis = (job: Job | undefined) => {
   // Collect all analytic account IDs (from sale order and project if different)
   const analyticAccountIds = useMemo(() => {
@@ -84,15 +86,16 @@ export const useJobCostAnalysis = (job: Job | undefined) => {
   );
 
   const costAnalyticLines = useMemo(() => {
-    // Filter out customer invoices and only keep actual costs/expenses
-    // In Odoo analytic accounting:
-    // - Negative amounts = Costs (vendor bills, expenses) → Keep these
-    // - Positive amounts = Revenue (customer invoices) → Filter out
     return analyticLines.filter((line) => {
-      // Only keep negative amounts (costs/expenses)
-      if (line.amount >= 0) return false;
-      
-      // Keep this line - it's a genuine cost/expense
+      const amount = Number(line.amount ?? 0);
+      if (!Number.isFinite(amount) || amount >= 0) {
+        return false;
+      }
+
+      if (isRevenueAnalyticEntry(line)) {
+        return false;
+      }
+
       return true;
     });
   }, [analyticLines]);
