@@ -385,6 +385,10 @@ export default function Settings() {
               projectStageId = project.stage_id?.[0] || null;
               projectStageName = project.stage_id?.[1] || null;
               projectManagerName = project.user_id?.[1] || null;
+              
+              if (!projectManagerName) {
+                console.warn(`⚠ No project manager assigned for order ${order.name} (Project: ${project.name})`);
+              }
             }
           }
 

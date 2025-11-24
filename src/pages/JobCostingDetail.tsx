@@ -264,7 +264,7 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
           .eq("odoo_line_id", update.odoo_line_id);
       }
       
-      // 2. Update project stage
+      // 2. Update project stage and project manager
       if (job.analytic_account_id) {
         const { data: projects } = await supabase.functions.invoke("odoo-query", {
           body: {
@@ -272,7 +272,7 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
             method: "search_read",
             args: [
               [["analytic_account_id", "=", job.analytic_account_id]],
-              ["id", "name", "stage_id"],
+              ["id", "name", "stage_id", "user_id"],
             ],
           },
         });
@@ -281,10 +281,14 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
         if (projectData && projectData.length > 0) {
           const project = projectData[0];
           const stageName = project.stage_id?.[1] || null;
+          const projectManagerName = project.user_id?.[1] || null;
           
           await supabase
             .from("jobs")
-            .update({ project_stage_name: stageName })
+            .update({ 
+              project_stage_name: stageName,
+              project_manager_name: projectManagerName 
+            })
             .eq("id", id);
         }
       }

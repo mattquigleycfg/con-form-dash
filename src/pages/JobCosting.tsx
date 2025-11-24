@@ -282,7 +282,9 @@ export default function JobCosting() {
               // Capture project manager (user_id from project.project)
               if (project.user_id && project.user_id[1]) {
                 projectManagerName = project.user_id[1];
-                logger.info(`Found project manager for SO ${order.name}: ${projectManagerName}`);
+                logger.info(`✓ Found project manager for SO ${order.name}: ${projectManagerName}`);
+              } else {
+                logger.warn(`⚠ No project manager assigned for SO ${order.name} (Project ID: ${projectId})`);
               }
               
               // Capture project's analytic account (may differ from sale order)
@@ -776,7 +778,7 @@ export default function JobCosting() {
               method: "search_read",
               args: [
                 [["analytic_account_id", "=", job.analytic_account_id]],
-                ["id", "name"],
+                ["id", "name", "user_id", "stage_id"],
               ],
             },
           });
@@ -786,7 +788,10 @@ export default function JobCosting() {
             continue;
           }
 
-          const projectId = projects[0].id;
+          const project = projects[0];
+          const projectId = project.id;
+          const projectManagerName = project.user_id?.[1] || null;
+          const projectStageFromProject = project.stage_id?.[1] || null;
 
           // Find tasks for this project
           const { data: tasks } = await supabase.functions.invoke("odoo-query", {
@@ -816,16 +821,40 @@ export default function JobCosting() {
               const taskStageId = mainTask.stage_id[0];
               const taskStageName = mainTask.stage_id[1];
 
-              // Update job with task stage
+              // Update job with task stage and project manager
               await supabase
                 .from("jobs")
                 .update({
                   project_stage_id: taskStageId,
                   project_stage_name: taskStageName,
+                  project_manager_name: projectManagerName,
                 })
                 .eq("id", job.id);
 
-              logger.info(`Updated stage for ${job.sale_order_name}: ${taskStageName}`);
+              logger.info(`Updated stage for ${job.sale_order_name}: ${taskStageName}${projectManagerName ? ` | PM: ${projectManagerName}` : ''}`);
+              updatedCount++;
+            } else if (projectStageFromProject) {
+              // If no tasks, use project stage directly
+              await supabase
+                .from("jobs")
+                .update({
+                  project_stage_name: projectStageFromProject,
+                  project_manager_name: projectManagerName,
+                })
+                .eq("id", job.id);
+              
+              logger.info(`Updated project stage for ${job.sale_order_name}: ${projectStageFromProject}${projectManagerName ? ` | PM: ${projectManagerName}` : ''}`);
+              updatedCount++;
+            } else if (projectManagerName && projectManagerName !== job.project_manager_name) {
+              // Even if no stage update, update project manager if it changed
+              await supabase
+                .from("jobs")
+                .update({
+                  project_manager_name: projectManagerName,
+                })
+                .eq("id", job.id);
+              
+              logger.info(`Updated project manager for ${job.sale_order_name}: ${projectManagerName}`);
               updatedCount++;
             }
           }
