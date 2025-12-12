@@ -21,6 +21,16 @@ import JobCosting from "./pages/JobCosting";
 import JobCostingDetail from "./pages/JobCostingDetail";
 import JobCostingReports from "./pages/JobCostingReports";
 import NotFound from "./pages/NotFound";
+// KPI Pages
+import KPIOverview from "./pages/kpis";
+import SalesKPIs from "./pages/kpis/SalesKPIs";
+import MarketingKPIs from "./pages/kpis/MarketingKPIs";
+import EngineeringKPIs from "./pages/kpis/EngineeringKPIs";
+import ConstructionKPIs from "./pages/kpis/ConstructionKPIs";
+import ProductionKPIs from "./pages/kpis/ProductionKPIs";
+import DesignKPIs from "./pages/kpis/DesignKPIs";
+import FinanceKPIs from "./pages/kpis/FinanceKPIs";
+import HRKPIs from "./pages/kpis/HRKPIs";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,6 +66,16 @@ const App = () => (
               <Route path="/job-costing" element={<ProtectedRoute><JobCosting /></ProtectedRoute>} />
               <Route path="/job-costing/reports" element={<ProtectedRoute><JobCostingReports /></ProtectedRoute>} />
               <Route path="/job-costing/:id" element={<ProtectedRoute><JobCostingDetail /></ProtectedRoute>} />
+              {/* KPI Routes */}
+              <Route path="/kpis" element={<ProtectedRoute><KPIOverview /></ProtectedRoute>} />
+              <Route path="/kpis/sales" element={<ProtectedRoute><SalesKPIs /></ProtectedRoute>} />
+              <Route path="/kpis/marketing" element={<ProtectedRoute><MarketingKPIs /></ProtectedRoute>} />
+              <Route path="/kpis/engineering" element={<ProtectedRoute><EngineeringKPIs /></ProtectedRoute>} />
+              <Route path="/kpis/construction" element={<ProtectedRoute><ConstructionKPIs /></ProtectedRoute>} />
+              <Route path="/kpis/production" element={<ProtectedRoute><ProductionKPIs /></ProtectedRoute>} />
+              <Route path="/kpis/design" element={<ProtectedRoute><DesignKPIs /></ProtectedRoute>} />
+              <Route path="/kpis/finance" element={<ProtectedRoute><FinanceKPIs /></ProtectedRoute>} />
+              <Route path="/kpis/hr" element={<ProtectedRoute><HRKPIs /></ProtectedRoute>} />
               <Route path="/calculator" element={<ProtectedRoute><Calculator /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />

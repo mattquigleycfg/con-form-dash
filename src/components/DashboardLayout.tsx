@@ -1,5 +1,5 @@
 import { ReactNode, useState, useEffect } from "react";
-import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt, Briefcase } from "lucide-react";
+import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt, Briefcase, Gauge, Megaphone, Compass, HardHat, Factory, Palette, Wallet, UserCog } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -61,6 +61,20 @@ const navigation: NavSection[] = [
     ],
   },
   {
+    title: "KPIs",
+    items: [
+      { name: "Overview", href: "/kpis", icon: Gauge },
+      { name: "Sales", href: "/kpis/sales", icon: TrendingUp },
+      { name: "Marketing", href: "/kpis/marketing", icon: Megaphone },
+      { name: "Engineering", href: "/kpis/engineering", icon: Compass },
+      { name: "Construction", href: "/kpis/construction", icon: HardHat },
+      { name: "Production", href: "/kpis/production", icon: Factory },
+      { name: "Design", href: "/kpis/design", icon: Palette },
+      { name: "Finance", href: "/kpis/finance", icon: Wallet },
+      { name: "HR", href: "/kpis/hr", icon: UserCog },
+    ],
+  },
+  {
     title: "Tools",
     items: [
       { name: "Estimator", href: "/calculator", icon: Receipt },
@@ -83,6 +97,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (path.startsWith("/accounting")) return "Accounting";
     if (path.startsWith("/project") || path.startsWith("/job-costing")) return "Project";
     if (path.startsWith("/helpdesk")) return "Helpdesk";
+    if (path.startsWith("/kpis")) return "KPIs";
     if (path.startsWith("/calculator")) return "Tools";
     if (path.startsWith("/settings")) return "Settings";
     return "Sales"; // Default for /, /pipeline, /targets, /analytics, /team
@@ -95,6 +110,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     Accounting: activeSection === "Accounting",
     Project: activeSection === "Project",
     Helpdesk: activeSection === "Helpdesk",
+    KPIs: activeSection === "KPIs",
     Tools: activeSection === "Tools",
     Settings: activeSection === "Settings",
   }));
@@ -107,6 +123,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       Accounting: section === "Accounting",
       Project: section === "Project",
       Helpdesk: section === "Helpdesk",
+      KPIs: section === "KPIs",
       Tools: section === "Tools",
       Settings: section === "Settings",
     });

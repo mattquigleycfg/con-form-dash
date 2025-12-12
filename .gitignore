@@ -52,3 +52,4 @@ supabase/migrations/20251112000001_create_ai_job_insights.sql
 README.md
 DEPLOYMENT_DIAGNOSIS.md
 supabase/migrations/20250122000000_fix_cost_type_constraint.sql
+supabase/migrations/20251212000001_create_kpi_entries.sql
