@@ -760,12 +760,12 @@ const handleActualSave = async (
       other: []
     };
 
-    // Add manual costs (excluding is_from_odoo to prevent double-counting with analytic lines)
-    costs?.filter(c => !c.is_from_odoo).forEach(cost => {
+    // Add all database costs (both manual and imported from Odoo)
+    costs?.forEach(cost => {
       const category = cost.cost_type || 'other';
       if (categories[category]) {
         categories[category].push({
-          id: `manual-${cost.id}`,
+          id: cost.id, // Use actual database ID (not prefixed)
           description: cost.description || '-',
           amount: cost.amount,
           is_from_odoo: cost.is_from_odoo || false,
@@ -828,20 +828,20 @@ const handleActualSave = async (
 
   // Calculate non-material totals
   const nonMaterialBudgetTotal = budgetLines?.filter(isServiceBudgetLine).reduce((sum, line) => sum + (line.subtotal ?? 0), 0) || 0;
-  // Include both manually entered costs AND non-material analytic lines from Odoo
-  // NOTE: Only count manual costs (not imported from Odoo) to avoid double-counting
-  const nonMaterialManualTotal = costs?.filter(c => !c.is_from_odoo).reduce((sum, cost) => sum + cost.amount, 0) || 0;
+  // Include all database costs (both manual and imported)
+  const nonMaterialDatabaseTotal = costs?.reduce((sum, cost) => sum + cost.amount, 0) || 0;
+  // Add live analytic lines that haven't been imported yet
   const nonMaterialAnalyticTotal = filteredNonMaterialAnalyticLines.reduce((sum, line) => sum + Math.abs(line.amount), 0);
-  const nonMaterialActualTotal = nonMaterialManualTotal + nonMaterialAnalyticTotal;
+  const nonMaterialActualTotal = nonMaterialDatabaseTotal + nonMaterialAnalyticTotal;
   const nonMaterialRemaining = nonMaterialBudgetTotal - nonMaterialActualTotal;
   const nonMaterialOverBudget = nonMaterialRemaining < 0;
   
   // DEBUG: Log non-material cost components
   console.log('🔍 Non-Material Cost Breakdown:', {
-    nonMaterialManualTotal,
+    nonMaterialDatabaseTotal,
     nonMaterialAnalyticTotal,
     nonMaterialActualTotal,
-    manualCostsCount: costs?.filter(c => !c.is_from_odoo).length || 0,
+    databaseCostsCount: costs?.length || 0,
     analyticLinesCount: filteredNonMaterialAnalyticLines.length,
   });
 
@@ -1722,20 +1722,36 @@ const handleActualSave = async (
                                       >
                                         <Trash2 className="h-4 w-4" />
                                       </Button>
-                                    ) : !cost.is_from_odoo ? (
+                                    ) : (
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        onClick={(e) => {
+                                        onClick={async (e) => {
                                           e.stopPropagation();
-                                          if (confirm("Delete this cost?")) {
-                                            deleteCost(parseInt(cost.id.replace('manual-', '')));
+                                          const confirmMessage = cost.is_from_odoo 
+                                            ? "Delete this imported cost?\n\nNote: This only removes it from the dashboard. The entry still exists in Odoo."
+                                            : "Delete this cost?";
+                                          if (confirm(confirmMessage)) {
+                                            try {
+                                              deleteCost(cost.id);
+                                              // Wait a moment for mutation to complete
+                                              await new Promise(resolve => setTimeout(resolve, 300));
+                                              // Recalculate totals
+                                              await recalculateJobTotals();
+                                              // Refresh queries
+                                              queryClient.invalidateQueries({ queryKey: ["job", id] });
+                                              queryClient.invalidateQueries({ queryKey: ["jobs"] });
+                                              toast.success("Cost deleted successfully");
+                                            } catch (error) {
+                                              console.error("Error deleting cost:", error);
+                                              toast.error("Failed to delete cost");
+                                            }
                                           }
                                         }}
                                       >
                                         <Trash2 className="h-4 w-4" />
                                       </Button>
-                                    ) : null}
+                                    )}
                                   </TableCell>
                                 </TableRow>
                               ))}
