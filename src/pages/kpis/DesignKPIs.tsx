@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Palette, FileText, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import { Palette, FileText, AlertTriangle, CheckCircle, Clock, TrendingDown, Activity } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import {
 import { useKPIData } from "@/hooks/useKPIData";
 import { useManualKPIs } from "@/hooks/useManualKPIs";
 import { useDepartmentHelpdeskKPIs } from "@/hooks/useHelpdeskKPIs";
+import { useShopDrawingCycleTime } from "@/hooks/useShopDrawingCycleTime";
 import { getDateRange } from "@/utils/dateHelpers";
 
 export default function DesignKPIs() {
@@ -23,6 +24,7 @@ export default function DesignKPIs() {
   
   const { metrics, isLoading, helpdeskTeams } = useKPIData({ department: "design", period });
   const { data: helpdeskData, refetch } = useDepartmentHelpdeskKPIs("design", period);
+  const { data: cycleTimeData, isLoading: isCycleTimeLoading, refetch: refetchCycleTime } = useShopDrawingCycleTime();
   const { start, end } = getDateRange(period);
   const { saveEntry, isSaving, getLatestEntry } = useManualKPIs("design", start, end);
 
@@ -50,8 +52,11 @@ export default function DesignKPIs() {
           icon={Palette}
           period={period}
           onPeriodChange={setPeriod}
-          onRefresh={() => refetch()}
-          isRefreshing={isLoading}
+          onRefresh={() => {
+            refetch();
+            refetchCycleTime();
+          }}
+          isRefreshing={isLoading || isCycleTimeLoading}
         />
 
         {/* Shop Drawings Section */}
@@ -87,13 +92,17 @@ export default function DesignKPIs() {
             />
             <KPICard
               title="Avg Turnaround"
-              value={getLatestEntry("shop_drawing_avg_hours")?.value ?? 0}
+              value={isCycleTimeLoading ? 0 : Math.round(cycleTimeData?.overallAvgHours ?? 0)}
               suffix=" hrs"
               status="neutral"
-              source="manual"
+              source="odoo"
               icon={Clock}
               trendInverse
-              onEdit={() => setEditingMetric({ key: "shop_drawing_avg_hours", label: "Avg Turnaround (hrs)" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  {cycleTimeData?.completedTicketsCount ?? 0} completed tickets
+                </p>
+              }
             />
           </KPIGrid>
         </KPISection>
@@ -120,6 +129,68 @@ export default function DesignKPIs() {
               source={getMetric("shop_drawings_closed_ytd")?.source}
             />
           </KPIGrid>
+        </KPISection>
+
+        {/* Cycle Time Analysis */}
+        <KPISection 
+          title="Cycle Time Analysis" 
+          description="Shop drawing lifecycle from creation to completion"
+        >
+          {isCycleTimeLoading ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Loading cycle time data...
+            </div>
+          ) : !cycleTimeData?.hasStageHistory ? (
+            <Card className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-foreground mb-1">Limited Stage History Available</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Detailed stage tracking data is not available. Showing overall cycle time only.
+                      Stage history will be tracked going forward.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <KPIGrid columns={5}>
+              {cycleTimeData?.stages.map((stage) => {
+                // Map stage names to icons
+                const getStageIcon = (stageName: string) => {
+                  if (stageName.includes("New")) return FileText;
+                  if (stageName.includes("Revision")) return TrendingDown;
+                  if (stageName.includes("Progress")) return Activity;
+                  if (stageName.includes("Review")) return CheckCircle;
+                  if (stageName.includes("Complete")) return CheckCircle;
+                  return Clock;
+                };
+
+                return (
+                  <KPICard
+                    key={stage.stageName}
+                    title={stage.stageName}
+                    value={Math.round(stage.avgHours)}
+                    suffix=" hrs"
+                    status="neutral"
+                    source="odoo"
+                    icon={getStageIcon(stage.stageName)}
+                    trendInverse
+                    footer={
+                      <p className="text-xs text-muted-foreground">
+                        {stage.ticketCount} ticket{stage.ticketCount !== 1 ? 's' : ''}
+                        {stage.minHours > 0 && stage.maxHours > 0 && (
+                          <> • {Math.round(stage.minHours)}-{Math.round(stage.maxHours)}h</>
+                        )}
+                      </p>
+                    }
+                  />
+                );
+              })}
+            </KPIGrid>
+          )}
         </KPISection>
 
         {/* Team Performance Summary */}
