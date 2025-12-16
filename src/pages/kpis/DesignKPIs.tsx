@@ -24,7 +24,7 @@ export default function DesignKPIs() {
   
   const { metrics, isLoading, helpdeskTeams } = useKPIData({ department: "design", period });
   const { data: helpdeskData, refetch } = useDepartmentHelpdeskKPIs("design", period);
-  const { data: cycleTimeData, isLoading: isCycleTimeLoading, refetch: refetchCycleTime } = useShopDrawingCycleTime();
+  const { data: cycleTimeData, isLoading: isCycleTimeLoading, refetch: refetchCycleTime } = useShopDrawingCycleTime(period);
   const { start, end } = getDateRange(period);
   const { saveEntry, isSaving, getLatestEntry } = useManualKPIs("design", start, end);
 
@@ -82,13 +82,21 @@ export default function DesignKPIs() {
             />
             <KPICard
               title="DIFOT %"
-              value={getMetric("shop_drawing_difot")?.value ?? 0}
+              value={isCycleTimeLoading ? 0 : Math.round((cycleTimeData?.qualityMetrics.difotRate ?? 0) * 10) / 10}
               suffix="%"
               target={95}
-              status={getMetric("shop_drawing_difot")?.status ?? "neutral"}
-              source="manual"
+              status={
+                !isCycleTimeLoading && cycleTimeData?.qualityMetrics.difotRate 
+                  ? cycleTimeData.qualityMetrics.difotRate >= 95 ? "green" : cycleTimeData.qualityMetrics.difotRate >= 85 ? "amber" : "red"
+                  : "neutral"
+              }
+              source="odoo"
               icon={CheckCircle}
-              onEdit={() => setEditingMetric({ key: "shop_drawing_difot", label: "Shop Drawing DIFOT %" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  {cycleTimeData?.qualityMetrics.onTimeDeliveries ?? 0} on-time / {cycleTimeData?.qualityMetrics.totalCompleted ?? 0} total
+                </p>
+              }
             />
             <KPICard
               title="Avg Turnaround"
@@ -232,22 +240,28 @@ export default function DesignKPIs() {
           <KPIGrid columns={2}>
             <KPICard
               title="Revision Rate %"
-              value={getLatestEntry("revision_rate")?.value ?? 0}
+              value={isCycleTimeLoading ? 0 : Math.round((cycleTimeData?.qualityMetrics.revisionRate ?? 0) * 10) / 10}
               suffix="%"
               status="neutral"
-              source="manual"
+              source="odoo"
               trendInverse
-              footer={<p className="text-xs text-muted-foreground">Lower is better</p>}
-              onEdit={() => setEditingMetric({ key: "revision_rate", label: "Revision Rate %" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  {cycleTimeData?.qualityMetrics.revisionsRequired ?? 0} of {cycleTimeData?.qualityMetrics.totalCompleted ?? 0} tickets • Lower is better
+                </p>
+              }
             />
             <KPICard
               title="First-Time Pass Rate %"
-              value={getLatestEntry("first_time_pass_rate")?.value ?? 0}
+              value={isCycleTimeLoading ? 0 : Math.round((cycleTimeData?.qualityMetrics.firstTimePassRate ?? 0) * 10) / 10}
               suffix="%"
               status="neutral"
-              source="manual"
-              footer={<p className="text-xs text-muted-foreground">Higher is better</p>}
-              onEdit={() => setEditingMetric({ key: "first_time_pass_rate", label: "First-Time Pass Rate %" })}
+              source="odoo"
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  {(cycleTimeData?.qualityMetrics.totalCompleted ?? 0) - (cycleTimeData?.qualityMetrics.revisionsRequired ?? 0)} of {cycleTimeData?.qualityMetrics.totalCompleted ?? 0} tickets • Higher is better
+                </p>
+              }
             />
           </KPIGrid>
         </KPISection>

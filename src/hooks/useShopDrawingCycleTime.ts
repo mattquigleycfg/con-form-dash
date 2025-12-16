@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateWorkingHours } from "@/utils/workingHours";
+import { getDateRange, type DatePeriod } from "@/utils/dateHelpers";
 
 export interface StageMetrics {
   stageName: string;
@@ -8,6 +9,16 @@ export interface StageMetrics {
   minHours: number;
   maxHours: number;
   ticketCount: number;
+}
+
+export interface QualityMetrics {
+  revisionRate: number;        // % of drawings that needed revisions
+  firstTimePassRate: number;   // % of drawings passed without revisions
+  difotRate: number;           // % of drawings delivered on time
+  totalCompleted: number;      // Total completed in period
+  revisionsRequired: number;   // Count with revisions
+  onTimeDeliveries: number;    // Count delivered on time
+  lateDeliveries: number;      // Count delivered late
 }
 
 export interface TicketWithHistory {
@@ -34,6 +45,7 @@ export interface ShopDrawingCycleTimeData {
   stages: StageMetrics[];
   recentTickets: TicketWithHistory[];
   hasStageHistory: boolean; // Whether we have detailed stage tracking
+  qualityMetrics: QualityMetrics;
 }
 
 interface HelpdeskTicketWithMessages {
@@ -44,6 +56,8 @@ interface HelpdeskTicketWithMessages {
   create_date: string;
   close_date: string | false;
   message_ids?: number[];
+  sla_deadline?: string | false;
+  sla_reached_late?: boolean;
 }
 
 interface MailMessage {
@@ -89,6 +103,8 @@ async function fetchShopDrawingsTickets(): Promise<HelpdeskTicketWithMessages[]>
           "create_date",
           "close_date",
           "message_ids",
+          "sla_deadline",
+          "sla_reached_late",
         ],
       ],
       kwargs: {
@@ -236,6 +252,74 @@ function calculateStageTransitions(
   return transitions;
 }
 
+function calculateQualityMetrics(
+  ticketsWithHistory: TicketWithHistory[],
+  rawTickets: HelpdeskTicketWithMessages[]
+): QualityMetrics {
+  // Only consider closed tickets
+  const closedTickets = ticketsWithHistory.filter((t) => t.closeDate);
+  const totalCompleted = closedTickets.length;
+
+  if (totalCompleted === 0) {
+    return {
+      revisionRate: 0,
+      firstTimePassRate: 0,
+      difotRate: 0,
+      totalCompleted: 0,
+      revisionsRequired: 0,
+      onTimeDeliveries: 0,
+      lateDeliveries: 0,
+    };
+  }
+
+  // Calculate Revision Rate
+  const ticketsWithRevisions = closedTickets.filter((ticket) =>
+    ticket.stageTransitions.some((st) => st.stageName.includes("Revision Required"))
+  );
+  const revisionsRequired = ticketsWithRevisions.length;
+  const revisionRate = (revisionsRequired / totalCompleted) * 100;
+
+  // Calculate First-Time Pass Rate
+  const firstTimePassRate = 100 - revisionRate;
+
+  // Calculate DIFOT Rate
+  let onTimeDeliveries = 0;
+  let lateDeliveries = 0;
+
+  closedTickets.forEach((ticket) => {
+    const rawTicket = rawTickets.find((t) => t.id === ticket.id);
+    
+    // Priority 1: Use Odoo SLA if available
+    if (rawTicket && typeof rawTicket.sla_reached_late === 'boolean') {
+      if (!rawTicket.sla_reached_late) {
+        onTimeDeliveries++;
+      } else {
+        lateDeliveries++;
+      }
+    } 
+    // Priority 2: Fallback to custom SLA (40 working hours)
+    else if (ticket.totalCycleTimeHours > 0) {
+      if (ticket.totalCycleTimeHours <= 40) {
+        onTimeDeliveries++;
+      } else {
+        lateDeliveries++;
+      }
+    }
+  });
+
+  const difotRate = totalCompleted > 0 ? (onTimeDeliveries / totalCompleted) * 100 : 0;
+
+  return {
+    revisionRate: Math.round(revisionRate * 10) / 10, // Round to 1 decimal
+    firstTimePassRate: Math.round(firstTimePassRate * 10) / 10,
+    difotRate: Math.round(difotRate * 10) / 10,
+    totalCompleted,
+    revisionsRequired,
+    onTimeDeliveries,
+    lateDeliveries,
+  };
+}
+
 function calculateCycleTimeMetrics(
   tickets: HelpdeskTicketWithMessages[],
   ticketsWithHistory: TicketWithHistory[]
@@ -297,6 +381,9 @@ function calculateCycleTimeMetrics(
 
   const hasStageHistory = ticketsWithHistory.some((t) => t.stageTransitions.length > 1);
 
+  // Calculate quality metrics
+  const qualityMetrics = calculateQualityMetrics(ticketsWithHistory, tickets);
+
   return {
     overallAvgHours,
     overallMedianHours,
@@ -304,15 +391,24 @@ function calculateCycleTimeMetrics(
     stages,
     recentTickets,
     hasStageHistory,
+    qualityMetrics,
   };
 }
 
-export function useShopDrawingCycleTime() {
+export function useShopDrawingCycleTime(period: DatePeriod = "month") {
   return useQuery({
-    queryKey: ["shop-drawing-cycle-time"],
+    queryKey: ["shop-drawing-cycle-time", period],
     queryFn: async (): Promise<ShopDrawingCycleTimeData> => {
       // Step 1: Fetch tickets
-      const tickets = await fetchShopDrawingsTickets();
+      const allTickets = await fetchShopDrawingsTickets();
+      
+      // Step 2: Filter tickets by period (based on close_date)
+      const periodRange = getDateRange(period);
+      const tickets = allTickets.filter((ticket) => {
+        if (!ticket.close_date) return false;
+        const closeDate = new Date(ticket.close_date);
+        return closeDate >= periodRange.start && closeDate <= periodRange.end;
+      });
       
       if (tickets.length === 0) {
         return {
@@ -322,14 +418,23 @@ export function useShopDrawingCycleTime() {
           stages: [],
           recentTickets: [],
           hasStageHistory: false,
+          qualityMetrics: {
+            revisionRate: 0,
+            firstTimePassRate: 0,
+            difotRate: 0,
+            totalCompleted: 0,
+            revisionsRequired: 0,
+            onTimeDeliveries: 0,
+            lateDeliveries: 0,
+          },
         };
       }
 
-      // Step 2: Try to fetch message tracking data
+      // Step 3: Try to fetch message tracking data
       const ticketIds = tickets.map((t) => t.id);
       const messages = await fetchMessagesForTickets(ticketIds);
       
-      // Step 3: Fetch tracking values if we have messages
+      // Step 4: Fetch tracking values if we have messages
       const trackingIds: number[] = [];
       messages.forEach((msg) => {
         if (msg.tracking_value_ids && Array.isArray(msg.tracking_value_ids)) {
@@ -341,7 +446,7 @@ export function useShopDrawingCycleTime() {
         ? await fetchTrackingValues(trackingIds)
         : [];
 
-      // Step 4: Build ticket history
+      // Step 5: Build ticket history
       const ticketsWithHistory: TicketWithHistory[] = tickets.map((ticket) => {
         let stageTransitions: StageTransition[] = [];
         
@@ -377,7 +482,7 @@ export function useShopDrawingCycleTime() {
         };
       });
 
-      // Step 5: Calculate metrics
+      // Step 6: Calculate metrics
       return calculateCycleTimeMetrics(tickets, ticketsWithHistory);
     },
     staleTime: 1000 * 60 * 10, // 10 minutes
