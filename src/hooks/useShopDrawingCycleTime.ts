@@ -1,4 +1,4 @@
-import { useQuery } from "@tantml:query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateWorkingHours } from "@/utils/workingHours";
 import { getDateRange, type DatePeriod } from "@/utils/dateHelpers";

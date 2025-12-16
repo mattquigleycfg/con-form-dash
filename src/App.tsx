@@ -31,6 +31,7 @@ import ProductionKPIs from "./pages/kpis/ProductionKPIs";
 import DesignKPIs from "./pages/kpis/DesignKPIs";
 import FinanceKPIs from "./pages/kpis/FinanceKPIs";
 import HRKPIs from "./pages/kpis/HRKPIs";
+import AccountingKPIs from "./pages/kpis/AccountingKPIs";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,6 +77,7 @@ const App = () => (
               <Route path="/kpis/design" element={<ProtectedRoute><DesignKPIs /></ProtectedRoute>} />
               <Route path="/kpis/finance" element={<ProtectedRoute><FinanceKPIs /></ProtectedRoute>} />
               <Route path="/kpis/hr" element={<ProtectedRoute><HRKPIs /></ProtectedRoute>} />
+              <Route path="/kpis/accounting" element={<ProtectedRoute><AccountingKPIs /></ProtectedRoute>} />
               <Route path="/calculator" element={<ProtectedRoute><Calculator /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />

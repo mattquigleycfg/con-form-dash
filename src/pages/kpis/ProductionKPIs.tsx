@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Factory, Package, Scissors, AlertTriangle, CheckCircle, Clock, Wrench, ShieldAlert } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
@@ -18,16 +18,30 @@ import {
 import { useKPIData } from "@/hooks/useKPIData";
 import { useManualKPIs } from "@/hooks/useManualKPIs";
 import { useDepartmentHelpdeskKPIs } from "@/hooks/useHelpdeskKPIs";
+import { useProductionHelpdeskKPIs } from "@/hooks/useProductionHelpdeskKPIs";
+import { AdvancedFilterBar } from "@/components/filters/AdvancedFilterBar";
+import { MetresRolledTable } from "@/components/production/MetresRolledTable";
 import { getDateRange } from "@/utils/dateHelpers";
+import type { AdvancedFilters } from "@/types/filters";
 
 export default function ProductionKPIs() {
   const [period, setPeriod] = useState<DatePeriod>("month");
   const [editingMetric, setEditingMetric] = useState<{ key: string; label: string } | null>(null);
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>({});
   
   const { metrics, isLoading, helpdeskTeams } = useKPIData({ department: "production", period });
   const { data: helpdeskData, refetch } = useDepartmentHelpdeskKPIs("production", period);
+  const { data: packoutData, isLoading: isPackoutLoading, refetch: refetchPackout } = useProductionHelpdeskKPIs("Pack out Requests", period, advancedFilters);
+  const { data: kitData, isLoading: isKitLoading } = useProductionHelpdeskKPIs("Kit Orders", period, advancedFilters);
   const { start, end } = getDateRange(period);
   const { saveEntry, isSaving, getLatestEntry } = useManualKPIs("production", start, end);
+
+  // Available teams for filter
+  const availableTeams = useMemo(() => [
+    { value: "Pack out Requests", label: "Pack out Requests" },
+    { value: "Kit Orders", label: "Kit Orders" },
+    { value: "Span+", label: "Span+" }
+  ], []);
 
   const handleSaveManual = async (data: ManualEntryData) => {
     await saveEntry({
@@ -82,8 +96,18 @@ export default function ProductionKPIs() {
           icon={Factory}
           period={period}
           onPeriodChange={setPeriod}
-          onRefresh={() => refetch()}
-          isRefreshing={isLoading}
+          onRefresh={() => {
+            refetch();
+            refetchPackout();
+          }}
+          isRefreshing={isLoading || isPackoutLoading}
+        />
+
+        {/* Advanced Filters */}
+        <AdvancedFilterBar
+          storageKey="production_kpis"
+          availableTeams={availableTeams}
+          onFiltersChange={setAdvancedFilters}
         />
 
         {/* Packouts Section */}
@@ -118,13 +142,21 @@ export default function ProductionKPIs() {
             />
             <KPICard
               title="DIFOT %"
-              value={getMetric("packout_difot")?.value ?? 0}
+              value={isPackoutLoading ? 0 : Math.round((packoutData?.qualityMetrics.difotRate ?? 0) * 10) / 10}
               suffix="%"
               target={95}
-              status={getMetric("packout_difot")?.status ?? "neutral"}
-              source={getMetric("packout_difot")?.source}
+              status={
+                !isPackoutLoading && packoutData?.qualityMetrics.difotRate 
+                  ? packoutData.qualityMetrics.difotRate >= 95 ? "green" : packoutData.qualityMetrics.difotRate >= 85 ? "amber" : "red"
+                  : "neutral"
+              }
+              source="odoo"
               icon={CheckCircle}
-              onEdit={() => setEditingMetric({ key: "packout_difot", label: "Packout DIFOT %" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  {packoutData?.qualityMetrics.onTimeDeliveries ?? 0} on-time / {packoutData?.qualityMetrics.totalCompleted ?? 0} total
+                </p>
+              }
             />
           </KPIGrid>
 
@@ -209,20 +241,7 @@ export default function ProductionKPIs() {
 
         {/* Metres Rolled Section */}
         <KPISection title="Metres Rolled by Machine" description="Manual entry for production output tracking">
-          <KPITable
-            columns={metresRolledColumns}
-            rows={metresRolledRows}
-            onEdit={(rowId, columnKey, value) => {
-              const machine = rowId.replace(/_/g, " ");
-              saveEntry({
-                department: "production",
-                metricKey: `metres_${rowId}_${columnKey}`,
-                value,
-                periodStart: start,
-                periodEnd: end,
-              });
-            }}
-          />
+          <MetresRolledTable period={activePeriod} />
         </KPISection>
 
         {/* Safety Section */}

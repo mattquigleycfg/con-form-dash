@@ -91,10 +91,18 @@ const DEPARTMENTS: DepartmentSummary[] = [
   {
     key: "finance",
     name: "Finance",
-    description: "Invoicing and accounting",
+    description: "Financial metrics and budgeting",
     icon: Wallet,
     href: "/kpis/finance",
     primaryMetrics: ["invoices_open", "ar_days", "actual_gp_ytd"],
+  },
+  {
+    key: "accounting",
+    name: "Accounting",
+    description: "AR/AP, invoicing, and account applications",
+    icon: Wallet,
+    href: "/kpis/accounting",
+    primaryMetrics: ["total_invoices", "ar_days", "account_applications_open"],
   },
   {
     key: "hr",
