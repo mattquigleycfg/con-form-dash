@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getDateRange, toOdooDateTime, type DatePeriod } from "@/utils/dateHelpers";
 import { getTeamsForDepartment, type Department } from "@/utils/helpdeskTeamMapping";
+import { calculateWorkingHours } from "@/utils/workingHours";
 
 export interface HelpdeskTicketRaw {
   id: number;
@@ -131,28 +132,20 @@ function calculateTeamMetrics(
     return new Date(t.sla_deadline) < now;
   });
 
-  // Calculate average close time
+  // Calculate average close time (working hours only)
   const closeTimesHours = closedTickets
     .filter((t) => t.create_date && t.close_date)
-    .map((t) => {
-      const created = new Date(t.create_date);
-      const closed = new Date(t.close_date as string);
-      return (closed.getTime() - created.getTime()) / (1000 * 60 * 60);
-    });
+    .map((t) => calculateWorkingHours(t.create_date, t.close_date as string));
 
   const avgCloseHours =
     closeTimesHours.length > 0
       ? closeTimesHours.reduce((a, b) => a + b, 0) / closeTimesHours.length
       : null;
 
-  // Calculate average assignment time
+  // Calculate average assignment time (working hours only)
   const assignTimesHours = teamTickets
     .filter((t) => t.create_date && t.assign_date)
-    .map((t) => {
-      const created = new Date(t.create_date);
-      const assigned = new Date(t.assign_date as string);
-      return (assigned.getTime() - created.getTime()) / (1000 * 60 * 60);
-    });
+    .map((t) => calculateWorkingHours(t.create_date, t.assign_date as string));
 
   const avgAssignHours =
     assignTimesHours.length > 0

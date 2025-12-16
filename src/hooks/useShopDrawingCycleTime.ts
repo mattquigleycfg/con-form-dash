@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { calculateWorkingHours } from "@/utils/workingHours";
 
 export interface StageMetrics {
   stageName: string;
@@ -221,7 +222,7 @@ function calculateStageTransitions(
     const enteredAt = current.timestamp;
     const exitedAt = next ? next.timestamp : null;
     const durationHours = exitedAt 
-      ? (new Date(exitedAt).getTime() - new Date(enteredAt).getTime()) / (1000 * 60 * 60)
+      ? calculateWorkingHours(enteredAt, exitedAt)
       : null;
 
     transitions.push({
@@ -351,9 +352,7 @@ export function useShopDrawingCycleTime() {
         
         // Fallback: Use create_date and close_date only
         if (stageTransitions.length === 0 && ticket.close_date) {
-          const hours = 
-            (new Date(ticket.close_date).getTime() - new Date(ticket.create_date).getTime()) / 
-            (1000 * 60 * 60);
+          const hours = calculateWorkingHours(ticket.create_date, ticket.close_date);
           
           stageTransitions = [{
             stageName: ticket.stage_id[1],
@@ -364,8 +363,7 @@ export function useShopDrawingCycleTime() {
         }
 
         const totalCycleTimeHours = ticket.close_date
-          ? (new Date(ticket.close_date).getTime() - new Date(ticket.create_date).getTime()) / 
-            (1000 * 60 * 60)
+          ? calculateWorkingHours(ticket.create_date, ticket.close_date)
           : 0;
 
         return {

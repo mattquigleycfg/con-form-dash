@@ -39,9 +39,11 @@ This document describes how to test and validate the Shop Drawing cycle time tra
 
 3. **Cycle time calculations**
    - For each completed ticket, verify:
-     - `totalCycleTimeHours` = (close_date - create_date) in hours
+     - `totalCycleTimeHours` = working hours between create_date and close_date
+     - Working hours = Monday-Friday, 9 AM - 5 PM (8 hours per day)
+     - Weekends and after-hours time are excluded
      - Stage transitions are ordered chronologically
-     - Duration calculations are correct
+     - Duration calculations use working hours, not total elapsed hours
 
 4. **UI displays correctly**
    - "Avg Turnaround" card shows numeric hours value
@@ -62,7 +64,10 @@ This document describes how to test and validate the Shop Drawing cycle time tra
 2. **Data Accuracy**
    - Pick a known completed Shop Drawing ticket from Odoo UI
    - Note its create_date and close_date
-   - Calculate expected hours: (close - create) / 3600000
+   - Calculate expected working hours:
+     * Count only Monday-Friday between the dates
+     * For each working day, count only hours between 9 AM - 5 PM (8 hours max)
+     * Example: Monday 2 PM to Tuesday 11 AM = 3 hours (Mon) + 2 hours (Tue) = 5 working hours
    - Compare with displayed "Avg Turnaround"
 
 3. **Refresh Functionality**
@@ -129,6 +134,10 @@ This document describes how to test and validate the Shop Drawing cycle time tra
 3. **Stage Name Changes**: Stage names are hardcoded. If Odoo stage names change, the mapping needs updating in `STAGE_ORDER` constant.
 
 4. **Performance**: With large datasets (1000+ tickets), initial load may take 5-10 seconds. Consider adding pagination if needed.
+
+5. **Working Hours Configuration**: Working hours are set to 9 AM - 5 PM, Monday-Friday (8 hours/day). This is hardcoded but can be customized in `src/utils/workingHours.ts` if your organization has different working hours.
+
+6. **Time Zones**: All timestamps are assumed to be in the same timezone as the Odoo server. Cross-timezone calculations are not currently supported.
 
 ## Validation Scenarios
 
