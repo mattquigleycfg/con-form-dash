@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tantml:query";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateWorkingHours } from "@/utils/workingHours";
 import { getDateRange, type DatePeriod } from "@/utils/dateHelpers";
+import { applyAdvancedFilters, type AdvancedFilters } from "@/utils/filterHelpers";
+import type { AdvancedFilters as AdvancedFiltersType } from "@/types/filters";
 
 export interface StageMetrics {
   stageName: string;
@@ -395,20 +397,28 @@ function calculateCycleTimeMetrics(
   };
 }
 
-export function useShopDrawingCycleTime(period: DatePeriod = "month") {
+export function useShopDrawingCycleTime(
+  period: DatePeriod = "month",
+  advancedFilters?: AdvancedFiltersType
+) {
   return useQuery({
-    queryKey: ["shop-drawing-cycle-time", period],
+    queryKey: ["shop-drawing-cycle-time", period, advancedFilters],
     queryFn: async (): Promise<ShopDrawingCycleTimeData> => {
       // Step 1: Fetch tickets
       const allTickets = await fetchShopDrawingsTickets();
       
       // Step 2: Filter tickets by period (based on close_date)
       const periodRange = getDateRange(period);
-      const tickets = allTickets.filter((ticket) => {
+      let tickets = allTickets.filter((ticket) => {
         if (!ticket.close_date) return false;
         const closeDate = new Date(ticket.close_date);
         return closeDate >= periodRange.start && closeDate <= periodRange.end;
       });
+
+      // Step 2.5: Apply advanced filters if provided
+      if (advancedFilters && Object.keys(advancedFilters).length > 0) {
+        tickets = applyAdvancedFilters(tickets, advancedFilters);
+      }
       
       if (tickets.length === 0) {
         return {

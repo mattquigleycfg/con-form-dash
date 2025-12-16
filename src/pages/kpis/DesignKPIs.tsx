@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Palette, FileText, AlertTriangle, CheckCircle, Clock, TrendingDown, Activity } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
@@ -16,17 +16,25 @@ import { useKPIData } from "@/hooks/useKPIData";
 import { useManualKPIs } from "@/hooks/useManualKPIs";
 import { useDepartmentHelpdeskKPIs } from "@/hooks/useHelpdeskKPIs";
 import { useShopDrawingCycleTime } from "@/hooks/useShopDrawingCycleTime";
+import { AdvancedFilterBar } from "@/components/filters/AdvancedFilterBar";
 import { getDateRange } from "@/utils/dateHelpers";
+import type { AdvancedFilters } from "@/types/filters";
 
 export default function DesignKPIs() {
   const [period, setPeriod] = useState<DatePeriod>("month");
   const [editingMetric, setEditingMetric] = useState<{ key: string; label: string } | null>(null);
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>({});
   
   const { metrics, isLoading, helpdeskTeams } = useKPIData({ department: "design", period });
   const { data: helpdeskData, refetch } = useDepartmentHelpdeskKPIs("design", period);
-  const { data: cycleTimeData, isLoading: isCycleTimeLoading, refetch: refetchCycleTime } = useShopDrawingCycleTime(period);
+  const { data: cycleTimeData, isLoading: isCycleTimeLoading, refetch: refetchCycleTime } = useShopDrawingCycleTime(period, advancedFilters);
   const { start, end } = getDateRange(period);
   const { saveEntry, isSaving, getLatestEntry } = useManualKPIs("design", start, end);
+
+  // Available teams for filter
+  const availableTeams = useMemo(() => [
+    { value: "Shop Drawings", label: "Shop Drawings" }
+  ], []);
 
   const handleSaveManual = async (data: ManualEntryData) => {
     await saveEntry({
@@ -57,6 +65,13 @@ export default function DesignKPIs() {
             refetchCycleTime();
           }}
           isRefreshing={isLoading || isCycleTimeLoading}
+        />
+
+        {/* Advanced Filters */}
+        <AdvancedFilterBar
+          storageKey="design_kpis"
+          availableTeams={availableTeams}
+          onFiltersChange={setAdvancedFilters}
         />
 
         {/* Shop Drawings Section */}
