@@ -52,23 +52,25 @@ async function fetchAccountApplicationTickets(
     body: {
       model: "helpdesk.ticket",
       method: "search_read",
-      domain: [
-        ["ticket_type_id", "=", ACCOUNT_APP_TICKET_TYPE_ID],
-        ["create_date", ">=", startDate],
-        ["create_date", "<=", endDate],
-      ],
-      fields: [
-        "id",
-        "name",
-        "stage_id",
-        "create_date",
-        "close_date",
-        "date_deadline",
-        "user_id",
-        "team_id",
-        "priority",
-        "ticket_type_id",
-        "sla_reached_late",
+      args: [
+        [
+          ["ticket_type_id", "=", ACCOUNT_APP_TICKET_TYPE_ID],
+          ["create_date", ">=", startDate],
+          ["create_date", "<=", endDate],
+        ],
+        [
+          "id",
+          "name",
+          "stage_id",
+          "create_date",
+          "close_date",
+          "date_deadline",
+          "user_id",
+          "team_id",
+          "priority",
+          "ticket_type_id",
+          "sla_reached_late",
+        ],
       ],
     },
   });
@@ -84,17 +86,19 @@ async function fetchStageHistory(ticketIds: number[]): Promise<StageTransition[]
     body: {
       model: "mail.tracking.value",
       method: "search_read",
-      domain: [
-        ["mail_message_id.model", "=", "helpdesk.ticket"],
-        ["mail_message_id.res_id", "in", ticketIds],
-        ["field_id.name", "=", "stage_id"],
-      ],
-      fields: [
-        "id",
-        "mail_message_id",
-        "old_value_char",
-        "new_value_char",
-        "create_date",
+      args: [
+        [
+          ["mail_message_id.model", "=", "helpdesk.ticket"],
+          ["mail_message_id.res_id", "in", ticketIds],
+          ["field_id.name", "=", "stage_id"],
+        ],
+        [
+          "id",
+          "mail_message_id",
+          "old_value_char",
+          "new_value_char",
+          "create_date",
+        ],
       ],
     },
   });
@@ -104,13 +108,15 @@ async function fetchStageHistory(ticketIds: number[]): Promise<StageTransition[]
   const trackingValues = data?.result || [];
   const transitions: StageTransition[] = [];
 
-  for (const tracking of trackingValues) {
+    for (const tracking of trackingValues) {
     const { data: messageData } = await supabase.functions.invoke("odoo-query", {
       body: {
         model: "mail.message",
         method: "search_read",
-        domain: [["id", "=", tracking.mail_message_id[0]]],
-        fields: ["res_id", "date"],
+        args: [
+          [["id", "=", tracking.mail_message_id[0]]],
+          ["res_id", "date"],
+        ],
       },
     });
 

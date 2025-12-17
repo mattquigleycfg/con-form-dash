@@ -5,8 +5,12 @@ import { calculateWorkingHours } from "@/utils/workingHours";
 export interface AccountingMetrics {
   arDays: number;          // Average days to receive payment (Accounts Receivable)
   apDays: number;          // Average days to pay suppliers (Accounts Payable)
-  invoicesOpen: number;    // Count of open customer invoices
-  invoicesClosedYTD: number; // Count of invoices closed this year
+  invoicing: {
+    totalInvoices: number;        // Total customer invoices
+    paidInvoices: number;         // Paid customer invoices
+    outstandingInvoices: number;  // Outstanding customer invoices
+    totalRevenue: number;         // Total revenue from all invoices
+  };
   totalARAmount: number;   // Total outstanding receivables
   totalAPAmount: number;   // Total outstanding payables
 }
@@ -178,33 +182,39 @@ function calculateAPDays(bills: AccountMove[]): number {
  * Calculate invoicing metrics
  */
 function calculateInvoicingMetrics(invoices: AccountMove[]) {
-  const now = new Date();
-  const yearStart = new Date(now.getFullYear(), 0, 1);
+  const totalInvoices = invoices.length;
+  
+  const paidInvoices = invoices.filter(
+    (inv) => inv.invoice_payment_state === "paid"
+  ).length;
 
-  const invoicesOpen = invoices.filter(
+  const outstandingInvoices = invoices.filter(
     (inv) => inv.invoice_payment_state !== "paid"
   ).length;
 
-  const invoicesClosedYTD = invoices.filter((inv) => {
-    if (inv.invoice_payment_state !== "paid") return false;
-    if (!inv.invoice_date) return false;
-    const invoiceDate = new Date(inv.invoice_date);
-    return invoiceDate >= yearStart;
-  }).length;
+  const totalRevenue = invoices.reduce((sum, inv) => sum + inv.amount_total, 0);
 
   const totalARAmount = invoices
     .filter((inv) => inv.invoice_payment_state !== "paid")
     .reduce((sum, inv) => sum + inv.amount_residual, 0);
 
-  return { invoicesOpen, invoicesClosedYTD, totalARAmount };
+  return { 
+    totalInvoices,
+    paidInvoices, 
+    outstandingInvoices, 
+    totalRevenue,
+    totalARAmount 
+  };
 }
 
 /**
  * Main hook to fetch accounting metrics
+ * Note: startDate and endDate parameters are accepted but currently not used
+ * The hook fetches data from 2024-01-01 onwards
  */
-export function useOdooAccounting() {
+export function useOdooAccounting(startDate?: string, endDate?: string) {
   return useQuery({
-    queryKey: ["odoo-accounting"],
+    queryKey: ["odoo-accounting", startDate, endDate],
     queryFn: async (): Promise<AccountingMetrics> => {
       // Fetch customer invoices and supplier bills in parallel
       const [customerInvoices, supplierBills] = await Promise.all([
@@ -215,7 +225,7 @@ export function useOdooAccounting() {
       // Calculate metrics
       const arDays = calculateARDays(customerInvoices);
       const apDays = calculateAPDays(supplierBills);
-      const { invoicesOpen, invoicesClosedYTD, totalARAmount } = calculateInvoicingMetrics(customerInvoices);
+      const { totalInvoices, paidInvoices, outstandingInvoices, totalRevenue, totalARAmount } = calculateInvoicingMetrics(customerInvoices);
 
       const totalAPAmount = supplierBills
         .filter((bill) => bill.invoice_payment_state !== "paid")
@@ -224,8 +234,12 @@ export function useOdooAccounting() {
       return {
         arDays,
         apDays,
-        invoicesOpen,
-        invoicesClosedYTD,
+        invoicing: {
+          totalInvoices,
+          paidInvoices,
+          outstandingInvoices,
+          totalRevenue,
+        },
         totalARAmount,
         totalAPAmount,
       };
