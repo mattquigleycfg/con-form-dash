@@ -241,7 +241,7 @@ export default function ProductionKPIs() {
 
         {/* Metres Rolled Section */}
         <KPISection title="Metres Rolled by Machine" description="Manual entry for production output tracking">
-          <MetresRolledTable period={activePeriod} />
+          <MetresRolledTable period={period} />
         </KPISection>
 
         {/* Safety Section */}
