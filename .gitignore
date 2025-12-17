@@ -54,3 +54,4 @@ DEPLOYMENT_DIAGNOSIS.md
 supabase/migrations/20250122000000_fix_cost_type_constraint.sql
 supabase/migrations/20251212000001_create_kpi_entries.sql
 docs/PRODUCTION_DESIGN_KPI_ENHANCEMENTS.md
+docs/FINANCE_KPI_INTEGRATION.md

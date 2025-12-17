@@ -18,6 +18,8 @@ import {
 import { useKPIData } from "@/hooks/useKPIData";
 import { useManualKPIs } from "@/hooks/useManualKPIs";
 import { useDepartmentHelpdeskKPIs } from "@/hooks/useHelpdeskKPIs";
+import { useOdooAccounting } from "@/hooks/useOdooAccounting";
+import { useAccountApplications } from "@/hooks/useAccountApplications";
 import { getDateRange } from "@/utils/dateHelpers";
 
 export default function FinanceKPIs() {
@@ -28,6 +30,12 @@ export default function FinanceKPIs() {
   const { data: helpdeskData, refetch } = useDepartmentHelpdeskKPIs("finance", period);
   const { start, end } = getDateRange(period);
   const { saveEntry, isSaving, getLatestEntry } = useManualKPIs("finance", start, end);
+  
+  // Odoo Accounting Integration
+  const { data: accountingData, isLoading: accountingLoading, refetch: refetchAccounting } = useOdooAccounting(start, end);
+  const { data: accountAppData, isLoading: appsLoading, refetch: refetchAccountApps } = useAccountApplications(start, end);
+  
+  const isLoadingAll = isLoading || accountingLoading || appsLoading;
 
   const handleSaveManual = async (data: ManualEntryData) => {
     await saveEntry({
@@ -107,81 +115,138 @@ export default function FinanceKPIs() {
           icon={Wallet}
           period={period}
           onPeriodChange={setPeriod}
-          onRefresh={() => refetch()}
-          isRefreshing={isLoading}
+          onRefresh={() => {
+            refetch();
+            refetchAccounting();
+            refetchAccountApps();
+          }}
+          isRefreshing={isLoadingAll}
         />
 
         {/* Invoicing Section */}
-        <KPISection title="Invoicing" description="Invoice processing from Odoo Helpdesk">
-          <KPIGrid columns={2}>
+        <KPISection title="Invoicing" description="Invoice data from Odoo Accounting">
+          <KPIGrid columns={3}>
             <KPICard
-              title="Invoices Open"
-              value={getMetric("invoices_open")?.value ?? 0}
-              status={getMetric("invoices_open")?.status ?? "neutral"}
-              source={getMetric("invoices_open")?.source}
+              title="Total Invoices"
+              value={accountingData?.invoicing.totalInvoices ?? 0}
+              status="neutral"
+              source="odoo"
               icon={FileText}
-              trendInverse
-              onEdit={() => setEditingMetric({ key: "invoices_open", label: "Invoices Open" })}
             />
             <KPICard
-              title="Invoices Closed YTD"
-              value={getMetric("invoices_closed_ytd")?.value ?? 0}
-              status="neutral"
-              source={getMetric("invoices_closed_ytd")?.source}
+              title="Paid Invoices"
+              value={accountingData?.invoicing.paidInvoices ?? 0}
+              status="positive"
+              source="odoo"
+              icon={FileText}
+            />
+            <KPICard
+              title="Outstanding Invoices"
+              value={accountingData?.invoicing.outstandingInvoices ?? 0}
+              status={
+                (accountingData?.invoicing.outstandingInvoices ?? 0) > 10
+                  ? "warning"
+                  : "neutral"
+              }
+              source="odoo"
+              icon={FileText}
+              trendInverse
+            />
+          </KPIGrid>
+          <KPIGrid columns={1} className="mt-4">
+            <KPICard
+              title="Total Revenue"
+              value={`$${((accountingData?.invoicing.totalRevenue ?? 0) / 1000).toFixed(0)}k`}
+              status="positive"
+              source="odoo"
+              icon={DollarSign}
             />
           </KPIGrid>
         </KPISection>
 
         {/* Account Applications Section */}
-        <KPISection title="Account Applications" description="Credit application processing">
-          <KPIGrid columns={2}>
+        <KPISection title="Account Applications" description="Credit application processing from Odoo Helpdesk">
+          <KPIGrid columns={3}>
             <KPICard
-              title="Applications Open"
-              value={getMetric("account_apps_open")?.value ?? 0}
-              status={getMetric("account_apps_open")?.status ?? "neutral"}
-              source={getMetric("account_apps_open")?.source}
+              title="Total Applications"
+              value={accountAppData?.totalTickets ?? 0}
+              status="neutral"
+              source="odoo"
               icon={FileText}
-              trendInverse
-              onEdit={() => setEditingMetric({ key: "account_apps_open", label: "Account Applications Open" })}
             />
             <KPICard
-              title="Applications Urgent"
-              value={getMetric("account_apps_urgent")?.value ?? 0}
-              status={getMetric("account_apps_urgent")?.status ?? "neutral"}
-              source={getMetric("account_apps_urgent")?.source}
-              icon={AlertTriangle}
+              title="Applications Open"
+              value={(accountAppData?.totalTickets ?? 0) - (accountAppData?.completedTickets ?? 0)}
+              status={
+                ((accountAppData?.totalTickets ?? 0) - (accountAppData?.completedTickets ?? 0)) > 5
+                  ? "warning"
+                  : "neutral"
+              }
+              source="odoo"
+              icon={FileText}
               trendInverse
-              onEdit={() => setEditingMetric({ key: "account_apps_urgent", label: "Account Applications Urgent" })}
+            />
+            <KPICard
+              title="Completed"
+              value={accountAppData?.completedTickets ?? 0}
+              status="positive"
+              source="odoo"
+              icon={FileText}
             />
           </KPIGrid>
         </KPISection>
 
         {/* AR/AP Section */}
-        <KPISection title="Accounts Receivable / Payable" description="Cash flow metrics">
-          <KPIGrid columns={2}>
+        <KPISection title="Accounts Receivable / Payable" description="Cash flow metrics from Odoo Accounting">
+          <KPIGrid columns={3}>
             <KPICard
               title="AR Days"
-              value={getMetric("ar_days")?.value ?? 0}
+              value={Math.round(accountingData?.arDays ?? 0)}
               suffix=" days"
-              target={45}
-              status={getMetric("ar_days")?.status ?? "neutral"}
-              source="manual"
+              target={30}
+              status={
+                (accountingData?.arDays ?? 0) <= 30
+                  ? "positive"
+                  : (accountingData?.arDays ?? 0) <= 45
+                  ? "warning"
+                  : "negative"
+              }
+              source="odoo"
               icon={Clock}
               trendInverse
               footer={<p className="text-xs text-muted-foreground">Avg days to receive payment</p>}
-              onEdit={() => setEditingMetric({ key: "ar_days", label: "AR Days" })}
             />
             <KPICard
               title="AP Days"
-              value={getMetric("ap_days")?.value ?? 0}
+              value={Math.round(accountingData?.apDays ?? 0)}
               suffix=" days"
               target={30}
-              status={getMetric("ap_days")?.status ?? "neutral"}
-              source="manual"
+              status={
+                (accountingData?.apDays ?? 0) <= 30
+                  ? "positive"
+                  : (accountingData?.apDays ?? 0) <= 45
+                  ? "warning"
+                  : "negative"
+              }
+              source="odoo"
               icon={Clock}
               trendInverse
               footer={<p className="text-xs text-muted-foreground">Avg days to pay suppliers</p>}
-              onEdit={() => setEditingMetric({ key: "ap_days", label: "AP Days" })}
+            />
+            <KPICard
+              title="Cash Conversion Cycle"
+              value={`${Math.round((accountingData?.arDays ?? 0) - (accountingData?.apDays ?? 0))} days`}
+              status={
+                ((accountingData?.arDays ?? 0) - (accountingData?.apDays ?? 0)) <= 15
+                  ? "positive"
+                  : ((accountingData?.arDays ?? 0) - (accountingData?.apDays ?? 0)) <= 30
+                  ? "warning"
+                  : "negative"
+              }
+              source="odoo"
+              icon={TrendingUp}
+              trendInverse
+              footer={<p className="text-xs text-muted-foreground">AR Days - AP Days</p>}
             />
           </KPIGrid>
         </KPISection>
