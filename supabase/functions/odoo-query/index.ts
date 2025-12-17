@@ -97,9 +97,10 @@ serve(async (req) => {
     const ok = queryResponse.ok && queryData && typeof queryData === 'object' && 'result' in queryData;
     
     console.log('Odoo query response status:', queryResponse.status);
-    console.log('Odoo query result:', ok && queryData.result ? 'success' : 'failed');
+    console.log('Odoo query result:', ok ? `success (${Array.isArray(queryData.result) ? queryData.result.length : 'non-array'} items)` : 'failed');
 
-    if (!ok || !queryData.result) {
+    // Check if response is OK and has 'result' property (even if result is empty array or null)
+    if (!ok) {
       const errorMsg = (queryData && (queryData.error?.data?.message || queryData.error?.message)) || 'Odoo returned no result';
       const errorDetails = {
         message: errorMsg,

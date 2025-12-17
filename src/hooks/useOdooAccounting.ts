@@ -41,37 +41,46 @@ interface AccountPayment {
  * Fetch customer invoices (AR)
  */
 async function fetchCustomerInvoices(): Promise<AccountMove[]> {
-  const { data, error } = await supabase.functions.invoke("odoo-query", {
-    body: {
-      model: "account.move",
-      method: "search_read",
-      args: [
-        [
-          ["move_type", "=", "out_invoice"],
-          ["state", "=", "posted"],
-          ["invoice_date", ">=", "2024-01-01"],
-        ],
-        [
-          "id",
-          "name",
-          "move_type",
-          "state",
-          "invoice_date",
-          "invoice_date_due",
-          "invoice_payment_state",
-          "amount_total",
-          "amount_residual",
-          "payment_state",
-        ],
+  const requestBody = {
+    model: "account.move",
+    method: "search_read",
+    args: [
+      [
+        ["move_type", "=", "out_invoice"],
+        ["state", "=", "posted"],
+        ["invoice_date", ">=", "2024-01-01"],
       ],
-      kwargs: {
-        order: "invoice_date desc",
-        limit: 1000,
-      },
+      [
+        "id",
+        "name",
+        "move_type",
+        "state",
+        "invoice_date",
+        "invoice_date_due",
+        "invoice_payment_state",
+        "amount_total",
+        "amount_residual",
+        "payment_state",
+      ],
+    ],
+    kwargs: {
+      order: "invoice_date desc",
+      limit: 1000,
     },
+  };
+  
+  console.log("fetchCustomerInvoices request:", JSON.stringify(requestBody, null, 2));
+  
+  const { data, error } = await supabase.functions.invoke("odoo-query", {
+    body: requestBody,
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error("fetchCustomerInvoices error:", error);
+    throw error;
+  }
+  
+  console.log("fetchCustomerInvoices success:", data ? `${data.length} invoices` : 'no data');
   return data as AccountMove[];
 }
 
@@ -79,37 +88,46 @@ async function fetchCustomerInvoices(): Promise<AccountMove[]> {
  * Fetch supplier bills (AP)
  */
 async function fetchSupplierBills(): Promise<AccountMove[]> {
-  const { data, error } = await supabase.functions.invoke("odoo-query", {
-    body: {
-      model: "account.move",
-      method: "search_read",
-      args: [
-        [
-          ["move_type", "=", "in_invoice"],
-          ["state", "=", "posted"],
-          ["invoice_date", ">=", "2024-01-01"],
-        ],
-        [
-          "id",
-          "name",
-          "move_type",
-          "state",
-          "invoice_date",
-          "invoice_date_due",
-          "invoice_payment_state",
-          "amount_total",
-          "amount_residual",
-          "payment_state",
-        ],
+  const requestBody = {
+    model: "account.move",
+    method: "search_read",
+    args: [
+      [
+        ["move_type", "=", "in_invoice"],
+        ["state", "=", "posted"],
+        ["invoice_date", ">=", "2024-01-01"],
       ],
-      kwargs: {
-        order: "invoice_date desc",
-        limit: 1000,
-      },
+      [
+        "id",
+        "name",
+        "move_type",
+        "state",
+        "invoice_date",
+        "invoice_date_due",
+        "invoice_payment_state",
+        "amount_total",
+        "amount_residual",
+        "payment_state",
+      ],
+    ],
+    kwargs: {
+      order: "invoice_date desc",
+      limit: 1000,
     },
+  };
+  
+  console.log("fetchSupplierBills request:", JSON.stringify(requestBody, null, 2));
+  
+  const { data, error } = await supabase.functions.invoke("odoo-query", {
+    body: requestBody,
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error("fetchSupplierBills error:", error);
+    throw error;
+  }
+  
+  console.log("fetchSupplierBills success:", data ? `${data.length} bills` : 'no data');
   return data as AccountMove[];
 }
 
