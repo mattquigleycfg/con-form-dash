@@ -88,9 +88,29 @@ function calculateTeamMetrics(
   teamName: string,
   period: DatePeriod
 ): TeamKPIMetrics {
-  const teamTickets = tickets.filter(
-    (t) => t.team_id && t.team_id[1] === teamName
-  );
+  // Normalize team name for flexible matching (case-insensitive, trim spaces, handle hyphens)
+  const normalizeTeamName = (name: string) => 
+    name.toLowerCase().trim().replace(/[-\s]+/g, ' ');
+
+  const normalizedSearchName = normalizeTeamName(teamName);
+
+  const teamTickets = tickets.filter((t) => {
+    if (!t.team_id) return false;
+    const odooTeamName = t.team_id[1];
+    const normalizedOdooName = normalizeTeamName(odooTeamName);
+    return normalizedOdooName === normalizedSearchName;
+  });
+
+  // DEBUG: Log Pack out Requests specifically
+  if (teamName.includes("Pack out") || teamName.includes("Packout")) {
+    console.log(`🎯 "${teamName}" tickets found:`, teamTickets.length);
+    if (teamTickets.length > 0) {
+      console.log(`✅ Matching Odoo team name:`, teamTickets[0].team_id[1]);
+      console.log(`Sample ticket:`, teamTickets[0]);
+    } else {
+      console.log(`❌ No tickets found for "${teamName}"`);
+    }
+  }
   
   const now = new Date();
   const weekRange = getDateRange("week", now);
@@ -101,6 +121,11 @@ function calculateTeamMetrics(
   const openTickets = teamTickets.filter(
     (t) => t.active && !t.close_date
   );
+
+  // DEBUG: Log Pack out Requests open tickets
+  if (teamName === "Pack out Requests") {
+    console.log(`📂 Pack out Requests OPEN tickets:`, openTickets.length);
+  }
 
   // Closed tickets
   const closedTickets = teamTickets.filter((t) => t.close_date);
@@ -197,6 +222,10 @@ export function useHelpdeskKPIs(period: DatePeriod = "month") {
           teamNames.add(t.team_id[1]);
         }
       });
+
+      // DEBUG: Log all team names found in Odoo
+      console.log("🔍 Teams found in Odoo:", Array.from(teamNames).sort());
+      console.log("📊 Total tickets fetched:", tickets.length);
 
       // Calculate metrics for each team
       const teams: TeamKPIMetrics[] = Array.from(teamNames).map((teamName) =>

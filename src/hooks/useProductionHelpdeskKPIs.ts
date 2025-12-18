@@ -40,13 +40,13 @@ const TEAM_SLA_HOURS: Record<string, number> = {
 };
 
 async function fetchTeamTickets(teamName: string): Promise<HelpdeskTicketWithSLA[]> {
+  // Fetch all tickets and filter client-side for flexible team name matching
   const { data, error } = await supabase.functions.invoke("odoo-query", {
     body: {
       model: "helpdesk.ticket",
       method: "search_read",
       args: [
         [
-          ["team_id.name", "=", teamName],
           ["create_date", ">=", "2024-01-01"],
         ],
         [
@@ -70,7 +70,23 @@ async function fetchTeamTickets(teamName: string): Promise<HelpdeskTicketWithSLA
   });
 
   if (error) throw error;
-  return data as HelpdeskTicketWithSLA[];
+
+  // Filter by team name with flexible matching (case-insensitive, handles hyphens/spaces)
+  const normalizeTeamName = (name: string) => 
+    name.toLowerCase().trim().replace(/[-\s]+/g, ' ');
+
+  const normalizedSearchName = normalizeTeamName(teamName);
+
+  const filtered = (data as HelpdeskTicketWithSLA[]).filter((ticket) => {
+    if (!ticket.team_id) return false;
+    const odooTeamName = ticket.team_id[1];
+    const normalizedOdooName = normalizeTeamName(odooTeamName);
+    return normalizedOdooName === normalizedSearchName;
+  });
+
+  console.log(`🎯 Production KPI: "${teamName}" found ${filtered.length} tickets`);
+  
+  return filtered;
 }
 
 function calculateProductionQualityMetrics(
