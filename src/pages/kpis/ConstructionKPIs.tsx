@@ -15,6 +15,8 @@ import {
 import { useKPIData } from "@/hooks/useKPIData";
 import { useManualKPIs } from "@/hooks/useManualKPIs";
 import { useDepartmentHelpdeskKPIs } from "@/hooks/useHelpdeskKPIs";
+import { useConstructionLiveProjects } from "@/hooks/useConstructionLiveProjects";
+import { useConstructionProjectPerformance } from "@/hooks/useConstructionProjectPerformance";
 import { getDateRange } from "@/utils/dateHelpers";
 
 export default function ConstructionKPIs() {
@@ -23,6 +25,8 @@ export default function ConstructionKPIs() {
   
   const { metrics, isLoading, helpdeskTeams } = useKPIData({ department: "construction", period });
   const { data: helpdeskData, refetch } = useDepartmentHelpdeskKPIs("construction", period);
+  const { data: liveProjectsData, isLoading: isLiveProjectsLoading, refetch: refetchLiveProjects } = useConstructionLiveProjects();
+  const { data: performanceData, isLoading: isPerformanceLoading, refetch: refetchPerformance } = useConstructionProjectPerformance(period);
   const { start, end } = getDateRange(period);
   const { saveEntry, isSaving, getLatestEntry } = useManualKPIs("construction", start, end);
 
@@ -50,8 +54,12 @@ export default function ConstructionKPIs() {
           icon={HardHat}
           period={period}
           onPeriodChange={setPeriod}
-          onRefresh={() => refetch()}
-          isRefreshing={isLoading}
+          onRefresh={() => {
+            refetch();
+            refetchLiveProjects();
+            refetchPerformance();
+          }}
+          isRefreshing={isLoading || isLiveProjectsLoading || isPerformanceLoading}
         />
 
         {/* Contracts Section */}
@@ -92,36 +100,52 @@ export default function ConstructionKPIs() {
           <KPIGrid columns={4}>
             <KPICard
               title="NSW Projects"
-              value={getMetric("live_projects_nsw")?.value ?? 0}
+              value={isLiveProjectsLoading ? 0 : (liveProjectsData?.nswProjects ?? 0)}
               status="neutral"
-              source="manual"
+              source="odoo"
               icon={MapPin}
-              onEdit={() => setEditingMetric({ key: "live_projects_nsw", label: "Live Projects NSW" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  Closed Won / Not Invoiced
+                </p>
+              }
             />
             <KPICard
               title="VIC Projects"
-              value={getMetric("live_projects_vic")?.value ?? 0}
+              value={isLiveProjectsLoading ? 0 : (liveProjectsData?.vicProjects ?? 0)}
               status="neutral"
-              source="manual"
+              source="odoo"
               icon={MapPin}
-              onEdit={() => setEditingMetric({ key: "live_projects_vic", label: "Live Projects VIC" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  Closed Won / Not Invoiced
+                </p>
+              }
             />
             <KPICard
               title="QLD Projects"
-              value={getMetric("live_projects_qld")?.value ?? 0}
+              value={isLiveProjectsLoading ? 0 : (liveProjectsData?.qldProjects ?? 0)}
               status="neutral"
-              source="manual"
+              source="odoo"
               icon={MapPin}
-              onEdit={() => setEditingMetric({ key: "live_projects_qld", label: "Live Projects QLD" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  Closed Won / Not Invoiced
+                </p>
+              }
             />
             <KPICard
               title="Total $ Value"
-              value={getMetric("live_projects_value")?.value ?? 0}
+              value={isLiveProjectsLoading ? 0 : Math.round(liveProjectsData?.totalValue ?? 0)}
               prefix="$"
               status="neutral"
-              source="manual"
+              source="odoo"
               icon={DollarSign}
-              onEdit={() => setEditingMetric({ key: "live_projects_value", label: "Live Projects $ Value" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  Sum of all live projects
+                </p>
+              }
             />
           </KPIGrid>
         </KPISection>
@@ -131,33 +155,47 @@ export default function ConstructionKPIs() {
           <KPIGrid columns={3}>
             <KPICard
               title="Project DIFOT %"
-              value={getMetric("project_difot")?.value ?? 0}
+              value={isPerformanceLoading ? 0 : Math.round((performanceData?.difotRate ?? 0) * 10) / 10}
               suffix="%"
               target={95}
-              status={getMetric("project_difot")?.status ?? "neutral"}
-              source="manual"
+              status={
+                !isPerformanceLoading && performanceData?.difotRate
+                  ? performanceData.difotRate >= 95 ? "green" : performanceData.difotRate >= 85 ? "amber" : "red"
+                  : "neutral"
+              }
+              source="calculated"
               icon={CheckCircle}
-              onEdit={() => setEditingMetric({ key: "project_difot", label: "Project DIFOT %" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  {performanceData?.onTimeProjects ?? 0} on-time / {performanceData?.totalClosedProjects ?? 0} closed
+                </p>
+              }
             />
             <KPICard
               title="Closed Within Budget"
-              value={getMetric("closed_within_budget")?.value ?? 0}
+              value={isPerformanceLoading ? 0 : Math.round(performanceData?.closedWithinBudget ?? 0)}
               prefix="$"
-              status="neutral"
-              source="manual"
+              status="green"
+              source="calculated"
               icon={TrendingUp}
-              footer={<p className="text-xs text-muted-foreground">MTD/YTD value</p>}
-              onEdit={() => setEditingMetric({ key: "closed_within_budget", label: "Closed Within Budget" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  Total savings from under-budget projects
+                </p>
+              }
             />
             <KPICard
               title="Closed Over Budget"
-              value={getMetric("closed_over_budget")?.value ?? 0}
+              value={isPerformanceLoading ? 0 : Math.round(performanceData?.closedOverBudget ?? 0)}
               prefix="$"
-              status="neutral"
-              source="manual"
+              status={performanceData?.closedOverBudget && performanceData.closedOverBudget > 0 ? "red" : "green"}
+              source="calculated"
               icon={TrendingDown}
-              footer={<p className="text-xs text-muted-foreground">MTD/YTD value</p>}
-              onEdit={() => setEditingMetric({ key: "closed_over_budget", label: "Closed Over Budget" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  Total overrun from over-budget projects
+                </p>
+              }
             />
           </KPIGrid>
         </KPISection>

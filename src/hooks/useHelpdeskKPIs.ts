@@ -260,6 +260,13 @@ export function useHelpdeskKPIs(period: DatePeriod = "month") {
         byDepartment[dept] = teams.filter((t) =>
           deptTeams.some((dt) => dt.name === t.teamName)
         );
+        
+        // DEBUG: Log engineering teams specifically
+        if (dept === "engineering") {
+          console.log(`🔧 Engineering - Expected teams:`, deptTeams.map(t => t.name));
+          console.log(`🔧 Engineering - Found teams:`, byDepartment[dept].map(t => t.teamName));
+          console.log(`🔧 Engineering - Team metrics:`, byDepartment[dept]);
+        }
       }
 
       return { teams, totals, byDepartment };

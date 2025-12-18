@@ -140,8 +140,14 @@ export function useKPIData({ department, period = "month" }: UseKPIDataOptions):
         break;
 
       case "engineering":
+        // DEBUG: Log all available teams for engineering
+        console.log("🔧 Engineering department teams available:", departmentTeams.map(t => ({ name: t.teamName, open: t.open, closed: t.closedMTD })));
+        
         const cfgTeam = departmentTeams.find((t) => t.teamName.includes("CFG"));
         const dsfTeam = departmentTeams.find((t) => t.teamName.includes("DSF"));
+
+        console.log("🔧 CFG Team found:", cfgTeam ? `YES - ${cfgTeam.teamName}` : "NO");
+        console.log("🔧 DSF Team found:", dsfTeam ? `YES - ${dsfTeam.teamName}` : "NO");
 
         if (cfgTeam) {
           addMetric("cfg_quotes_open", "CFG Quotes Open", cfgTeam.open, { trendInverse: true });

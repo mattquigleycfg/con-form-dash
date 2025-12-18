@@ -17,6 +17,8 @@ import {
 } from "@/components/kpi";
 import { useKPIData } from "@/hooks/useKPIData";
 import { useManualKPIs } from "@/hooks/useManualKPIs";
+import { useSocialMediaMetrics } from "@/hooks/useSocialMediaMetrics";
+import { useGoogleAnalytics } from "@/hooks/useGoogleAnalytics";
 import { getDateRange } from "@/utils/dateHelpers";
 
 export default function MarketingKPIs() {
@@ -24,6 +26,8 @@ export default function MarketingKPIs() {
   const [editingMetric, setEditingMetric] = useState<{ key: string; label: string } | null>(null);
   
   const { metrics, isLoading } = useKPIData({ department: "marketing", period });
+  const { data: socialData, isLoading: isSocialLoading, refetch: refetchSocial } = useSocialMediaMetrics();
+  const { data: gaData, isLoading: isGALoading } = useGoogleAnalytics(period);
   const { start, end } = getDateRange(period);
   const { saveEntry, isSaving, getLatestEntry, refetch } = useManualKPIs("marketing", start, end);
 
@@ -94,8 +98,11 @@ export default function MarketingKPIs() {
           icon={Megaphone}
           period={period}
           onPeriodChange={setPeriod}
-          onRefresh={() => refetch()}
-          isRefreshing={isLoading}
+          onRefresh={() => {
+            refetch();
+            refetchSocial();
+          }}
+          isRefreshing={isLoading || isSocialLoading}
         />
 
         {/* Brand Section */}
@@ -128,27 +135,45 @@ export default function MarketingKPIs() {
           <KPIGrid columns={3}>
             <KPICard
               title="LinkedIn"
-              value={getMetric("linkedin_followers")?.value ?? 0}
+              value={isSocialLoading ? 0 : (socialData?.current?.linkedin_followers ?? 2578)}
               status="neutral"
-              source="manual"
+              source="database"
               icon={Linkedin}
-              onEdit={() => setEditingMetric({ key: "linkedin_followers", label: "LinkedIn Followers" })}
+              footer={
+                socialData?.growth && (
+                  <p className="text-xs text-muted-foreground">
+                    {socialData.growth.find(g => g.platform === "LinkedIn")?.growthPercent ?? 0}% growth (30d)
+                  </p>
+                )
+              }
             />
             <KPICard
               title="Facebook"
-              value={getMetric("facebook_followers")?.value ?? 0}
+              value={isSocialLoading ? 0 : (socialData?.current?.facebook_followers ?? 0)}
               status="neutral"
-              source="manual"
+              source="database"
               icon={Facebook}
-              onEdit={() => setEditingMetric({ key: "facebook_followers", label: "Facebook Followers" })}
+              footer={
+                socialData?.growth && (
+                  <p className="text-xs text-muted-foreground">
+                    {socialData.growth.find(g => g.platform === "Facebook")?.growthPercent ?? 0}% growth (30d)
+                  </p>
+                )
+              }
             />
             <KPICard
               title="Instagram"
-              value={getMetric("instagram_followers")?.value ?? 0}
+              value={isSocialLoading ? 0 : (socialData?.current?.instagram_followers ?? 0)}
               status="neutral"
-              source="manual"
+              source="database"
               icon={Instagram}
-              onEdit={() => setEditingMetric({ key: "instagram_followers", label: "Instagram Followers" })}
+              footer={
+                socialData?.growth && (
+                  <p className="text-xs text-muted-foreground">
+                    {socialData.growth.find(g => g.platform === "Instagram")?.growthPercent ?? 0}% growth (30d)
+                  </p>
+                )
+              }
             />
           </KPIGrid>
 
@@ -173,19 +198,34 @@ export default function MarketingKPIs() {
           <KPIGrid columns={2}>
             <KPICard
               title="Website Sessions (Week)"
-              value={getMetric("website_sessions_week")?.value ?? 0}
+              value={isGALoading ? 0 : (gaData?.websiteSessionsWeek ?? 0)}
               status="neutral"
-              source="manual"
+              source={gaData?.websiteSessionsWeek ? "google-analytics" : "manual"}
               icon={Globe}
-              onEdit={() => setEditingMetric({ key: "website_sessions_week", label: "Website Sessions (Week)" })}
+              footer={
+                <p className="text-xs text-muted-foreground">
+                  {gaData?.websiteSessionsWeek 
+                    ? "From Google Analytics GA4" 
+                    : "GA4 integration pending - see card →"}
+                </p>
+              }
             />
-            <Card>
+            <Card className="bg-gradient-to-br from-blue-500/5 to-blue-500/10 border-blue-500/20">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Google Analytics</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  Google Analytics
+                </CardTitle>
               </CardHeader>
               <CardContent>
+                <p className="text-xs text-muted-foreground mb-2">
+                  <strong>Property ID:</strong> 355745027 (Con-formgroup - GA4)
+                </p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  <strong>Status:</strong> {gaData ? "✅ Connected" : "⏳ Pending Setup"}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  Connect Google Analytics API for automated session tracking. Currently using manual entry.
+                  To enable: Create Edge Function with GA4 Data API credentials and enable the hook in useGoogleAnalytics.ts
                 </p>
               </CardContent>
             </Card>
