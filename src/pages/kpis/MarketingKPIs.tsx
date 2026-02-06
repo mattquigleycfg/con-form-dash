@@ -197,14 +197,14 @@ export default function MarketingKPIs() {
         <KPISection title="Website" description="Traffic and engagement metrics">
           <KPIGrid columns={2}>
             <KPICard
-              title="Website Sessions (Week)"
-              value={isGALoading ? 0 : (gaData?.websiteSessionsWeek ?? 0)}
+              title="Website Sessions (This Month)"
+              value={isGALoading ? 0 : (gaData?.websiteSessionsMonth ?? 0)}
               status="neutral"
-              source={gaData?.websiteSessionsWeek ? "google-analytics" : "manual"}
+              source={gaData?.websiteSessionsMonth ? "google-analytics" : "manual"}
               icon={Globe}
               footer={
                 <p className="text-xs text-muted-foreground">
-                  {gaData?.websiteSessionsWeek 
+                  {gaData?.websiteSessionsMonth 
                     ? "From Google Analytics GA4" 
                     : "GA4 integration pending - see card →"}
                 </p>
