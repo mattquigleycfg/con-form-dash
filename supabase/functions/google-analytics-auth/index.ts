@@ -60,27 +60,50 @@ serve(async (req) => {
 
     const tokens = await tokenResponse.json();
     
-    // Store refresh token in Supabase using REST API
-    const upsertResponse = await fetch(`${SUPABASE_URL}/rest/v1/settings`, {
-      method: 'POST',
+    // Store refresh token in Supabase using REST API (upsert pattern)
+    // First, try to update existing token
+    const updateResponse = await fetch(`${SUPABASE_URL}/rest/v1/settings?key=eq.ga4_refresh_token`, {
+      method: 'PATCH',
       headers: {
         'apikey': SUPABASE_SERVICE_ROLE_KEY,
         'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
       },
       body: JSON.stringify({
-        key: 'ga4_refresh_token',
         value: tokens.refresh_token,
         updated_at: new Date().toISOString(),
       })
     });
 
-    if (!upsertResponse.ok) {
-      const error = await upsertResponse.text();
-      console.error('Failed to store refresh token:', error);
+    // If no rows were updated (404), insert new record
+    if (!updateResponse.ok && updateResponse.status === 404) {
+      const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/settings`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          key: 'ga4_refresh_token',
+          value: tokens.refresh_token,
+          updated_at: new Date().toISOString(),
+        })
+      });
+
+      if (!insertResponse.ok) {
+        const error = await insertResponse.text();
+        console.error('Failed to insert refresh token:', error);
+        return new Response(
+          JSON.stringify({ error: 'Failed to store refresh token', details: error }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else if (!updateResponse.ok) {
+      const error = await updateResponse.text();
+      console.error('Failed to update refresh token:', error);
       return new Response(
-        JSON.stringify({ error: 'Failed to store refresh token', details: error }),
+        JSON.stringify({ error: 'Failed to update refresh token', details: error }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
