@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Megaphone, ThumbsUp, Linkedin, Facebook, Instagram, Globe, Users, DollarSign, Eye, Clock, Activity, ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { WebsiteAnalyticsModal } from "@/components/analytics/WebsiteAnalyticsModal";
 import {
   KPICard,
   KPIGrid,
@@ -26,6 +26,7 @@ import { getDateRange } from "@/utils/dateHelpers";
 export default function MarketingKPIs() {
   const [period, setPeriod] = useState<DatePeriod>("month");
   const [editingMetric, setEditingMetric] = useState<{ key: string; label: string } | null>(null);
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   
   const { metrics, isLoading } = useKPIData({ department: "marketing", period });
   const { data: socialData, isLoading: isSocialLoading, refetch: refetchSocial } = useSocialMediaMetrics();
@@ -265,12 +266,14 @@ export default function MarketingKPIs() {
                   <p className="text-sm text-muted-foreground mb-4">
                     View comprehensive analytics including top pages, traffic sources, user behavior, and detailed trends.
                   </p>
-                  <Link to="/kpis/website">
-                    <Button className="w-full" variant="default">
-                      View Full Website Analytics
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
+                  <Button 
+                    className="w-full" 
+                    variant="default"
+                    onClick={() => setShowAnalyticsModal(true)}
+                  >
+                    View Full Website Analytics
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
                   <p className="text-xs text-muted-foreground mt-3 text-center">
                     Property ID: 355745027 • Updates every 30 minutes
                   </p>
@@ -376,6 +379,12 @@ export default function MarketingKPIs() {
         currentValue={editingMetric ? getMetric(editingMetric.key)?.value : undefined}
         onSave={handleSaveManual}
         isSaving={isSaving}
+      />
+
+      <WebsiteAnalyticsModal
+        open={showAnalyticsModal}
+        onOpenChange={setShowAnalyticsModal}
+        defaultPeriod={period}
       />
 
       <AICopilot />
