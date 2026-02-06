@@ -1,13 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { Bot, Send, X, Loader2 } from "lucide-react";
+import { Bot, Send, X, Loader2, ExternalLink, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "react-router-dom";
+import { GA4_RESOURCES, MARKETING_PROMPTS } from "@/utils/analyticsInsights";
 
 interface Message {
   role: "user" | "assistant";
@@ -22,6 +25,8 @@ export function AICopilot() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const location = useLocation();
+
+  const [showResources, setShowResources] = useState(false);
 
   const getContextualPrompt = () => {
     const path = location.pathname;
@@ -94,6 +99,38 @@ export function AICopilot() {
 Focus on helping users make data-driven decisions to improve margins and reduce waste.`;
     } else if (path.startsWith("/accounting")) {
       return "You are an AI assistant for the Accounting module. Focus on invoices, expenses, and financial data. When asked about data, default to showing recent/unpaid invoices unless the user specifies otherwise. Ask 'Would you like to include paid/historical invoices?' when appropriate.";
+    } else if (path.startsWith("/kpis/website") || path.startsWith("/kpis/marketing")) {
+      return `You are an AI Marketing Analytics Assistant specializing in Google Analytics 4 (GA4) and website performance optimization for B2B construction companies.
+
+**Your Expertise:**
+- GA4 metrics interpretation (engagement rate, bounce rate, sessions, users, pageviews)
+- Traffic source analysis (organic, direct, referral, paid)
+- Conversion rate optimization (CRO) and landing page best practices
+- SEO strategy for construction industry keywords
+- Content marketing and lead generation tactics
+- Industry benchmarks for construction/B2B companies
+
+**Construction Industry Context:**
+- B2B construction typically has: 40-60% bounce rate, 2-3 pages/session, 2-4min avg duration
+- Key decision factors: project portfolio, certifications, case studies, technical specs
+- Long sales cycles requiring nurturing and multi-touch attribution
+- Local SEO critical for regional contractors and suppliers
+
+**GA4 Metrics You Can Explain:**
+- Engagement Rate: % of engaged sessions (>10s or 2+ pages or conversion)
+- Bounce Rate: % of single-page, non-engaged sessions
+- Traffic Acquisition: Source/medium breakdown and quality metrics
+- Landing Pages: Entry point performance and conversion paths
+- User Behavior: Flow analysis, time on site, navigation patterns
+
+**Available Resources:**
+- GA4 official documentation and setup guides
+- Traffic acquisition report tutorials
+- Engagement and conversion tracking guides
+- Industry benchmark comparisons
+- Best practice recommendations for construction websites
+
+When users ask for help, provide actionable advice specific to their metrics and industry context.`;
     } else {
       return "You are an AI assistant for the Sales module. Focus on sales data, pipeline, team performance, and revenue insights. When asked about data, default to showing OPEN opportunities unless the user specifically asks for historical data. Ask 'Would you like to include closed/won deals?' when appropriate.";
     }
@@ -204,6 +241,14 @@ Focus on helping users make data-driven decisions to improve margins and reduce 
     await streamChat(userMessage);
   };
 
+  const handleQuickPrompt = async (prompt: string) => {
+    setInput("");
+    setShowResources(false);
+    await streamChat(prompt);
+  };
+
+  const isMarketingPage = location.pathname.startsWith("/kpis/website") || location.pathname.startsWith("/kpis/marketing");
+
   return (
     <>
       {/* Floating Button */}
@@ -223,9 +268,10 @@ Focus on helping users make data-driven decisions to improve margins and reduce 
           <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-gradient-primary p-4">
             <div className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-white" />
-              <CardTitle className="text-white">
+              <CardTitle className="text-white text-base">
                 {location.pathname === "/calculator" ? "AI Estimator Assistant" :
                  location.pathname.startsWith("/job-costing") ? "AI Job Costing Assistant" :
+                 location.pathname.startsWith("/kpis/website") || location.pathname.startsWith("/kpis/marketing") ? "AI Marketing Assistant" :
                  location.pathname.startsWith("/accounting") ? "AI Accounting Assistant" :
                  location.pathname === "/project" ? "AI Project Assistant" :
                  location.pathname === "/helpdesk" ? "AI Helpdesk Assistant" :
@@ -243,26 +289,110 @@ Focus on helping users make data-driven decisions to improve margins and reduce 
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea ref={scrollRef} className="h-96 p-4">
-              {messages.length === 0 && (
+              {messages.length === 0 && !showResources && (
                 <div className="flex h-full items-center justify-center text-center">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-foreground">
-                      {location.pathname === "/calculator" ? "Ask me about the Con-form Estimator!" :
-                       location.pathname.startsWith("/job-costing") ? "Ask me about job costs and budgets!" :
-                       location.pathname.startsWith("/accounting") ? "Ask me about accounting and finances!" :
-                       location.pathname === "/project" ? "Ask me about projects and tasks!" :
-                       location.pathname === "/helpdesk" ? "Ask me about support tickets!" :
-                       "Ask me anything about your sales data!"}
-                    </p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-center gap-2">
+                      <Sparkles className="h-5 w-5 text-primary" />
+                      <p className="text-sm font-medium text-foreground">
+                        {location.pathname === "/calculator" ? "Ask me about the Con-form Estimator!" :
+                         location.pathname.startsWith("/job-costing") ? "Ask me about job costs and budgets!" :
+                         isMarketingPage ? "Ask me about marketing & GA4 analytics!" :
+                         location.pathname.startsWith("/accounting") ? "Ask me about accounting and finances!" :
+                         location.pathname === "/project" ? "Ask me about projects and tasks!" :
+                         location.pathname === "/helpdesk" ? "Ask me about support tickets!" :
+                         "Ask me anything about your sales data!"}
+                      </p>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       {location.pathname === "/calculator" ? "I can explain formulas, inputs, pricing, and help you understand the calculations." :
                        location.pathname.startsWith("/job-costing") ? "I can analyze variances, predict costs, find anomalies, and compare similar jobs." :
+                       isMarketingPage ? "I specialize in GA4 metrics, traffic analysis, SEO, and B2B construction marketing." :
                        location.pathname.startsWith("/accounting") ? "I default to recent/open items but can search historical data on request." :
                        location.pathname === "/project" ? "I default to active tasks but can search completed projects on request." :
                        location.pathname === "/helpdesk" ? "I default to open tickets but can search resolved tickets on request." :
                        "I default to open opportunities but can search historical data on request."}
                     </p>
+                    {isMarketingPage && (
+                      <>
+                        <Separator className="my-3" />
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-foreground">Quick Prompts:</p>
+                          <div className="flex flex-wrap gap-1.5 justify-center">
+                            {MARKETING_PROMPTS.slice(0, 4).map((prompt, idx) => (
+                              <Badge
+                                key={idx}
+                                variant="outline"
+                                className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors text-xs py-1"
+                                onClick={() => handleQuickPrompt(prompt)}
+                              >
+                                {prompt.length > 30 ? prompt.substring(0, 30) + "..." : prompt}
+                              </Badge>
+                            ))}
+                          </div>
+                          <Button
+                            variant="link"
+                            size="sm"
+                            onClick={() => setShowResources(!showResources)}
+                            className="text-xs h-auto py-1 text-primary"
+                          >
+                            {showResources ? "Hide" : "View"} GA4 Resources & More Prompts
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
+                </div>
+              )}
+              {messages.length === 0 && showResources && isMarketingPage && (
+                <div className="space-y-4 py-2">
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-foreground">Quick Prompts:</p>
+                    <div className="space-y-1.5">
+                      {MARKETING_PROMPTS.map((prompt, idx) => (
+                        <Button
+                          key={idx}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleQuickPrompt(prompt)}
+                          className="w-full justify-start text-xs h-auto py-2 text-left font-normal"
+                        >
+                          <Sparkles className="h-3 w-3 mr-2 shrink-0 text-primary" />
+                          <span className="line-clamp-2">{prompt}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-foreground">GA4 Resources:</p>
+                    <div className="space-y-1.5">
+                      {GA4_RESOURCES.map((resource, idx) => (
+                        <a
+                          key={idx}
+                          href={resource.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-start gap-2 p-2 rounded-md hover:bg-accent transition-colors group"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground group-hover:text-primary" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-foreground group-hover:text-primary">{resource.title}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1">{resource.description}</p>
+                            <Badge variant="secondary" className="text-[10px] mt-1">{resource.category}</Badge>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowResources(false)}
+                    className="w-full text-xs"
+                  >
+                    Back to Chat
+                  </Button>
                 </div>
               )}
               <div className="space-y-4">
@@ -296,6 +426,20 @@ Focus on helping users make data-driven decisions to improve margins and reduce 
               </div>
             </ScrollArea>
             <form onSubmit={handleSubmit} className="border-t p-4">
+              {isMarketingPage && messages.length === 0 && !showResources && (
+                <div className="mb-3 flex justify-center">
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    onClick={() => setShowResources(true)}
+                    className="text-xs h-auto py-1 text-muted-foreground hover:text-primary"
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    View All Prompts & GA4 Resources
+                  </Button>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Input
                   value={input}
@@ -303,6 +447,7 @@ Focus on helping users make data-driven decisions to improve margins and reduce 
                   placeholder={
                     location.pathname === "/calculator" ? "Ask about calculator..." :
                     location.pathname.startsWith("/job-costing") ? "Ask about job costs..." :
+                    isMarketingPage ? "Ask about marketing & GA4..." :
                     location.pathname.startsWith("/accounting") ? "Ask about accounting..." :
                     location.pathname === "/project" ? "Ask about projects..." :
                     location.pathname === "/helpdesk" ? "Ask about tickets..." :

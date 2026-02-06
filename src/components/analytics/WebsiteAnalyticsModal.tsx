@@ -17,6 +17,7 @@ import { TrafficTrendChart } from "./TrafficTrendChart";
 import { TopPagesChart } from "./TopPagesChart";
 import { TrafficSourceChart } from "./TrafficSourceChart";
 import { AcquisitionTable } from "./AcquisitionTable";
+import { AIInsightBanner } from "./AIInsightBanner";
 import { type DatePeriod } from "@/utils/dateHelpers";
 import { 
   Users, 
@@ -90,6 +91,9 @@ export function WebsiteAnalyticsModal({
 
         <ScrollArea className="h-[calc(95vh-120px)]">
           <div className="px-8 py-6 space-y-6">
+            {/* AI Insights Banner */}
+            <AIInsightBanner metrics={trafficData} sources={trafficSources} />
+
             {/* Hero Metrics Section - F-Pattern Layout */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {/* North Star Metric - Sessions (Top Left, Larger) */}

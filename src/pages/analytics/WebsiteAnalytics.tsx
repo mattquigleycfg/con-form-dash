@@ -11,6 +11,7 @@ import { TrafficTrendChart } from "@/components/analytics/TrafficTrendChart";
 import { TopPagesChart } from "@/components/analytics/TopPagesChart";
 import { TrafficSourceChart } from "@/components/analytics/TrafficSourceChart";
 import { AcquisitionTable } from "@/components/analytics/AcquisitionTable";
+import { AIInsightBanner } from "@/components/analytics/AIInsightBanner";
 import { type DatePeriod } from "@/utils/dateHelpers";
 import { 
   Users, 
@@ -68,6 +69,9 @@ export default function WebsiteAnalytics() {
           </TabsList>
         </Tabs>
       </div>
+
+      {/* AI Insights Banner */}
+      <AIInsightBanner metrics={trafficData} sources={trafficSources} />
 
       {/* Hero Metrics Section - F-Pattern Layout */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
