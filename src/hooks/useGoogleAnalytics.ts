@@ -33,52 +33,44 @@ export function useGoogleAnalytics(period: DatePeriod = "month") {
     queryFn: async (): Promise<GoogleAnalyticsMetrics> => {
       const { start, end } = getDateRange(period);
 
-      // TODO: Uncomment when GA4 Edge Function is ready
-      /*
       const { data, error } = await supabase.functions.invoke("google-analytics-query", {
         body: {
           propertyId: "355745027", // Your GA4 Property ID
           startDate: start.toISOString().split('T')[0],
           endDate: end.toISOString().split('T')[0],
           metrics: [
-            "sessions",
             "totalUsers",
             "activeUsers",
             "newUsers",
             "screenPageViews",
             "averageSessionDuration",
             "bounceRate",
+            "sessions",
           ],
         },
       });
 
-      if (error) throw error;
-      return data as GoogleAnalyticsMetrics;
-      */
-
-      // PLACEHOLDER DATA - Replace with actual GA4 API call
-      console.log("📊 Google Analytics: Using placeholder data (Edge Function not yet deployed)");
+      if (error) {
+        console.error("📊 Google Analytics error:", error);
+        // Return zeros if not authorized yet
+        return {
+          websiteSessionsWeek: 0,
+          websiteSessionsMonth: 0,
+          websiteSessionsYTD: 0,
+          totalUsers: 0,
+          activeUsers: 0,
+          newUsers: 0,
+          pageviews: 0,
+          avgSessionDuration: 0,
+          bounceRate: 0,
+        };
+      }
       
-      // Calculate ranges for week/month/ytd
-      const weekRange = getDateRange("week");
-      const monthRange = getDateRange("month");
-      const ytdRange = getDateRange("ytd");
-
-      return {
-        websiteSessionsWeek: 0,
-        websiteSessionsMonth: 0,
-        websiteSessionsYTD: 0,
-        totalUsers: 0,
-        activeUsers: 0,
-        newUsers: 0,
-        pageviews: 0,
-        avgSessionDuration: 0,
-        bounceRate: 0,
-      };
+      return data as GoogleAnalyticsMetrics;
     },
     staleTime: 1000 * 60 * 60, // 1 hour (GA data doesn't change rapidly)
     refetchInterval: 1000 * 60 * 60, // Auto-refresh every hour
-    enabled: false, // Disable until Edge Function is deployed
+    enabled: true, // Enable the query
   });
 }
 

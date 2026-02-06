@@ -17,6 +17,10 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Credentials and sensitive files
+*credentials*.json
+ga4-credentials.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -30,6 +34,9 @@ dist-ssr
 
 # Local Netlify folder
 .netlify
+
+# Supabase temporary files
+supabase/.temp/
 
 # MCP verification checklist (local use only)
 .mcp-verify.md
@@ -56,3 +63,25 @@ supabase/migrations/20251212000001_create_kpi_entries.sql
 docs/PRODUCTION_DESIGN_KPI_ENHANCEMENTS.md
 docs/FINANCE_KPI_INTEGRATION.md
 docs/CRITICAL_BUG_FIX_EMPTY_ARRAYS.md
+
+# Implementation/fix documentation (temporary, not needed in git)
+*_FIX*.md
+*_FIXES_*.md
+*_IMPLEMENTATION*.md
+*_COMPLETE*.md
+*DIAGNOSIS*.md
+QUICK_FIX_GUIDE.md
+SUBCONTRACTOR_FIX_README.md
+
+# Temporary setup files
+GA4_INTEGRATION_COMPLETE.md
+GA4_SETUP_SQL.sql
+*_SETUP_*.sql
+create_social_media_table.sql
+APPLY_SUBCONTRACTOR_MIGRATION.sql
+
+# Keep important docs (exceptions to above patterns)
+!RELEASE_NOTES.md
+!docs/DEPLOYMENT_CHECKLIST.md
+!docs/WORKING_HOURS_IMPLEMENTATION.md
+!docs/QUALITY_METRICS_IMPLEMENTATION.md

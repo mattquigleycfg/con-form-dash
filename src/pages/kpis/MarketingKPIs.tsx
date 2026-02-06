@@ -222,10 +222,26 @@ export default function MarketingKPIs() {
                   <strong>Property ID:</strong> 355745027 (Con-formgroup - GA4)
                 </p>
                 <p className="text-xs text-muted-foreground mb-2">
-                  <strong>Status:</strong> {gaData ? "✅ Connected" : "⏳ Pending Setup"}
+                  <strong>Status:</strong> {gaData?.totalUsers ? "✅ Connected" : "⏳ Pending Authorization"}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  To enable: Create Edge Function with GA4 Data API credentials and enable the hook in useGoogleAnalytics.ts
+                {!gaData?.totalUsers && (
+                  <button
+                    onClick={() => {
+                      const clientId = "207375156912-ic96pa8aa5fq06sq6hr79ffmtfv5iuao.apps.googleusercontent.com";
+                      const redirectUri = "https://ibqgwakjmsnjtvwpkdns.supabase.co/functions/v1/google-analytics-auth";
+                      const scope = "https://www.googleapis.com/auth/analytics.readonly";
+                      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
+                      window.open(authUrl, "_blank", "width=600,height=700");
+                    }}
+                    className="mt-2 w-full px-3 py-2 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors"
+                  >
+                    Authorize Google Analytics
+                  </button>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  {gaData?.totalUsers 
+                    ? "Live data from GA4 Data API" 
+                    : "Click to authorize access to your GA4 property"}
                 </p>
               </CardContent>
             </Card>
