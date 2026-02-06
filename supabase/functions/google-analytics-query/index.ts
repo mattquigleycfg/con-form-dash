@@ -178,10 +178,11 @@ serve(async (req) => {
         pageviews: parseInt(metricValues[3]?.value || '0'),
         avgSessionDuration: parseFloat(metricValues[4]?.value || '0'),
         bounceRate: parseFloat(metricValues[5]?.value || '0'),
+        engagementRate: parseFloat(metricValues[6]?.value || '0'),
       };
 
       // The sessions value depends on the date range requested
-      const sessions = parseInt(metricValues[6]?.value || '0');
+      const sessions = parseInt(metricValues[7]?.value || '0');
       
       // Determine which period this is based on date range
       const daysDiff = Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24));

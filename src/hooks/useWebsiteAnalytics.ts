@@ -74,22 +74,25 @@ export function useWebsiteTraffic(period: DatePeriod = "month") {
         throw error;
       }
 
-      // Transform summary response to detailed metrics
-      const row = data?.rows?.[0];
-      const metricValues = row?.metricValues || [];
+      // The Edge Function returns pre-transformed summary data
+      // Extract sessions based on period
+      const sessions = period === 'week' 
+        ? (data?.websiteSessionsWeek || 0)
+        : period === 'month'
+        ? (data?.websiteSessionsMonth || 0)
+        : (data?.websiteSessionsYTD || 0);
 
-      const sessions = parseInt(metricValues[0]?.value || '0');
-      const pageviews = parseInt(metricValues[4]?.value || '0');
+      const pageviews = data?.pageviews || 0;
 
       return {
         sessions,
-        totalUsers: parseInt(metricValues[1]?.value || '0'),
-        activeUsers: parseInt(metricValues[2]?.value || '0'),
-        newUsers: parseInt(metricValues[3]?.value || '0'),
+        totalUsers: data?.totalUsers || 0,
+        activeUsers: data?.activeUsers || 0,
+        newUsers: data?.newUsers || 0,
         pageviews,
-        avgSessionDuration: parseFloat(metricValues[5]?.value || '0'),
-        bounceRate: parseFloat(metricValues[6]?.value || '0'),
-        engagementRate: parseFloat(metricValues[7]?.value || '0'),
+        avgSessionDuration: data?.avgSessionDuration || 0,
+        bounceRate: data?.bounceRate || 0,
+        engagementRate: data?.engagementRate || 0,
         pagesPerSession: sessions > 0 ? pageviews / sessions : 0,
       };
     },
