@@ -58,14 +58,15 @@ async function fetchPreviousMetrics(daysAgo: number): Promise<SocialMediaMetrics
     .select("*")
     .lte("updated_at", dateThreshold.toISOString())
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .single();
+    .limit(1);
 
   if (error && error.code !== "PGRST116") {
     console.warn("Could not fetch previous metrics:", error);
+    return null;
   }
 
-  return data as SocialMediaMetrics | null;
+  // Return the first result or null if empty
+  return (data && data.length > 0) ? data[0] as SocialMediaMetrics : null;
 }
 
 /**
