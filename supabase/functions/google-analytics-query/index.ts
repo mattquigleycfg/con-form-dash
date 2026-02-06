@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { propertyId, startDate, endDate, metrics } = await req.json();
+    const { queryType = 'summary', propertyId, startDate, endDate, metrics, dimensions, limit = 10 } = await req.json();
 
     const GA4_PROPERTY_ID = propertyId || Deno.env.get('GA4_PROPERTY_ID');
     const GA4_CLIENT_ID = Deno.env.get('GA4_CLIENT_ID');
@@ -82,6 +82,60 @@ serve(async (req) => {
 
     const { access_token } = await tokenResponse.json();
 
+    // Build GA4 API request based on query type
+    let ga4RequestBody: any = {
+      dateRanges: [{ startDate, endDate }],
+    };
+
+    if (queryType === 'summary') {
+      // Original summary query
+      ga4RequestBody.metrics = (metrics || [
+        "totalUsers", "activeUsers", "newUsers", "screenPageViews",
+        "averageSessionDuration", "bounceRate", "sessions"
+      ]).map((m: string) => ({ name: m }));
+    } else if (queryType === 'topPages') {
+      // Top pages query with dimensions
+      ga4RequestBody.metrics = [
+        { name: "screenPageViews" },
+        { name: "activeUsers" },
+        { name: "averageSessionDuration" },
+        { name: "bounceRate" }
+      ];
+      ga4RequestBody.dimensions = [
+        { name: "pagePath" },
+        { name: "pageTitle" }
+      ];
+      ga4RequestBody.limit = limit;
+      ga4RequestBody.orderBys = [{ metric: { metricName: "screenPageViews" }, desc: true }];
+    } else if (queryType === 'acquisition') {
+      // Traffic acquisition query
+      ga4RequestBody.metrics = [
+        { name: "sessions" },
+        { name: "activeUsers" },
+        { name: "newUsers" },
+        { name: "bounceRate" },
+        { name: "engagementRate" }
+      ];
+      ga4RequestBody.dimensions = [
+        { name: "sessionSource" },
+        { name: "sessionMedium" }
+      ];
+      ga4RequestBody.limit = limit;
+      ga4RequestBody.orderBys = [{ metric: { metricName: "sessions" }, desc: true }];
+    } else if (queryType === 'timeSeries') {
+      // Time series query for charts
+      ga4RequestBody.metrics = (metrics || [
+        "sessions", "activeUsers", "screenPageViews"
+      ]).map((m: string) => ({ name: m }));
+      ga4RequestBody.dimensions = [{ name: "date" }];
+      ga4RequestBody.orderBys = [{ dimension: { dimensionName: "date" }, desc: false }];
+    } else {
+      // Custom query with provided metrics and dimensions
+      if (metrics) ga4RequestBody.metrics = metrics.map((m: string) => ({ name: m }));
+      if (dimensions) ga4RequestBody.dimensions = dimensions.map((d: string) => ({ name: d }));
+      if (limit) ga4RequestBody.limit = limit;
+    }
+
     // Query GA4 Data API
     const ga4Response = await fetch(
       `https://analyticsdata.googleapis.com/v1beta/properties/${GA4_PROPERTY_ID}:runReport`,
@@ -91,10 +145,7 @@ serve(async (req) => {
           'Authorization': `Bearer ${access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          dateRanges: [{ startDate, endDate }],
-          metrics: metrics.map((m: string) => ({ name: m })),
-        }),
+        body: JSON.stringify(ga4RequestBody),
       }
     );
 
@@ -109,34 +160,71 @@ serve(async (req) => {
 
     const ga4Data = await ga4Response.json();
 
-    // Transform the response into our expected format
-    const row = ga4Data.rows?.[0];
-    const metricValues = row?.metricValues || [];
+    // Transform response based on query type
+    let response: any;
 
-    const response = {
-      websiteSessionsWeek: 0,
-      websiteSessionsMonth: 0,
-      websiteSessionsYTD: 0,
-      totalUsers: parseInt(metricValues[0]?.value || '0'),
-      activeUsers: parseInt(metricValues[1]?.value || '0'),
-      newUsers: parseInt(metricValues[2]?.value || '0'),
-      pageviews: parseInt(metricValues[3]?.value || '0'),
-      avgSessionDuration: parseFloat(metricValues[4]?.value || '0'),
-      bounceRate: parseFloat(metricValues[5]?.value || '0'),
-    };
+    if (queryType === 'summary') {
+      // Transform summary data (original format)
+      const row = ga4Data.rows?.[0];
+      const metricValues = row?.metricValues || [];
 
-    // The sessions value depends on the date range requested
-    const sessions = parseInt(metricValues[6]?.value || '0');
-    
-    // Determine which period this is based on date range
-    const daysDiff = Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysDiff <= 7) {
-      response.websiteSessionsWeek = sessions;
-    } else if (daysDiff <= 31) {
-      response.websiteSessionsMonth = sessions;
+      response = {
+        websiteSessionsWeek: 0,
+        websiteSessionsMonth: 0,
+        websiteSessionsYTD: 0,
+        totalUsers: parseInt(metricValues[0]?.value || '0'),
+        activeUsers: parseInt(metricValues[1]?.value || '0'),
+        newUsers: parseInt(metricValues[2]?.value || '0'),
+        pageviews: parseInt(metricValues[3]?.value || '0'),
+        avgSessionDuration: parseFloat(metricValues[4]?.value || '0'),
+        bounceRate: parseFloat(metricValues[5]?.value || '0'),
+      };
+
+      // The sessions value depends on the date range requested
+      const sessions = parseInt(metricValues[6]?.value || '0');
+      
+      // Determine which period this is based on date range
+      const daysDiff = Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysDiff <= 7) {
+        response.websiteSessionsWeek = sessions;
+      } else if (daysDiff <= 31) {
+        response.websiteSessionsMonth = sessions;
+      } else {
+        response.websiteSessionsYTD = sessions;
+      }
+    } else if (queryType === 'topPages') {
+      // Transform top pages data
+      response = (ga4Data.rows || []).map((row: any) => ({
+        pagePath: row.dimensionValues?.[0]?.value || '',
+        pageTitle: row.dimensionValues?.[1]?.value || '',
+        views: parseInt(row.metricValues?.[0]?.value || '0'),
+        users: parseInt(row.metricValues?.[1]?.value || '0'),
+        avgDuration: parseFloat(row.metricValues?.[2]?.value || '0'),
+        bounceRate: parseFloat(row.metricValues?.[3]?.value || '0'),
+      }));
+    } else if (queryType === 'acquisition') {
+      // Transform acquisition data
+      response = (ga4Data.rows || []).map((row: any) => ({
+        source: row.dimensionValues?.[0]?.value || '(direct)',
+        medium: row.dimensionValues?.[1]?.value || '(none)',
+        sessions: parseInt(row.metricValues?.[0]?.value || '0'),
+        users: parseInt(row.metricValues?.[1]?.value || '0'),
+        newUsers: parseInt(row.metricValues?.[2]?.value || '0'),
+        bounceRate: parseFloat(row.metricValues?.[3]?.value || '0'),
+        engagementRate: parseFloat(row.metricValues?.[4]?.value || '0'),
+      }));
+    } else if (queryType === 'timeSeries') {
+      // Transform time series data
+      response = (ga4Data.rows || []).map((row: any) => ({
+        date: row.dimensionValues?.[0]?.value || '',
+        sessions: parseInt(row.metricValues?.[0]?.value || '0'),
+        users: parseInt(row.metricValues?.[1]?.value || '0'),
+        pageviews: parseInt(row.metricValues?.[2]?.value || '0'),
+      }));
     } else {
-      response.websiteSessionsYTD = sessions;
+      // Return raw GA4 data for custom queries
+      response = ga4Data;
     }
 
     return new Response(

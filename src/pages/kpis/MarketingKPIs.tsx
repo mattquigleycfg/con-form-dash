@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Megaphone, ThumbsUp, Linkedin, Facebook, Instagram, Globe, Users, DollarSign } from "lucide-react";
+import { Megaphone, ThumbsUp, Linkedin, Facebook, Instagram, Globe, Users, DollarSign, Eye, Clock, Activity, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   KPICard,
   KPIGrid,
@@ -194,37 +196,115 @@ export default function MarketingKPIs() {
         </KPISection>
 
         {/* Website Section */}
-        <KPISection title="Website" description="Traffic and engagement metrics">
-          <KPIGrid columns={2}>
-            <KPICard
-              title="Website Sessions (This Month)"
-              value={isGALoading ? 0 : (gaData?.websiteSessionsMonth ?? 0)}
-              status="neutral"
-              source={gaData?.websiteSessionsMonth ? "google-analytics" : "manual"}
-              icon={Globe}
-              footer={
-                <p className="text-xs text-muted-foreground">
-                  {gaData?.websiteSessionsMonth 
-                    ? "From Google Analytics GA4" 
-                    : "GA4 integration pending - see card →"}
-                </p>
-              }
-            />
-            <Card className="bg-gradient-to-br from-blue-500/5 to-blue-500/10 border-blue-500/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Globe className="h-4 w-4" />
-                  Google Analytics
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground mb-2">
-                  <strong>Property ID:</strong> 355745027 (Con-formgroup - GA4)
-                </p>
-                <p className="text-xs text-muted-foreground mb-2">
-                  <strong>Status:</strong> {gaData?.totalUsers ? "✅ Connected" : "⏳ Pending Authorization"}
-                </p>
-                {!gaData?.totalUsers && (
+        <KPISection title="Website Analytics" description="Traffic and engagement metrics from Google Analytics 4">
+          {gaData?.totalUsers ? (
+            <>
+              <KPIGrid columns={4}>
+                <KPICard
+                  title="Total Sessions"
+                  value={isGALoading ? 0 : (gaData?.websiteSessionsMonth ?? 0)}
+                  status="neutral"
+                  source="google-analytics"
+                  icon={Activity}
+                  footer={
+                    <p className="text-xs text-muted-foreground">
+                      This {period === 'week' ? 'week' : period === 'month' ? 'month' : period === 'quarter' ? 'quarter' : 'year'}
+                    </p>
+                  }
+                />
+                <KPICard
+                  title="Total Users"
+                  value={isGALoading ? 0 : (gaData?.totalUsers ?? 0)}
+                  status="neutral"
+                  source="google-analytics"
+                  icon={Users}
+                  footer={
+                    <p className="text-xs text-muted-foreground">
+                      {gaData?.newUsers.toLocaleString()} new users
+                    </p>
+                  }
+                />
+                <KPICard
+                  title="Pageviews"
+                  value={isGALoading ? 0 : (gaData?.pageviews ?? 0)}
+                  status="neutral"
+                  source="google-analytics"
+                  icon={Eye}
+                  footer={
+                    <p className="text-xs text-muted-foreground">
+                      Total page views
+                    </p>
+                  }
+                />
+                <KPICard
+                  title="Avg. Duration"
+                  value={isGALoading ? 0 : Math.floor((gaData?.avgSessionDuration ?? 0) / 60)}
+                  suffix="min"
+                  status="neutral"
+                  source="google-analytics"
+                  icon={Clock}
+                  footer={
+                    <p className="text-xs text-muted-foreground">
+                      {((gaData?.bounceRate ?? 0) * 100).toFixed(1)}% bounce rate
+                    </p>
+                  }
+                />
+              </KPIGrid>
+              
+              <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Globe className="h-4 w-4" />
+                      Website Analytics Dashboard
+                    </span>
+                    <span className="text-xs font-normal text-green-600">✅ GA4 Connected</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    View comprehensive analytics including top pages, traffic sources, user behavior, and detailed trends.
+                  </p>
+                  <Link to="/kpis/website">
+                    <Button className="w-full" variant="default">
+                      View Full Website Analytics
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                  <p className="text-xs text-muted-foreground mt-3 text-center">
+                    Property ID: 355745027 • Updates every 30 minutes
+                  </p>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <KPIGrid columns={2}>
+              <KPICard
+                title="Website Sessions (This Month)"
+                value={0}
+                status="neutral"
+                source="manual"
+                icon={Globe}
+                footer={
+                  <p className="text-xs text-muted-foreground">
+                    GA4 integration pending - authorize to see live data →
+                  </p>
+                }
+              />
+              <Card className="bg-gradient-to-br from-blue-500/5 to-blue-500/10 border-blue-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    Google Analytics Setup
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    <strong>Property ID:</strong> 355745027 (Con-formgroup - GA4)
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    <strong>Status:</strong> ⏳ Pending Authorization
+                  </p>
                   <button
                     onClick={() => {
                       const clientId = "207375156912-ic96pa8aa5fq06sq6hr79ffmtfv5iuao.apps.googleusercontent.com";
@@ -237,15 +317,13 @@ export default function MarketingKPIs() {
                   >
                     Authorize Google Analytics
                   </button>
-                )}
-                <p className="text-xs text-muted-foreground mt-2">
-                  {gaData?.totalUsers 
-                    ? "Live data from GA4 Data API" 
-                    : "Click to authorize access to your GA4 property"}
-                </p>
-              </CardContent>
-            </Card>
-          </KPIGrid>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Click to authorize access to your GA4 property
+                  </p>
+                </CardContent>
+              </Card>
+            </KPIGrid>
+          )}
         </KPISection>
 
         {/* Lead Generation Section */}
