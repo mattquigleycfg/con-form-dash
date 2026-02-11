@@ -295,11 +295,10 @@ export default function Settings() {
         description: `Found ${total} sales orders. Starting import...`,
       });
 
-      // Step 2: Check which jobs already exist
+      // Step 2: Check which jobs already exist (team-wide, not per-user)
       const { data: existingJobs } = await supabase
         .from('jobs')
-        .select('odoo_sale_order_id')
-        .eq('user_id', user.id);
+        .select('odoo_sale_order_id');
 
       const existingOrderIds = new Set(existingJobs?.map(j => j.odoo_sale_order_id) || []);
 
@@ -397,12 +396,13 @@ export default function Settings() {
           let jobError;
           
           if (alreadyExists) {
-            // Update existing job
+            // Update existing job (team-wide - no user_id filter since jobs are shared)
             const { data, error } = await supabase
               .from("jobs")
               .update({
                 last_synced_at: new Date().toISOString(),
                 last_synced_by_user_id: user.id,
+                sale_order_name: order.name,
                 customer_name: order.partner_id[1],
                 total_budget: order.amount_total,
                 material_budget: materialBudget,
@@ -419,7 +419,6 @@ export default function Settings() {
                 project_stage_name: projectStageName,
               })
               .eq('odoo_sale_order_id', order.id)
-              .eq('user_id', user.id)
               .select()
               .single();
             
@@ -431,10 +430,10 @@ export default function Settings() {
               logger.info(`Updated job for ${order.name}`);
             }
           } else {
-            // Create new job
+            // Create new job - use upsert with ignoreDuplicates for race condition safety
             const { data, error } = await supabase
               .from("jobs")
-              .insert([{
+              .upsert([{
                 user_id: user.id,
                 created_by_user_id: user.id,
                 last_synced_at: new Date().toISOString(),
@@ -459,16 +458,30 @@ export default function Settings() {
                 date_order: order.date_order,
                 project_stage_id: projectStageId,
                 project_stage_name: projectStageName,
-              }])
-              .select()
-              .single();
+              }], {
+                onConflict: 'odoo_sale_order_id',
+                ignoreDuplicates: true,
+              })
+              .select();
 
-            job = data;
             jobError = error;
-            
+
             if (!jobError) {
-              created++;
-              logger.info(`Created job for ${order.name}`);
+              if (data && data.length > 0) {
+                job = data[0];
+                created++;
+                logger.info(`Created job for ${order.name}`);
+              } else {
+                // Race condition: job was created by another user between lookup and insert
+                const { data: existingJob } = await supabase
+                  .from('jobs')
+                  .select()
+                  .eq('odoo_sale_order_id', order.id)
+                  .single();
+                job = existingJob;
+                skipped++;
+                logger.info(`Skipped ${order.name} (created by another user concurrently)`);
+              }
             }
           }
 

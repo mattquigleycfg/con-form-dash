@@ -203,7 +203,13 @@ export default function MarketingKPIs() {
               <KPIGrid columns={4}>
                 <KPICard
                   title="Total Sessions"
-                  value={isGALoading ? 0 : (gaData?.websiteSessionsMonth ?? 0)}
+                  value={isGALoading ? 0 : (
+                    period === 'week'
+                      ? (gaData?.websiteSessionsWeek ?? 0)
+                      : period === 'month'
+                      ? (gaData?.websiteSessionsMonth ?? 0)
+                      : (gaData?.websiteSessionsYTD ?? 0)
+                  )}
                   status="neutral"
                   source="google-analytics"
                   icon={Activity}

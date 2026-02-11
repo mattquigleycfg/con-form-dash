@@ -12,6 +12,7 @@ export interface GoogleAnalyticsMetrics {
   pageviews: number;
   avgSessionDuration: number;
   bounceRate: number;
+  engagementRate: number;
 }
 
 /**
@@ -39,13 +40,14 @@ export function useGoogleAnalytics(period: DatePeriod = "month") {
           startDate: start.toISOString().split('T')[0],
           endDate: end.toISOString().split('T')[0],
           metrics: [
+            "sessions",
             "totalUsers",
             "activeUsers",
             "newUsers",
             "screenPageViews",
             "averageSessionDuration",
             "bounceRate",
-            "sessions",
+            "engagementRate",
           ],
         },
       });
@@ -63,6 +65,7 @@ export function useGoogleAnalytics(period: DatePeriod = "month") {
           pageviews: 0,
           avgSessionDuration: 0,
           bounceRate: 0,
+          engagementRate: 0,
         };
       }
       

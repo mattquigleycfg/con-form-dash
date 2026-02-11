@@ -87,12 +87,16 @@ serve(async (req) => {
       dateRanges: [{ startDate, endDate }],
     };
 
+    // Track requested metric names for proper index mapping in response
+    let summaryMetricNames: string[] = [];
+
     if (queryType === 'summary') {
-      // Original summary query
-      ga4RequestBody.metrics = (metrics || [
-        "totalUsers", "activeUsers", "newUsers", "screenPageViews",
-        "averageSessionDuration", "bounceRate", "sessions"
-      ]).map((m: string) => ({ name: m }));
+      // Summary query - include all standard metrics
+      summaryMetricNames = metrics || [
+        "sessions", "totalUsers", "activeUsers", "newUsers", "screenPageViews",
+        "averageSessionDuration", "bounceRate", "engagementRate"
+      ];
+      ga4RequestBody.metrics = summaryMetricNames.map((m: string) => ({ name: m }));
     } else if (queryType === 'topPages') {
       // Top pages query with dimensions
       ga4RequestBody.metrics = [
@@ -164,26 +168,31 @@ serve(async (req) => {
     let response: any;
 
     if (queryType === 'summary') {
-      // Transform summary data (original format)
+      // Transform summary data using name-based mapping (not positional indices)
       const row = ga4Data.rows?.[0];
       const metricValues = row?.metricValues || [];
+
+      // Build a name→value map so we don't depend on metric order
+      const metricMap: Record<string, string> = {};
+      summaryMetricNames.forEach((name: string, index: number) => {
+        metricMap[name] = metricValues[index]?.value || '0';
+      });
+
+      const sessions = parseInt(metricMap['sessions'] || '0');
 
       response = {
         websiteSessionsWeek: 0,
         websiteSessionsMonth: 0,
         websiteSessionsYTD: 0,
-        totalUsers: parseInt(metricValues[0]?.value || '0'),
-        activeUsers: parseInt(metricValues[1]?.value || '0'),
-        newUsers: parseInt(metricValues[2]?.value || '0'),
-        pageviews: parseInt(metricValues[3]?.value || '0'),
-        avgSessionDuration: parseFloat(metricValues[4]?.value || '0'),
-        bounceRate: parseFloat(metricValues[5]?.value || '0'),
-        engagementRate: parseFloat(metricValues[6]?.value || '0'),
+        totalUsers: parseInt(metricMap['totalUsers'] || '0'),
+        activeUsers: parseInt(metricMap['activeUsers'] || '0'),
+        newUsers: parseInt(metricMap['newUsers'] || '0'),
+        pageviews: parseInt(metricMap['screenPageViews'] || '0'),
+        avgSessionDuration: parseFloat(metricMap['averageSessionDuration'] || '0'),
+        bounceRate: parseFloat(metricMap['bounceRate'] || '0'),
+        engagementRate: parseFloat(metricMap['engagementRate'] || '0'),
       };
 
-      // The sessions value depends on the date range requested
-      const sessions = parseInt(metricValues[7]?.value || '0');
-      
       // Determine which period this is based on date range
       const daysDiff = Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24));
       
