@@ -3,8 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Download, RefreshCw, Search } from "lucide-react";
+import { Download, RefreshCw, AlertTriangle, TrendingUp, ChevronDown } from "lucide-react";
 import { useJobs } from "@/hooks/useJobs";
 import { useNavigate } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { triggerConfetti } from "@/utils/confetti";
 import { logger } from "@/utils/logger";
 import { useOdooProjectStages } from "@/hooks/useOdooProjectStages";
-import { useJobFiltering, ViewMode, BudgetSort, DateRange } from "@/hooks/useJobFilters";
+import { useJobFiltering, ViewMode, BudgetSort, BudgetFilter, DateRange } from "@/hooks/useJobFilters";
 import { JobFilterBar } from "@/components/job-costing/JobFilterBar";
 import { ListView } from "@/components/job-costing/ListView";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,6 +22,9 @@ import { KanbanView } from "@/components/job-costing/KanbanView";
 import { GridView } from "@/components/job-costing/GridView";
 import { AIInsights } from "@/components/job-costing/AIInsights";
 import { processBatched, retryWithBackoff, RateLimiter } from "@/utils/rateLimit";
+import { JobListModal } from "@/components/job-costing/JobListModal";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export default function JobCosting() {
   const navigate = useNavigate();
@@ -33,6 +35,14 @@ export default function JobCosting() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [projectManager, setProjectManager] = useState<string | null>(null);
+  const [stage, setStage] = useState<string | null>(null);
+  const [subcontractor, setSubcontractor] = useState<string | null>(null);
+  const [budgetFilter, setBudgetFilter] = useState<BudgetFilter>('all');
+  const [jobListModalType, setJobListModalType] = useState<"overBudget" | "atRisk" | null>(null);
+  const [aiInsightsOpen, setAiInsightsOpen] = useState<boolean>(() => {
+    const stored = localStorage.getItem('job-costing-ai-insights-open');
+    return stored !== null ? stored === 'true' : true; // default open
+  });
   
   // View and filter state with localStorage persistence
   const [view, setView] = useState<ViewMode>(
@@ -55,6 +65,11 @@ export default function JobCosting() {
   useEffect(() => {
     localStorage.setItem('job-costing-view-mode', view);
   }, [view]);
+
+  // Persist AI insights collapsed state
+  useEffect(() => {
+    localStorage.setItem('job-costing-ai-insights-open', String(aiInsightsOpen));
+  }, [aiInsightsOpen]);
   
   // Compute confirmed orders from date range period (default: last 3 months)
   const relevantSalesOrders = (salesOrders || []).filter(order => {
@@ -64,7 +79,26 @@ export default function JobCosting() {
   });
 
   // Apply all filters using the filtering hook
-  const filteredJobs = useJobFiltering(jobs, { dateRange, budgetSort, searchTerm, projectManager });
+  const filteredJobs = useJobFiltering(jobs, { dateRange, budgetSort, searchTerm, projectManager, stage, subcontractor, budgetFilter });
+
+  // Compute over-budget and at-risk job lists
+  const overBudgetJobs = useMemo(
+    () =>
+      (filteredJobs || []).filter((job) => {
+        const util = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
+        return util > 100;
+      }),
+    [filteredJobs]
+  );
+
+  const atRiskJobs = useMemo(
+    () =>
+      (filteredJobs || []).filter((job) => {
+        const util = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
+        return util > 80 && util <= 100;
+      }),
+    [filteredJobs]
+  );
 
   // Auto-sync on mount and when sales orders change (only run once)
   const [hasAutoSynced, setHasAutoSynced] = useState(false);
@@ -880,6 +914,7 @@ export default function JobCosting() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* 1. Header */}
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Job Costing</h1>
@@ -911,19 +946,22 @@ export default function JobCosting() {
           </div>
         </div>
 
-        {/* Filter Bar */}
-        <JobFilterBar
-          dateRange={dateRange}
-          onDateRangeChange={setDateRange}
-          budgetSort={budgetSort}
-          onBudgetSortChange={setBudgetSort}
-          view={view}
-          onViewChange={setView}
-          projectManager={projectManager}
-          onProjectManagerChange={setProjectManager}
-        />
+        {/* 2. AI Insights (Collapsible) */}
+        {filteredJobs.length > 0 && (
+          <Collapsible open={aiInsightsOpen} onOpenChange={setAiInsightsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 px-2 -ml-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+                <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${aiInsightsOpen ? '' : '-rotate-90'}`} />
+                AI Insights
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2">
+              <AIInsights jobs={filteredJobs} analysisType="all" />
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
-        {/* Summary Dashboard */}
+        {/* 3. Summary Dashboard Cards */}
         {filteredJobs && filteredJobs.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <Card>
@@ -981,53 +1019,97 @@ export default function JobCosting() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card
+              className="cursor-pointer transition-all hover:shadow-md hover:border-red-300 hover:bg-red-50/50"
+              onClick={() => overBudgetJobs.length > 0 && setJobListModalType("overBudget")}
+            >
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Over Budget</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                  <TrendingUp className="h-3.5 w-3.5 text-red-500" />
+                  Over Budget
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600">
-                  {filteredJobs.filter(job => {
-                    const util = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
-                    return util > 100;
-                  }).length}
+                  {overBudgetJobs.length}
                 </div>
+                {overBudgetJobs.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">Click to view jobs</p>
+                )}
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">At Risk</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">
-                  {filteredJobs.filter(job => {
-                    const util = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
-                    return util > 80 && util <= 100;
-                  }).length}
-                </div>
-              </CardContent>
-            </Card>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Card
+                    className="cursor-pointer transition-all hover:shadow-md hover:border-yellow-300 hover:bg-yellow-50/50"
+                    onClick={() => atRiskJobs.length > 0 && setJobListModalType("atRisk")}
+                  >
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
+                        At Risk
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-yellow-600">
+                        {atRiskJobs.length}
+                      </div>
+                      {atRiskJobs.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">Click to view jobs</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TooltipTrigger>
+                {atRiskJobs.length > 0 && (
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <p className="font-semibold mb-1">At Risk Jobs (80-100% utilized):</p>
+                    <ul className="text-xs space-y-0.5">
+                      {atRiskJobs.slice(0, 10).map((job) => (
+                        <li key={job.id} className="flex justify-between gap-3">
+                          <span className="truncate">{job.sale_order_name} — {job.customer_name}</span>
+                          <span className="text-yellow-600 font-medium whitespace-nowrap">
+                            {(job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0).toFixed(0)}%
+                          </span>
+                        </li>
+                      ))}
+                      {atRiskJobs.length > 10 && (
+                        <li className="text-muted-foreground italic">
+                          +{atRiskJobs.length - 10} more...
+                        </li>
+                      )}
+                    </ul>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         )}
 
-        {/* AI Insights */}
-        {filteredJobs.length > 0 && (
-          <AIInsights jobs={filteredJobs} analysisType="all" />
-        )}
+        {/* 4. Search + Filter Bar (combined row) */}
+        <JobFilterBar
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          budgetSort={budgetSort}
+          onBudgetSortChange={setBudgetSort}
+          budgetFilter={budgetFilter}
+          onBudgetFilterChange={setBudgetFilter}
+          view={view}
+          onViewChange={setView}
+          projectManager={projectManager}
+          onProjectManagerChange={setProjectManager}
+          stage={stage}
+          onStageChange={setStage}
+          stages={stages}
+          isLoadingStages={loadingStages}
+          subcontractor={subcontractor}
+          onSubcontractorChange={setSubcontractor}
+        />
 
-        {/* Search */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by SO number, customer, opportunity, or sales person..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-
-        {/* View Rendering */}
+        {/* 5. Job List */}
         <Card>
           <CardContent className="p-0">
             {isLoading ? (
@@ -1074,6 +1156,17 @@ export default function JobCosting() {
         </Card>
       </div>
       <AICopilot />
+
+      {/* Over Budget / At Risk Job List Modal */}
+      <JobListModal
+        open={jobListModalType !== null}
+        onOpenChange={(open) => {
+          if (!open) setJobListModalType(null);
+        }}
+        jobs={jobListModalType === "overBudget" ? overBudgetJobs : atRiskJobs}
+        title={jobListModalType === "overBudget" ? "Over Budget Jobs" : "At Risk Jobs"}
+        variant={jobListModalType ?? "overBudget"}
+      />
     </DashboardLayout>
   );
 }

@@ -13,8 +13,8 @@ export const useOdooProjectManagers = (searchTerm: string = "") => {
   return useQuery({
     queryKey: ["odoo-project-managers", searchTerm],
     queryFn: async () => {
-      // Based on the screenshot, we need to query res.users with specific domain filters
       // Field: user_id, Model: project.project, Type: many2one, Relationship: res.users
+      // Domain from Odoo v16: [['share', '=', False]]
       const filters: any[] = [
         ["share", "=", false], // Only internal users (not portal/public)
         ["active", "=", true]
@@ -40,7 +40,7 @@ export const useOdooProjectManagers = (searchTerm: string = "") => {
       if (error) throw error;
       return data as OdooUser[];
     },
-    enabled: searchTerm.length >= 2,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes to avoid repeated API calls
   });
 };
 

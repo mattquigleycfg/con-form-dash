@@ -3,6 +3,7 @@ import { Job } from "./useJobs";
 
 export type ViewMode = 'list' | 'kanban' | 'grid';
 export type BudgetSort = 'high-low' | 'low-high';
+export type BudgetFilter = 'all' | 'overBudget' | 'atRisk';
 
 export interface DateRange {
   start: Date;
@@ -14,6 +15,9 @@ export interface JobFilters {
   budgetSort: BudgetSort;
   searchTerm: string;
   projectManager: string | null;
+  stage: string | null;
+  subcontractor: string | null;
+  budgetFilter: BudgetFilter;
 }
 
 export const useJobFiltering = (jobs: Job[] | undefined, filters: JobFilters): Job[] => {
@@ -38,7 +42,31 @@ export const useJobFiltering = (jobs: Job[] | undefined, filters: JobFilters): J
       );
     }
     
-    // 3. Search filter
+    // 3. Stage filter
+    if (filters.stage) {
+      filtered = filtered.filter(job => 
+        job.project_stage_name === filters.stage
+      );
+    }
+    
+    // 4. Subcontractor filter
+    if (filters.subcontractor) {
+      filtered = filtered.filter(job => 
+        job.subcontractor_name === filters.subcontractor
+      );
+    }
+    
+    // 5. Budget status filter (Over Budget / At Risk)
+    if (filters.budgetFilter !== 'all') {
+      filtered = filtered.filter(job => {
+        const util = job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0;
+        if (filters.budgetFilter === 'overBudget') return util > 100;
+        if (filters.budgetFilter === 'atRisk') return util > 80 && util <= 100;
+        return true;
+      });
+    }
+    
+    // 6. Search filter
     if (filters.searchTerm) {
       const search = filters.searchTerm.toLowerCase();
       filtered = filtered.filter(job => 
@@ -49,7 +77,7 @@ export const useJobFiltering = (jobs: Job[] | undefined, filters: JobFilters): J
       );
     }
     
-    // 4. Budget sort
+    // 7. Budget sort
     filtered.sort((a, b) => {
       const budgetA = a.total_budget || 0;
       const budgetB = b.total_budget || 0;
@@ -57,5 +85,5 @@ export const useJobFiltering = (jobs: Job[] | undefined, filters: JobFilters): J
     });
     
     return filtered;
-  }, [jobs, filters.dateRange, filters.projectManager, filters.searchTerm, filters.budgetSort]);
+  }, [jobs, filters.dateRange, filters.projectManager, filters.stage, filters.subcontractor, filters.budgetFilter, filters.searchTerm, filters.budgetSort]);
 };

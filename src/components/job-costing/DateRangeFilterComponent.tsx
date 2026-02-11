@@ -17,12 +17,11 @@ export function DateRangeFilterComponent({ dateRange, onChange }: DateRangeFilte
 
   const datePresets = [
     { label: "Last 7 Days", value: "7days" },
-    { label: "Last 30 Days", value: "30days" },
-    { label: "Last 3 Months", value: "3months" },
-    { label: "Last 6 Months", value: "6months" },
-    { label: "This Year", value: "year" },
+    { label: "Last Month", value: "month" },
+    { label: "Last Quarter", value: "quarter" },
+    { label: "Last Year", value: "year" },
     { label: "All Time", value: "all" },
-    { label: "Custom Range", value: "custom" },
+    { label: "Date Range", value: "custom" },
   ];
 
   const handlePresetChange = (value: string) => {
@@ -46,17 +45,14 @@ export function DateRangeFilterComponent({ dateRange, onChange }: DateRangeFilte
       case "7days":
         start.setDate(now.getDate() - 7);
         break;
-      case "30days":
-        start.setDate(now.getDate() - 30);
+      case "month":
+        start.setMonth(now.getMonth() - 1);
         break;
-      case "3months":
+      case "quarter":
         start.setMonth(now.getMonth() - 3);
         break;
-      case "6months":
-        start.setMonth(now.getMonth() - 6);
-        break;
       case "year":
-        start = new Date(now.getFullYear(), 0, 1);
+        start.setFullYear(now.getFullYear() - 1);
         break;
     }
 
@@ -65,7 +61,7 @@ export function DateRangeFilterComponent({ dateRange, onChange }: DateRangeFilte
 
   return (
     <div className="flex flex-col gap-2">
-      <Select onValueChange={handlePresetChange} defaultValue="3months">
+      <Select onValueChange={handlePresetChange} defaultValue="quarter">
         <SelectTrigger className="w-[200px]">
           <SelectValue placeholder="Select date range" />
         </SelectTrigger>
