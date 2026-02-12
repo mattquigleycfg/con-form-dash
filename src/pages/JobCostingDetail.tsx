@@ -264,6 +264,30 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
           .eq("odoo_line_id", update.odoo_line_id);
       }
       
+      // 1b. Re-fetch updated budget lines and recalculate job budget totals
+      const { data: refreshedBudgetLines } = await supabase
+        .from("job_budget_lines")
+        .select("*")
+        .eq("job_id", id);
+
+      if (refreshedBudgetLines) {
+        const newMaterialBudget = refreshedBudgetLines
+          .filter(line => isMaterialBudgetLine(line))
+          .reduce((sum, line) => sum + Number(line.subtotal || 0), 0);
+        const newNonMaterialBudget = refreshedBudgetLines
+          .filter(line => isServiceBudgetLine(line))
+          .reduce((sum, line) => sum + Number(line.subtotal || 0), 0);
+
+        await supabase
+          .from("jobs")
+          .update({
+            material_budget: newMaterialBudget,
+            non_material_budget: newNonMaterialBudget,
+            total_budget: newMaterialBudget + newNonMaterialBudget,
+          })
+          .eq("id", id);
+      }
+      
       // 2. Update project stage and project manager
       if (job.analytic_account_id) {
         const { data: projects } = await supabase.functions.invoke("odoo-query", {
@@ -293,7 +317,10 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
         }
       }
       
-      // 3. Mark job as synced
+      // 3. Recalculate actual cost totals from all sources
+      await recalculateJobTotals();
+      
+      // 4. Mark job as synced
       await supabase
         .from("jobs")
         .update({ 
@@ -301,7 +328,7 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
         })
         .eq("id", id);
       
-      // 4. Invalidate queries to refresh data
+      // 5. Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["job", id] });
       queryClient.invalidateQueries({ queryKey: ["job-budget-lines", id] });
       queryClient.invalidateQueries({ queryKey: ["sale-order-lines", job.odoo_sale_order_id] });

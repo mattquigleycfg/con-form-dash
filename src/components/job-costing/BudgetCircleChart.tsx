@@ -18,10 +18,21 @@ export function BudgetCircleChart({
   nonMaterialBudget,
   nonMaterialActual,
 }: BudgetCircleChartProps) {
-  const utilizationPercent = totalBudget > 0 ? (totalActual / totalBudget) * 100 : 0;
+  const utilizationPercent = totalBudget > 0
+    ? (totalActual / totalBudget) * 100
+    : (totalActual > 0 ? 100 : 0);
   const remaining = Math.max(0, totalBudget - totalActual);
-  const materialUtilization = materialBudget > 0 ? (materialActual / materialBudget) * 100 : 0;
-  const nonMaterialUtilization = nonMaterialBudget > 0 ? (nonMaterialActual / nonMaterialBudget) * 100 : 0;
+  const materialUtilization = materialBudget > 0
+    ? (materialActual / materialBudget) * 100
+    : (materialActual > 0 ? 100 : 0);
+  const nonMaterialUtilization = nonMaterialBudget > 0
+    ? (nonMaterialActual / nonMaterialBudget) * 100
+    : (nonMaterialActual > 0 ? 100 : 0);
+
+  // Edge case flags: budget is zero but there are actual costs
+  const isNoBudget = totalBudget === 0 && totalActual > 0;
+  const isMaterialNoBudget = materialBudget === 0 && materialActual > 0;
+  const isNonMaterialNoBudget = nonMaterialBudget === 0 && nonMaterialActual > 0;
 
   const getColor = (percent: number) => {
     if (percent > 100) return '#ef4444'; // red - over budget
@@ -29,30 +40,45 @@ export function BudgetCircleChart({
     return '#10b981'; // green - on track
   };
 
-  const mainColor = getColor(utilizationPercent);
-  const materialColor = getColor(materialUtilization);
-  const nonMaterialColor = getColor(nonMaterialUtilization);
+  const mainColor = isNoBudget ? '#ef4444' : getColor(utilizationPercent);
+  const materialColor = isMaterialNoBudget ? '#ef4444' : getColor(materialUtilization);
+  const nonMaterialColor = isNonMaterialNoBudget ? '#ef4444' : getColor(nonMaterialUtilization);
 
-  const mainData = [
-    { name: 'Spent', value: Math.min(totalActual, totalBudget) },
-    { name: 'Remaining', value: remaining },
-  ];
+  const mainData = isNoBudget
+    ? [
+        { name: 'Spent', value: totalActual },
+        { name: 'Remaining', value: 0 },
+      ]
+    : [
+        { name: 'Spent', value: Math.min(totalActual, totalBudget) },
+        { name: 'Remaining', value: remaining },
+      ];
 
-  // If over budget, show overspend
-  if (totalActual > totalBudget) {
+  // If over budget (and budget > 0), show overspend slice
+  if (!isNoBudget && totalActual > totalBudget) {
     mainData[0].value = totalBudget;
     mainData.push({ name: 'Over Budget', value: totalActual - totalBudget });
   }
 
-  const materialData = [
-    { name: 'Spent', value: Math.min(materialActual, materialBudget) },
-    { name: 'Remaining', value: Math.max(0, materialBudget - materialActual) },
-  ];
+  const materialData = isMaterialNoBudget
+    ? [
+        { name: 'Spent', value: materialActual },
+        { name: 'Remaining', value: 0 },
+      ]
+    : [
+        { name: 'Spent', value: Math.min(materialActual, materialBudget) },
+        { name: 'Remaining', value: Math.max(0, materialBudget - materialActual) },
+      ];
 
-  const nonMaterialData = [
-    { name: 'Spent', value: Math.min(nonMaterialActual, nonMaterialBudget) },
-    { name: 'Remaining', value: Math.max(0, nonMaterialBudget - nonMaterialActual) },
-  ];
+  const nonMaterialData = isNonMaterialNoBudget
+    ? [
+        { name: 'Spent', value: nonMaterialActual },
+        { name: 'Remaining', value: 0 },
+      ]
+    : [
+        { name: 'Spent', value: Math.min(nonMaterialActual, nonMaterialBudget) },
+        { name: 'Remaining', value: Math.max(0, nonMaterialBudget - nonMaterialActual) },
+      ];
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -63,7 +89,7 @@ export function BudgetCircleChart({
     }).format(value);
   };
 
-  const isOverBudget = utilizationPercent > 100;
+  const isOverBudget = utilizationPercent > 100 || isNoBudget;
 
   return (
     <div className="w-full bg-gradient-to-br from-background to-accent/5 rounded-lg border shadow-sm p-6">
@@ -96,21 +122,35 @@ export function BudgetCircleChart({
             {/* Center Content */}
             <div className="absolute inset-0 flex flex-col items-center justify-center animate-in fade-in duration-400 delay-200 px-12 py-10">
               <div className="text-center space-y-3">
-                <div className={`flex items-baseline justify-center gap-1 ${isOverBudget ? 'text-destructive' : 'text-foreground'} transition-colors duration-200`}>
-                  <span className="text-4xl font-bold tracking-tight">
-                    {utilizationPercent.toFixed(1)}
-                  </span>
-                  <span className="text-2xl font-semibold">%</span>
-                </div>
-                <div className="text-sm font-medium text-muted-foreground">
-                  {isOverBudget ? 'Over Budget' : 'Utilized'}
-                </div>
-                <div className={`text-xl font-semibold ${isOverBudget ? 'text-destructive' : 'text-primary'}`}>
-                  {formatCurrency(isOverBudget ? totalActual - totalBudget : remaining)}
-                </div>
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {isOverBudget ? 'Overspend' : 'Remaining'}
-                </div>
+                {isNoBudget ? (
+                  <>
+                    <div className="text-sm font-medium text-destructive">No Budget Set</div>
+                    <div className="text-xl font-semibold text-destructive">
+                      {formatCurrency(totalActual)}
+                    </div>
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Spent
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className={`flex items-baseline justify-center gap-1 ${isOverBudget ? 'text-destructive' : 'text-foreground'} transition-colors duration-200`}>
+                      <span className="text-4xl font-bold tracking-tight">
+                        {utilizationPercent.toFixed(1)}
+                      </span>
+                      <span className="text-2xl font-semibold">%</span>
+                    </div>
+                    <div className="text-sm font-medium text-muted-foreground">
+                      {isOverBudget ? 'Over Budget' : 'Utilized'}
+                    </div>
+                    <div className={`text-xl font-semibold ${isOverBudget ? 'text-destructive' : 'text-primary'}`}>
+                      {formatCurrency(isOverBudget ? totalActual - totalBudget : remaining)}
+                    </div>
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {isOverBudget ? 'Overspend' : 'Remaining'}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -158,9 +198,13 @@ export function BudgetCircleChart({
               
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-2xl font-bold" style={{ color: materialColor }}>
-                    {materialUtilization.toFixed(0)}%
-                  </div>
+                  {isMaterialNoBudget ? (
+                    <div className="text-xs font-medium text-destructive">No Budget</div>
+                  ) : (
+                    <div className="text-2xl font-bold" style={{ color: materialColor }}>
+                      {materialUtilization.toFixed(0)}%
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -168,26 +212,28 @@ export function BudgetCircleChart({
             <div className="mt-3 space-y-1 w-full">
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Budget:</span>
-                <span className="font-medium">{formatCurrency(materialBudget)}</span>
+                <span className={`font-medium ${isMaterialNoBudget ? 'text-destructive' : ''}`}>
+                  {formatCurrency(materialBudget)}
+                </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Actual:</span>
-                <span className={`font-medium ${materialUtilization > 100 ? 'text-destructive' : ''}`}>
+                <span className={`font-medium ${materialUtilization > 100 || isMaterialNoBudget ? 'text-destructive' : ''}`}>
                   {formatCurrency(materialActual)}
                 </span>
               </div>
               <div className="flex justify-between text-xs pt-1 border-t">
                 <span className="text-muted-foreground">Remaining:</span>
-                <span className={`font-medium ${materialUtilization > 100 ? 'text-destructive' : 'text-primary'}`}>
+                <span className={`font-medium ${materialUtilization > 100 || isMaterialNoBudget ? 'text-destructive' : 'text-primary'}`}>
                   {formatCurrency(Math.max(0, materialBudget - materialActual))}
                 </span>
               </div>
             </div>
 
-            {materialUtilization > 100 && (
+            {(materialUtilization > 100 || isMaterialNoBudget) && materialActual > 0 && (
               <div className="mt-2 flex items-center gap-1 text-xs text-destructive">
                 <TrendingUp className="h-3 w-3" />
-                <span>{formatCurrency(materialActual - materialBudget)} over</span>
+                <span>{isMaterialNoBudget ? `${formatCurrency(materialActual)} spent` : `${formatCurrency(materialActual - materialBudget)} over`}</span>
               </div>
             )}
           </div>
@@ -218,9 +264,13 @@ export function BudgetCircleChart({
               
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-2xl font-bold" style={{ color: nonMaterialColor }}>
-                    {nonMaterialUtilization.toFixed(0)}%
-                  </div>
+                  {isNonMaterialNoBudget ? (
+                    <div className="text-xs font-medium text-destructive">No Budget</div>
+                  ) : (
+                    <div className="text-2xl font-bold" style={{ color: nonMaterialColor }}>
+                      {nonMaterialUtilization.toFixed(0)}%
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -228,26 +278,28 @@ export function BudgetCircleChart({
             <div className="mt-3 space-y-1 w-full">
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Budget:</span>
-                <span className="font-medium">{formatCurrency(nonMaterialBudget)}</span>
+                <span className={`font-medium ${isNonMaterialNoBudget ? 'text-destructive' : ''}`}>
+                  {formatCurrency(nonMaterialBudget)}
+                </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Actual:</span>
-                <span className={`font-medium ${nonMaterialUtilization > 100 ? 'text-destructive' : ''}`}>
+                <span className={`font-medium ${nonMaterialUtilization > 100 || isNonMaterialNoBudget ? 'text-destructive' : ''}`}>
                   {formatCurrency(nonMaterialActual)}
                 </span>
               </div>
               <div className="flex justify-between text-xs pt-1 border-t">
                 <span className="text-muted-foreground">Remaining:</span>
-                <span className={`font-medium ${nonMaterialUtilization > 100 ? 'text-destructive' : 'text-primary'}`}>
+                <span className={`font-medium ${nonMaterialUtilization > 100 || isNonMaterialNoBudget ? 'text-destructive' : 'text-primary'}`}>
                   {formatCurrency(Math.max(0, nonMaterialBudget - nonMaterialActual))}
                 </span>
               </div>
             </div>
 
-            {nonMaterialUtilization > 100 && (
+            {(nonMaterialUtilization > 100 || isNonMaterialNoBudget) && nonMaterialActual > 0 && (
               <div className="mt-2 flex items-center gap-1 text-xs text-destructive">
                 <TrendingUp className="h-3 w-3" />
-                <span>{formatCurrency(nonMaterialActual - nonMaterialBudget)} over</span>
+                <span>{isNonMaterialNoBudget ? `${formatCurrency(nonMaterialActual)} spent` : `${formatCurrency(nonMaterialActual - nonMaterialBudget)} over`}</span>
               </div>
             )}
           </div>
