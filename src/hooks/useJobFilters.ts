@@ -35,24 +35,27 @@ export const useJobFiltering = (jobs: Job[] | undefined, filters: JobFilters): J
       });
     }
     
-    // 2. Project Manager filter
+    // 2. Project Manager filter (case-insensitive, trimmed)
     if (filters.projectManager) {
+      const pmFilter = filters.projectManager.trim().toLowerCase();
       filtered = filtered.filter(job => 
-        job.project_manager_name === filters.projectManager
+        job.project_manager_name?.trim().toLowerCase() === pmFilter
       );
     }
     
-    // 3. Stage filter
+    // 3. Stage filter (case-insensitive, trimmed)
     if (filters.stage) {
+      const stageFilter = filters.stage.trim().toLowerCase();
       filtered = filtered.filter(job => 
-        job.project_stage_name === filters.stage
+        job.project_stage_name?.trim().toLowerCase() === stageFilter
       );
     }
     
-    // 4. Subcontractor filter
+    // 4. Subcontractor filter (case-insensitive, trimmed)
     if (filters.subcontractor) {
+      const subFilter = filters.subcontractor.trim().toLowerCase();
       filtered = filtered.filter(job => 
-        job.subcontractor_name === filters.subcontractor
+        job.subcontractor_name?.trim().toLowerCase() === subFilter
       );
     }
     

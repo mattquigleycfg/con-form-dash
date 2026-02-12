@@ -9,6 +9,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from "@/components/ui/command";
 import {
   Popover,
@@ -47,32 +48,15 @@ export function ProjectManagerFilter({ value, onChange }: ProjectManagerFilterPr
             value={searchTerm}
             onValueChange={setSearchTerm}
           />
-          <CommandEmpty>
-            {isLoading ? "Loading..." : "No manager found."}
-          </CommandEmpty>
-          <CommandGroup>
-            <CommandItem
-              value="all"
-              onSelect={() => {
-                onChange(null);
-                setOpen(false);
-                setSearchTerm("");
-              }}
-            >
-              <Check
-                className={cn(
-                  "mr-2 h-4 w-4",
-                  !value ? "opacity-100" : "opacity-0"
-                )}
-              />
-              All Project Managers
-            </CommandItem>
-            {managers?.map((manager) => (
+          <CommandList>
+            <CommandEmpty>
+              {isLoading ? "Loading..." : "No manager found."}
+            </CommandEmpty>
+            <CommandGroup>
               <CommandItem
-                key={manager.id}
-                value={manager.name}
+                value="all"
                 onSelect={() => {
-                  onChange(manager.name);
+                  onChange(null);
                   setOpen(false);
                   setSearchTerm("");
                 }}
@@ -80,20 +64,39 @@ export function ProjectManagerFilter({ value, onChange }: ProjectManagerFilterPr
                 <Check
                   className={cn(
                     "mr-2 h-4 w-4",
-                    value === manager.name ? "opacity-100" : "opacity-0"
+                    !value ? "opacity-100" : "opacity-0"
                   )}
                 />
-                <div>
-                  <div className="font-medium">{manager.name}</div>
-                  {manager.email && (
-                    <div className="text-xs text-muted-foreground">
-                      {manager.email}
-                    </div>
-                  )}
-                </div>
+                All Project Managers
               </CommandItem>
-            ))}
-          </CommandGroup>
+              {managers?.map((manager) => (
+                <CommandItem
+                  key={manager.id}
+                  value={manager.name}
+                  onSelect={() => {
+                    onChange(value === manager.name ? null : manager.name);
+                    setOpen(false);
+                    setSearchTerm("");
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === manager.name ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <div>
+                    <div className="font-medium">{manager.name}</div>
+                    {manager.email && (
+                      <div className="text-xs text-muted-foreground">
+                        {manager.email}
+                      </div>
+                    )}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
         </Command>
         {value && (
           <div className="p-2 border-t">

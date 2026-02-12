@@ -9,6 +9,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from "@/components/ui/command";
 import {
   Popover,
@@ -47,32 +48,15 @@ export function SubcontractorFilter({ value, onChange }: SubcontractorFilterProp
             value={searchTerm}
             onValueChange={setSearchTerm}
           />
-          <CommandEmpty>
-            {isLoading ? "Loading..." : "No vendor found."}
-          </CommandEmpty>
-          <CommandGroup>
-            <CommandItem
-              value="all"
-              onSelect={() => {
-                onChange(null);
-                setOpen(false);
-                setSearchTerm("");
-              }}
-            >
-              <Check
-                className={cn(
-                  "mr-2 h-4 w-4",
-                  !value ? "opacity-100" : "opacity-0"
-                )}
-              />
-              All Subcontractors
-            </CommandItem>
-            {vendors?.map((vendor) => (
+          <CommandList>
+            <CommandEmpty>
+              {isLoading ? "Loading..." : "No vendor found."}
+            </CommandEmpty>
+            <CommandGroup>
               <CommandItem
-                key={vendor.id}
-                value={vendor.name}
+                value="all"
                 onSelect={() => {
-                  onChange(vendor.name);
+                  onChange(null);
                   setOpen(false);
                   setSearchTerm("");
                 }}
@@ -80,22 +64,41 @@ export function SubcontractorFilter({ value, onChange }: SubcontractorFilterProp
                 <Check
                   className={cn(
                     "mr-2 h-4 w-4",
-                    value === vendor.name ? "opacity-100" : "opacity-0"
+                    !value ? "opacity-100" : "opacity-0"
                   )}
                 />
-                <div>
-                  <div className="font-medium">{vendor.name}</div>
-                  {(vendor.city || vendor.phone) && (
-                    <div className="text-xs text-muted-foreground">
-                      {vendor.city && `${vendor.city}`}
-                      {vendor.city && vendor.phone && " | "}
-                      {vendor.phone && `${vendor.phone}`}
-                    </div>
-                  )}
-                </div>
+                All Subcontractors
               </CommandItem>
-            ))}
-          </CommandGroup>
+              {vendors?.map((vendor) => (
+                <CommandItem
+                  key={vendor.id}
+                  value={vendor.name}
+                  onSelect={() => {
+                    onChange(value === vendor.name ? null : vendor.name);
+                    setOpen(false);
+                    setSearchTerm("");
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === vendor.name ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <div>
+                    <div className="font-medium">{vendor.name}</div>
+                    {(vendor.city || vendor.phone) && (
+                      <div className="text-xs text-muted-foreground">
+                        {vendor.city && `${vendor.city}`}
+                        {vendor.city && vendor.phone && " | "}
+                        {vendor.phone && `${vendor.phone}`}
+                      </div>
+                    )}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
         </Command>
         {value && (
           <div className="p-2 border-t">

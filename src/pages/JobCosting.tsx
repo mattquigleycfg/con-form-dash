@@ -100,6 +100,31 @@ export default function JobCosting() {
     [filteredJobs]
   );
 
+  // Determine if any filter deviates from default values
+  const hasActiveFilters = useMemo(() => {
+    return (
+      searchTerm !== "" ||
+      projectManager !== null ||
+      stage !== null ||
+      subcontractor !== null ||
+      budgetFilter !== "all" ||
+      budgetSort !== "high-low"
+    );
+  }, [searchTerm, projectManager, stage, subcontractor, budgetFilter, budgetSort]);
+
+  const handleClearAll = useCallback(() => {
+    setSearchTerm("");
+    setProjectManager(null);
+    setStage(null);
+    setSubcontractor(null);
+    setBudgetFilter("all");
+    setBudgetSort("high-low");
+    // Reset date range to last quarter (default)
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    setDateRange({ start: threeMonthsAgo, end: new Date() });
+  }, []);
+
   // Auto-sync on mount and when sales orders change (only run once)
   const [hasAutoSynced, setHasAutoSynced] = useState(false);
 
@@ -1107,6 +1132,8 @@ export default function JobCosting() {
           isLoadingStages={loadingStages}
           subcontractor={subcontractor}
           onSubcontractorChange={setSubcontractor}
+          onClearAll={handleClearAll}
+          hasActiveFilters={hasActiveFilters}
         />
 
         {/* 5. Job List */}

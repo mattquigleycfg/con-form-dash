@@ -9,6 +9,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from "@/components/ui/command";
 import {
   Popover,
@@ -43,44 +44,46 @@ export function StageFilter({ value, onChange, stages, isLoading }: StageFilterP
       <PopoverContent className="w-[200px] p-0">
         <Command>
           <CommandInput placeholder="Search stage..." />
-          <CommandEmpty>
-            {isLoading ? "Loading..." : "No stage found."}
-          </CommandEmpty>
-          <CommandGroup>
-            <CommandItem
-              value="all"
-              onSelect={() => {
-                onChange(null);
-                setOpen(false);
-              }}
-            >
-              <Check
-                className={cn(
-                  "mr-2 h-4 w-4",
-                  !value ? "opacity-100" : "opacity-0"
-                )}
-              />
-              All Stages
-            </CommandItem>
-            {stages.map((stage) => (
+          <CommandList>
+            <CommandEmpty>
+              {isLoading ? "Loading..." : "No stage found."}
+            </CommandEmpty>
+            <CommandGroup>
               <CommandItem
-                key={stage.id}
-                value={stage.name}
+                value="all"
                 onSelect={() => {
-                  onChange(stage.name);
+                  onChange(null);
                   setOpen(false);
                 }}
               >
                 <Check
                   className={cn(
                     "mr-2 h-4 w-4",
-                    value === stage.name ? "opacity-100" : "opacity-0"
+                    !value ? "opacity-100" : "opacity-0"
                   )}
                 />
-                {stage.name}
+                All Stages
               </CommandItem>
-            ))}
-          </CommandGroup>
+              {stages.map((stage) => (
+                <CommandItem
+                  key={stage.id}
+                  value={stage.name}
+                  onSelect={() => {
+                    onChange(value === stage.name ? null : stage.name);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === stage.name ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {stage.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
         </Command>
         {value && (
           <div className="p-2 border-t">

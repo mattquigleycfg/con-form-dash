@@ -1,4 +1,4 @@
-import { Search, AlertTriangle, TrendingUp } from "lucide-react";
+import { Search, AlertTriangle, TrendingUp, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DateRangeFilterComponent } from "./DateRangeFilterComponent";
@@ -29,6 +29,8 @@ interface JobFilterBarProps {
   isLoadingStages: boolean;
   subcontractor: string | null;
   onSubcontractorChange: (subcontractor: string | null) => void;
+  onClearAll: () => void;
+  hasActiveFilters: boolean;
 }
 
 export function JobFilterBar({
@@ -50,6 +52,8 @@ export function JobFilterBar({
   isLoadingStages,
   subcontractor,
   onSubcontractorChange,
+  onClearAll,
+  hasActiveFilters,
 }: JobFilterBarProps) {
   return (
     <div className="flex flex-wrap gap-2 items-center">
@@ -129,6 +133,17 @@ export function JobFilterBar({
         value={budgetSort}
         onChange={onBudgetSortChange}
       />
+
+      {/* Clear Filters */}
+      {hasActiveFilters && (
+        <button
+          onClick={onClearAll}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2 decoration-muted-foreground/40 hover:decoration-foreground/60 px-1 py-0.5"
+        >
+          <X className="h-3 w-3" />
+          Clear filters
+        </button>
+      )}
 
       {/* View Switcher - pushed to far right */}
       <div className="ml-auto">
