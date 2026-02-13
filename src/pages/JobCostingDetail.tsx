@@ -289,6 +289,9 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
       }
       
       // 2. Update project stage and project manager
+      let project: any = null;
+
+      // Primary lookup: Find project via analytic account
       if (job.analytic_account_id) {
         const { data: projects } = await supabase.functions.invoke("odoo-query", {
           body: {
@@ -303,18 +306,50 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
 
         const projectData = projects as any[];
         if (projectData && projectData.length > 0) {
-          const project = projectData[0];
-          const stageName = project.stage_id?.[1] || null;
-          const projectManagerName = project.user_id?.[1] || null;
-          
-          await supabase
-            .from("jobs")
-            .update({ 
-              project_stage_name: stageName,
-              project_manager_name: projectManagerName 
-            })
-            .eq("id", id);
+          project = projectData[0];
         }
+      }
+
+      // Fallback lookup: Try finding project by sale_order_id
+      if (!project && job.odoo_sale_order_id) {
+        try {
+          const { data: projectsBySO } = await supabase.functions.invoke("odoo-query", {
+            body: {
+              model: "project.project",
+              method: "search_read",
+              args: [
+                [["sale_order_id", "=", job.odoo_sale_order_id]],
+                ["id", "name", "stage_id", "user_id"],
+              ],
+            },
+          });
+
+          const projectSOData = projectsBySO as any[];
+          if (projectSOData && projectSOData.length > 0) {
+            project = projectSOData[0];
+          }
+        } catch {
+          // sale_order_id field may not exist on this Odoo instance - skip gracefully
+        }
+      }
+
+      if (project) {
+        const stageName = project.stage_id?.[1] || null;
+        const projectManagerName = project.user_id?.[1] || null;
+        
+        await supabase
+          .from("jobs")
+          .update({ 
+            project_stage_name: stageName,
+            project_manager_name: projectManagerName 
+          })
+          .eq("id", id);
+      } else if (job.sales_person_name && !job.project_manager_name) {
+        // Last resort: use salesperson as PM fallback
+        await supabase
+          .from("jobs")
+          .update({ project_manager_name: job.sales_person_name })
+          .eq("id", id);
       }
       
       // 3. Recalculate actual cost totals from all sources

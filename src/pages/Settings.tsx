@@ -365,6 +365,9 @@ export default function Settings() {
           let projectStageName = null;
           let projectManagerName = null;
 
+          let projectFound = false;
+
+          // Primary lookup: Find project via analytic account
           if (order.analytic_account_id) {
             const { data: projects } = await supabase.functions.invoke("odoo-query", {
               body: {
@@ -384,11 +387,46 @@ export default function Settings() {
               projectStageId = project.stage_id?.[0] || null;
               projectStageName = project.stage_id?.[1] || null;
               projectManagerName = project.user_id?.[1] || null;
+              projectFound = true;
               
               if (!projectManagerName) {
                 console.warn(`⚠ No project manager assigned for order ${order.name} (Project: ${project.name})`);
               }
             }
+          }
+
+          // Fallback lookup: Try finding project by sale_order_id
+          if (!projectFound) {
+            try {
+              const { data: projectsBySO } = await supabase.functions.invoke("odoo-query", {
+                body: {
+                  model: "project.project",
+                  method: "search_read",
+                  args: [
+                    [["sale_order_id", "=", order.id]],
+                    ["id", "name", "analytic_account_id", "stage_id", "user_id"],
+                  ],
+                },
+              });
+
+              if (projectsBySO && projectsBySO.length > 0) {
+                const project = projectsBySO[0];
+                projectAnalyticAccountId = project.analytic_account_id?.[0] || null;
+                projectAnalyticAccountName = project.analytic_account_id?.[1] || null;
+                projectStageId = project.stage_id?.[0] || null;
+                projectStageName = project.stage_id?.[1] || null;
+                projectManagerName = project.user_id?.[1] || null;
+                console.info(`✓ Found project via sale_order_id fallback for ${order.name}`);
+              }
+            } catch {
+              // sale_order_id field may not exist on this Odoo instance - skip gracefully
+            }
+          }
+
+          // Last resort: use salesperson as PM fallback
+          if (!projectManagerName && order.user_id && order.user_id[1]) {
+            projectManagerName = order.user_id[1];
+            console.info(`Using salesperson as PM fallback for ${order.name}: ${projectManagerName}`);
           }
 
           // Create or update job
