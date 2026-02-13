@@ -81,6 +81,16 @@ export default function JobCosting() {
   // Apply all filters using the filtering hook
   const filteredJobs = useJobFiltering(jobs, { dateRange, budgetSort, searchTerm, projectManager, stage, subcontractor, budgetFilter });
 
+  // Extract unique PM names from jobs for the filter dropdown
+  const jobPMNames = useMemo(() => {
+    if (!jobs) return [];
+    const names = new Set<string>();
+    for (const job of jobs) {
+      if (job.project_manager_name) names.add(job.project_manager_name);
+    }
+    return Array.from(names).sort();
+  }, [jobs]);
+
   // Compute over-budget and at-risk job lists
   const overBudgetJobs = useMemo(
     () =>
@@ -920,7 +930,9 @@ export default function JobCosting() {
           }
 
           const projectId = project.id;
-          const projectManagerName = project.user_id?.[1] || null;
+          // Resolve PM: project PM > existing job PM > salesperson fallback
+          const projectPM = project.user_id?.[1] || null;
+          const resolvedPM = projectPM || job.project_manager_name || job.sales_person_name || null;
           const projectStageFromProject = project.stage_id?.[1] || null;
 
           // Find tasks for this project
@@ -938,6 +950,12 @@ export default function JobCosting() {
             },
           });
 
+          // Build the update object - NEVER overwrite PM with null
+          const jobUpdate: Record<string, any> = {};
+          if (resolvedPM) {
+            jobUpdate.project_manager_name = resolvedPM;
+          }
+
           if (tasks && tasks.length > 0) {
             // Get the primary task (highest priority, most recent)
             const mainTask = tasks.sort((a: any, b: any) => {
@@ -948,56 +966,44 @@ export default function JobCosting() {
             })[0];
 
             if (mainTask.stage_id && mainTask.stage_id[0]) {
-              const taskStageId = mainTask.stage_id[0];
-              const taskStageName = mainTask.stage_id[1];
-
-              // Update job with task stage and project manager
-              await supabase
-                .from("jobs")
-                .update({
-                  project_stage_id: taskStageId,
-                  project_stage_name: taskStageName,
-                  project_manager_name: projectManagerName,
-                })
-                .eq("id", job.id);
-
-              logger.info(`Updated stage for ${job.sale_order_name}: ${taskStageName}${projectManagerName ? ` | PM: ${projectManagerName}` : ''}`);
-              updatedCount++;
+              jobUpdate.project_stage_id = mainTask.stage_id[0];
+              jobUpdate.project_stage_name = mainTask.stage_id[1];
             } else if (projectStageFromProject) {
-              // If no tasks, use project stage directly
-              await supabase
-                .from("jobs")
-                .update({
-                  project_stage_name: projectStageFromProject,
-                  project_manager_name: projectManagerName,
-                })
-                .eq("id", job.id);
-              
-              logger.info(`Updated project stage for ${job.sale_order_name}: ${projectStageFromProject}${projectManagerName ? ` | PM: ${projectManagerName}` : ''}`);
-              updatedCount++;
-            } else if (projectManagerName && projectManagerName !== job.project_manager_name) {
-              // Even if no stage update, update project manager if it changed
-              await supabase
-                .from("jobs")
-                .update({
-                  project_manager_name: projectManagerName,
-                })
-                .eq("id", job.id);
-              
-              logger.info(`Updated project manager for ${job.sale_order_name}: ${projectManagerName}`);
-              updatedCount++;
+              jobUpdate.project_stage_name = projectStageFromProject;
             }
+          } else if (projectStageFromProject) {
+            jobUpdate.project_stage_name = projectStageFromProject;
+          }
+
+          // Only write to DB if we have something to update
+          if (Object.keys(jobUpdate).length > 0) {
+            await supabase
+              .from("jobs")
+              .update(jobUpdate)
+              .eq("id", job.id);
+
+            logger.info(`Updated ${job.sale_order_name}: ${JSON.stringify(jobUpdate)}`);
+            updatedCount++;
           }
         } catch (error) {
           logger.error(`Error refreshing stage for job ${job.sale_order_name}:`, error);
         }
       }
 
+      // Diagnostic: count how many jobs now have PM assigned
+      const { data: allJobs } = await supabase.from("jobs").select("project_manager_name, sale_order_name");
+      const withPM = allJobs?.filter(j => j.project_manager_name) || [];
+      const withoutPM = allJobs?.filter(j => !j.project_manager_name) || [];
+      logger.info(`PM diagnostic: ${withPM.length}/${allJobs?.length} jobs have a project manager assigned`);
+      if (withoutPM.length > 0) {
+        logger.info(`Jobs missing PM: ${withoutPM.map(j => j.sale_order_name).join(', ')}`);
+      }
+
       if (updatedCount > 0) {
-        toast.success(`Updated stages for ${updatedCount} job(s)!`);
+        toast.success(`Updated ${updatedCount} job(s)! (${withPM.length}/${allJobs?.length} have PM assigned)`);
         queryClient.invalidateQueries({ queryKey: ["jobs"] });
       } else {
-        toast.info("No stage updates needed");
+        toast.info(`No stage updates needed (${withPM.length}/${allJobs?.length} have PM assigned)`);
       }
     } catch (error) {
       logger.error("Error refreshing stages", error);
@@ -1205,6 +1211,7 @@ export default function JobCosting() {
           onSubcontractorChange={setSubcontractor}
           onClearAll={handleClearAll}
           hasActiveFilters={hasActiveFilters}
+          jobPMNames={jobPMNames}
         />
 
         {/* 5. Job List */}

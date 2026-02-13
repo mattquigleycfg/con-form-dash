@@ -31,6 +31,8 @@ interface JobFilterBarProps {
   onSubcontractorChange: (subcontractor: string | null) => void;
   onClearAll: () => void;
   hasActiveFilters: boolean;
+  /** PM names already assigned to jobs */
+  jobPMNames?: string[];
 }
 
 export function JobFilterBar({
@@ -54,6 +56,7 @@ export function JobFilterBar({
   onSubcontractorChange,
   onClearAll,
   hasActiveFilters,
+  jobPMNames,
 }: JobFilterBarProps) {
   return (
     <div className="flex flex-wrap gap-2 items-center">
@@ -126,6 +129,7 @@ export function JobFilterBar({
       <ProjectManagerFilter
         value={projectManager}
         onChange={onProjectManagerChange}
+        jobPMNames={jobPMNames}
       />
 
       {/* Sort By */}

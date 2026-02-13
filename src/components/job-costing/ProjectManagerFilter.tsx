@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Check, ChevronsUpDown, XCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -21,12 +21,30 @@ import { useOdooProjectManagers } from "@/hooks/useOdooProjectManagers";
 interface ProjectManagerFilterProps {
   value: string | null;
   onChange: (value: string | null) => void;
+  /** PM names already assigned to jobs - these always appear in the dropdown */
+  jobPMNames?: string[];
 }
 
-export function ProjectManagerFilter({ value, onChange }: ProjectManagerFilterProps) {
+export function ProjectManagerFilter({ value, onChange, jobPMNames = [] }: ProjectManagerFilterProps) {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const { data: managers, isLoading } = useOdooProjectManagers(searchTerm);
+
+  // Merge Odoo users with PM names from actual jobs to ensure all assigned PMs are selectable
+  const mergedManagers = useMemo(() => {
+    const odooNames = new Set((managers || []).map(m => m.name));
+    const combined = [...(managers || [])];
+
+    // Add PM names from jobs that aren't already in the Odoo user list
+    for (const pmName of jobPMNames) {
+      if (pmName && !odooNames.has(pmName)) {
+        combined.push({ id: -1, name: pmName, login: '', email: false, phone: false });
+        odooNames.add(pmName);
+      }
+    }
+
+    return combined.sort((a, b) => a.name.localeCompare(b.name));
+  }, [managers, jobPMNames]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -69,9 +87,9 @@ export function ProjectManagerFilter({ value, onChange }: ProjectManagerFilterPr
                 />
                 All Project Managers
               </CommandItem>
-              {managers?.map((manager) => (
+              {mergedManagers.map((manager, idx) => (
                 <CommandItem
-                  key={manager.id}
+                  key={manager.id !== -1 ? manager.id : `job-pm-${idx}`}
                   value={manager.name}
                   onSelect={() => {
                     onChange(value === manager.name ? null : manager.name);
