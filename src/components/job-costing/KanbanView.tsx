@@ -11,9 +11,9 @@ interface KanbanViewProps {
 }
 
 export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: KanbanViewProps) {
-  // Expected stage names as ordered list
+  // Fallback stage names matching the Odoo Project kanban (custom stages on project.project)
   const expectedStageNames = [
-    "Operation paperwork",
+    "1 Operation paperwork",
     "Waiting on Information",
     "Preproduction",
     "Production",
@@ -21,8 +21,6 @@ export function KanbanView({ jobs, stages, isLoadingStages, onJobClick }: Kanban
     "Despatched",
     "Installation",
     "Rework",
-    "Project Closeout",
-    "Invoice/Completed"
   ];
 
   // Use fetched stages if available, otherwise use expected names

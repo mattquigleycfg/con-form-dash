@@ -339,7 +339,7 @@ export default function JobCosting() {
                 method: "search_read",
                 args: [
                   [["analytic_account_id", "=", order.analytic_account_id[0]]],
-                  ["id", "name", "analytic_account_id", "user_id"],
+                  ["id", "name", "analytic_account_id", "user_id", "stage_id"],
                 ],
               },
             });
@@ -356,7 +356,7 @@ export default function JobCosting() {
                     method: "search_read",
                     args: [
                       [["sale_order_id", "=", order.id]],
-                      ["id", "name", "analytic_account_id", "user_id"],
+                      ["id", "name", "analytic_account_id", "user_id", "stage_id"],
                     ],
                   },
                 });
@@ -397,35 +397,13 @@ export default function JobCosting() {
                 }
               }
               
-              // Find tasks for this project to get the actual task stage
-              const { data: tasks } = await supabase.functions.invoke("odoo-query", {
-                body: {
-                  model: "project.task",
-                  method: "search_read",
-                  args: [
-                    [
-                      ["project_id", "=", projectId],
-                      ["active", "=", true],
-                    ],
-                    ["id", "name", "stage_id", "priority"],
-                  ],
-                },
-              });
-
-              if (tasks && tasks.length > 0) {
-                // Get primary task (highest priority, most recent)
-                const mainTask = tasks.sort((a: any, b: any) => {
-                  if (a.priority !== b.priority) return b.priority - a.priority;
-                  return b.id - a.id;
-                })[0];
-
-                if (mainTask.stage_id && mainTask.stage_id[0]) {
-                  projectStageId = mainTask.stage_id[0];
-                  projectStageName = mainTask.stage_id[1];
-                  logger.info(`Found task stage for SO ${order.name}: ${projectStageName}`);
-                }
+              // Use project-level stage (from project.project.stage_id) — NOT task stages
+              if (project.stage_id && project.stage_id[0]) {
+                projectStageId = project.stage_id[0];
+                projectStageName = project.stage_id[1];
+                logger.info(`Found project stage for SO ${order.name}: ${projectStageName}`);
               } else {
-                logger.info(`No tasks found for project ${projectId}, using Unassigned`);
+                logger.info(`No project stage set for SO ${order.name} (Project ID: ${projectId}), using Unassigned`);
               }
             } else {
               logger.info(`No project found for SO ${order.name}, using Unassigned`);
@@ -929,26 +907,9 @@ export default function JobCosting() {
             continue;
           }
 
-          const projectId = project.id;
           // Resolve PM: project PM > existing job PM > salesperson fallback
           const projectPM = project.user_id?.[1] || null;
           const resolvedPM = projectPM || job.project_manager_name || job.sales_person_name || null;
-          const projectStageFromProject = project.stage_id?.[1] || null;
-
-          // Find tasks for this project
-          const { data: tasks } = await supabase.functions.invoke("odoo-query", {
-            body: {
-              model: "project.task",
-              method: "search_read",
-              args: [
-                [
-                  ["project_id", "=", projectId],
-                  ["active", "=", true],
-                ],
-                ["id", "name", "stage_id", "priority", "kanban_state"],
-              ],
-            },
-          });
 
           // Build the update object - NEVER overwrite PM with null
           const jobUpdate: Record<string, any> = {};
@@ -956,23 +917,10 @@ export default function JobCosting() {
             jobUpdate.project_manager_name = resolvedPM;
           }
 
-          if (tasks && tasks.length > 0) {
-            // Get the primary task (highest priority, most recent)
-            const mainTask = tasks.sort((a: any, b: any) => {
-              if (a.priority !== b.priority) {
-                return b.priority - a.priority;
-              }
-              return b.id - a.id;
-            })[0];
-
-            if (mainTask.stage_id && mainTask.stage_id[0]) {
-              jobUpdate.project_stage_id = mainTask.stage_id[0];
-              jobUpdate.project_stage_name = mainTask.stage_id[1];
-            } else if (projectStageFromProject) {
-              jobUpdate.project_stage_name = projectStageFromProject;
-            }
-          } else if (projectStageFromProject) {
-            jobUpdate.project_stage_name = projectStageFromProject;
+          // Use project-level stage directly (from project.project.stage_id) — NOT task stages
+          if (project.stage_id && project.stage_id[0]) {
+            jobUpdate.project_stage_id = project.stage_id[0];
+            jobUpdate.project_stage_name = project.stage_id[1];
           }
 
           // Only write to DB if we have something to update

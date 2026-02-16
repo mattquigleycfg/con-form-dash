@@ -18,18 +18,58 @@ export const useOdooProjectStages = () => {
     setIsLoading(true);
     
     try {
-      const { data: stageData, error } = await supabase.functions.invoke('odoo-query', {
-        body: {
-          model: 'project.task.type',
-          method: 'search_read',
-          args: [
-            [],
-            ['name', 'sequence', 'fold']
-          ]
+      // Primary: try fetching from project.project.stage model (custom Odoo model for project-level stages)
+      let stageData: any[] | null = null;
+      try {
+        const { data, error } = await supabase.functions.invoke('odoo-query', {
+          body: {
+            model: 'project.project.stage',
+            method: 'search_read',
+            args: [
+              [],
+              ['name', 'sequence', 'fold']
+            ]
+          }
+        });
+        if (!error && data && Array.isArray(data) && data.length > 0) {
+          stageData = data;
         }
-      });
+      } catch {
+        // project.project.stage model may not exist — fall through to fallback
+        console.info('project.project.stage model not available, falling back to project records');
+      }
 
-      if (error) throw error;
+      // Fallback: extract unique stage_id values from project.project records
+      if (!stageData || stageData.length === 0) {
+        try {
+          const { data: projects, error } = await supabase.functions.invoke('odoo-query', {
+            body: {
+              model: 'project.project',
+              method: 'search_read',
+              args: [
+                [["active", "=", true]],
+                ['id', 'stage_id']
+              ]
+            }
+          });
+          if (!error && projects && Array.isArray(projects)) {
+            const stageMap = new Map<number, string>();
+            for (const p of projects) {
+              if (p.stage_id && p.stage_id[0] && p.stage_id[1]) {
+                stageMap.set(p.stage_id[0], p.stage_id[1]);
+              }
+            }
+            stageData = Array.from(stageMap.entries()).map(([id, name], idx) => ({
+              id,
+              name,
+              sequence: idx,
+              fold: false,
+            }));
+          }
+        } catch {
+          console.error('Failed to extract stages from project.project records');
+        }
+      }
 
       const sortedStages = (stageData || [])
         .map((stage: any) => ({

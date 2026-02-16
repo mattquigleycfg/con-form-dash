@@ -334,16 +334,21 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
       }
 
       if (project) {
+        const stageId = project.stage_id?.[0] || null;
         const stageName = project.stage_id?.[1] || null;
         const projectManagerName = project.user_id?.[1] || null;
         
-        await supabase
-          .from("jobs")
-          .update({ 
-            project_stage_name: stageName,
-            project_manager_name: projectManagerName 
-          })
-          .eq("id", id);
+        const jobUpdate: Record<string, any> = {};
+        if (stageId) jobUpdate.project_stage_id = stageId;
+        if (stageName) jobUpdate.project_stage_name = stageName;
+        if (projectManagerName) jobUpdate.project_manager_name = projectManagerName;
+        
+        if (Object.keys(jobUpdate).length > 0) {
+          await supabase
+            .from("jobs")
+            .update(jobUpdate)
+            .eq("id", id);
+        }
       } else if (job.sales_person_name && !job.project_manager_name) {
         // Last resort: use salesperson as PM fallback
         await supabase
