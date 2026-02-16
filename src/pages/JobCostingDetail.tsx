@@ -310,7 +310,30 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
         }
       }
 
-      // Fallback lookup: Try finding project by sale_order_id
+      // Fallback 1: Find project by name matching opportunity name
+      if (!project && job.opportunity_name) {
+        try {
+          const { data: projectsByName } = await supabase.functions.invoke("odoo-query", {
+            body: {
+              model: "project.project",
+              method: "search_read",
+              args: [
+                [["name", "=ilike", job.opportunity_name]],
+                ["id", "name", "stage_id", "user_id"],
+              ],
+            },
+          });
+
+          const projectNameData = projectsByName as any[];
+          if (projectNameData && projectNameData.length > 0) {
+            project = projectNameData[0];
+          }
+        } catch {
+          // =ilike may not be supported
+        }
+      }
+
+      // Fallback 2: Try finding project by sale_order_id (retained for future use)
       if (!project && job.odoo_sale_order_id) {
         try {
           const { data: projectsBySO } = await supabase.functions.invoke("odoo-query", {
@@ -329,7 +352,7 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
             project = projectSOData[0];
           }
         } catch {
-          // sale_order_id field may not exist on this Odoo instance - skip gracefully
+          // sale_order_id field may not exist on this Odoo instance
         }
       }
 
@@ -349,12 +372,6 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
             .update(jobUpdate)
             .eq("id", id);
         }
-      } else if (job.sales_person_name && !job.project_manager_name) {
-        // Last resort: use salesperson as PM fallback
-        await supabase
-          .from("jobs")
-          .update({ project_manager_name: job.sales_person_name })
-          .eq("id", id);
       }
       
       // 3. Recalculate actual cost totals from all sources

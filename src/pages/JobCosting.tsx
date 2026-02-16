@@ -330,9 +330,11 @@ export default function JobCosting() {
         let subcontractorId = null;
         let subcontractorName = null;
         
-        if (order.analytic_account_id) {
-          try {
-            // Primary lookup: Find project linked to this analytic account
+        try {
+          let project: any = null;
+
+          // Primary lookup: Find project linked to this analytic account
+          if (order.analytic_account_id) {
             const { data: projects } = await supabase.functions.invoke("odoo-query", {
               body: {
                 model: "project.project",
@@ -343,82 +345,88 @@ export default function JobCosting() {
                 ],
               },
             });
-
-            let projectFound = projects && projects.length > 0;
-            let project = projectFound ? projects[0] : null;
-
-            // Fallback lookup: Try finding project by sale_order_id if no project found via analytic account
-            if (!projectFound) {
-              try {
-                const { data: projectsBySO } = await supabase.functions.invoke("odoo-query", {
-                  body: {
-                    model: "project.project",
-                    method: "search_read",
-                    args: [
-                      [["sale_order_id", "=", order.id]],
-                      ["id", "name", "analytic_account_id", "user_id", "stage_id"],
-                    ],
-                  },
-                });
-                if (projectsBySO && projectsBySO.length > 0) {
-                  project = projectsBySO[0];
-                  projectFound = true;
-                  logger.info(`✓ Found project via sale_order_id fallback for SO ${order.name}`);
-                }
-              } catch {
-                // sale_order_id field may not exist on this Odoo instance - skip gracefully
-                logger.info(`sale_order_id lookup not available for SO ${order.name}, skipping fallback`);
-              }
+            if (projects && projects.length > 0) {
+              project = projects[0];
+              logger.info(`✓ Found project via analytic_account_id for SO ${order.name}`);
             }
-
-            if (projectFound && project) {
-              const projectId = project.id;
-              
-              // Capture project manager (user_id from project.project)
-              if (project.user_id && project.user_id[1]) {
-                projectManagerName = project.user_id[1];
-                logger.info(`✓ Found project manager for SO ${order.name}: ${projectManagerName}`);
-              } else {
-                logger.warn(`⚠ No project manager assigned for SO ${order.name} (Project ID: ${projectId})`);
-              }
-              
-              // Capture project's analytic account (may differ from sale order)
-              if (project.analytic_account_id) {
-                projectAnalyticAccountId = project.analytic_account_id[0];
-                projectAnalyticAccountName = project.analytic_account_id[1];
-                
-                // Log if project has different analytic account than sale order
-                if (projectAnalyticAccountId !== order.analytic_account_id[0]) {
-                  logger.info(`⚠️ Project has different analytic account than sale order`, {
-                    saleOrder: order.name,
-                    soAnalyticAccount: order.analytic_account_id,
-                    projectAnalyticAccount: project.analytic_account_id
-                  });
-                }
-              }
-              
-              // Use project-level stage (from project.project.stage_id) — NOT task stages
-              if (project.stage_id && project.stage_id[0]) {
-                projectStageId = project.stage_id[0];
-                projectStageName = project.stage_id[1];
-                logger.info(`Found project stage for SO ${order.name}: ${projectStageName}`);
-              } else {
-                logger.info(`No project stage set for SO ${order.name} (Project ID: ${projectId}), using Unassigned`);
-              }
-            } else {
-              logger.info(`No project found for SO ${order.name}, using Unassigned`);
-            }
-
-            // Last resort fallback: use salesperson as project manager if still null
-            if (!projectManagerName && order.user_id && order.user_id[1]) {
-              projectManagerName = order.user_id[1];
-              logger.info(`Using salesperson as PM fallback for SO ${order.name}: ${projectManagerName}`);
-            }
-          } catch (error) {
-            logger.error(`Error fetching task stage for SO ${order.name}:`, error);
           }
-          
-          // Try to auto-detect subcontractor from purchase orders linked to this analytic account
+
+          // Fallback 1: Find project by name matching opportunity name
+          if (!project && order.opportunity_id && order.opportunity_id[1]) {
+            try {
+              const { data: projectsByName } = await supabase.functions.invoke("odoo-query", {
+                body: {
+                  model: "project.project",
+                  method: "search_read",
+                  args: [
+                    [["name", "=ilike", order.opportunity_id[1]]],
+                    ["id", "name", "analytic_account_id", "user_id", "stage_id"],
+                  ],
+                },
+              });
+              if (projectsByName && projectsByName.length > 0) {
+                project = projectsByName[0];
+                logger.info(`✓ Found project via name match for SO ${order.name}: "${order.opportunity_id[1]}"`);
+              }
+            } catch {
+              logger.info(`Name-based project lookup not available for SO ${order.name}`);
+            }
+          }
+
+          // Fallback 2: Try finding project by sale_order_id (retained for future use)
+          if (!project) {
+            try {
+              const { data: projectsBySO } = await supabase.functions.invoke("odoo-query", {
+                body: {
+                  model: "project.project",
+                  method: "search_read",
+                  args: [
+                    [["sale_order_id", "=", order.id]],
+                    ["id", "name", "analytic_account_id", "user_id", "stage_id"],
+                  ],
+                },
+              });
+              if (projectsBySO && projectsBySO.length > 0) {
+                project = projectsBySO[0];
+                logger.info(`✓ Found project via sale_order_id for SO ${order.name}`);
+              }
+            } catch {
+              // sale_order_id field may not exist on this Odoo instance
+            }
+          }
+
+          if (project) {
+            // Capture project manager (user_id from project.project)
+            if (project.user_id && project.user_id[1]) {
+              projectManagerName = project.user_id[1];
+              logger.info(`✓ Found project manager for SO ${order.name}: ${projectManagerName}`);
+            } else {
+              logger.warn(`⚠ No project manager assigned for SO ${order.name} (Project: ${project.name})`);
+            }
+
+            // Capture project's analytic account (may differ from sale order)
+            if (project.analytic_account_id) {
+              projectAnalyticAccountId = project.analytic_account_id[0];
+              projectAnalyticAccountName = project.analytic_account_id[1];
+            }
+
+            // Use project-level stage (from project.project.stage_id)
+            if (project.stage_id && project.stage_id[0]) {
+              projectStageId = project.stage_id[0];
+              projectStageName = project.stage_id[1];
+              logger.info(`Found project stage for SO ${order.name}: ${projectStageName}`);
+            } else {
+              logger.info(`No project stage set for SO ${order.name}, using Unassigned`);
+            }
+          } else {
+            logger.info(`No project found for SO ${order.name}, using Unassigned`);
+          }
+        } catch (error) {
+          logger.error(`Error looking up project for SO ${order.name}:`, error);
+        }
+
+        // Try to auto-detect subcontractor from purchase orders linked to this analytic account
+        if (order.analytic_account_id) {
           try {
             const { data: purchaseOrders } = await supabase.functions.invoke("odoo-query", {
               body: {
@@ -431,15 +439,13 @@ export default function JobCosting() {
                   ],
                   ["id", "name", "partner_id", "amount_total", "order_line"],
                   0,
-                  5, // Get first 5 POs
+                  5,
                 ],
               },
             });
 
             if (purchaseOrders && purchaseOrders.length > 0) {
-              // Find PO with installation/service items by checking order lines
               for (const po of purchaseOrders) {
-                // Simple heuristic: use the first confirmed PO's vendor as subcontractor
                 if (po.partner_id && po.partner_id[0]) {
                   subcontractorId = po.partner_id[0];
                   subcontractorName = po.partner_id[1];
@@ -450,12 +456,6 @@ export default function JobCosting() {
             }
           } catch (error) {
             logger.error(`Error auto-detecting subcontractor for SO ${order.name}:`, error);
-          }
-        } else {
-          // No analytic account - use salesperson as PM fallback
-          if (!projectManagerName && order.user_id && order.user_id[1]) {
-            projectManagerName = order.user_id[1];
-            logger.info(`No analytic account for SO ${order.name}, using salesperson as PM: ${projectManagerName}`);
           }
         }
 
@@ -867,10 +867,33 @@ export default function JobCosting() {
             });
             if (projects && projects.length > 0) {
               project = projects[0];
+              logger.info(`✓ Found project via analytic_account_id for ${job.sale_order_name}`);
             }
           }
 
-          // Fallback lookup: Try finding project by sale_order_id
+          // Fallback 1: Find project by name matching opportunity name
+          if (!project && job.opportunity_name) {
+            try {
+              const { data: projectsByName } = await supabase.functions.invoke("odoo-query", {
+                body: {
+                  model: "project.project",
+                  method: "search_read",
+                  args: [
+                    [["name", "=ilike", job.opportunity_name]],
+                    ["id", "name", "user_id", "stage_id"],
+                  ],
+                },
+              });
+              if (projectsByName && projectsByName.length > 0) {
+                project = projectsByName[0];
+                logger.info(`✓ Found project via name match for ${job.sale_order_name}: "${job.opportunity_name}"`);
+              }
+            } catch {
+              // =ilike may not be supported
+            }
+          }
+
+          // Fallback 2: Try finding project by sale_order_id (retained for future use)
           if (!project && job.odoo_sale_order_id) {
             try {
               const { data: projectsBySO } = await supabase.functions.invoke("odoo-query", {
@@ -885,39 +908,26 @@ export default function JobCosting() {
               });
               if (projectsBySO && projectsBySO.length > 0) {
                 project = projectsBySO[0];
-                logger.info(`✓ Found project via sale_order_id fallback for ${job.sale_order_name}`);
+                logger.info(`✓ Found project via sale_order_id for ${job.sale_order_name}`);
               }
             } catch {
-              // sale_order_id field may not exist - skip gracefully
+              // sale_order_id field may not exist
             }
           }
 
           if (!project) {
-            // Last resort: use salesperson name as PM if available and PM is currently null
-            if (!job.project_manager_name && job.sales_person_name) {
-              await supabase
-                .from("jobs")
-                .update({ project_manager_name: job.sales_person_name })
-                .eq("id", job.id);
-              logger.info(`No project found for ${job.sale_order_name}, using salesperson as PM: ${job.sales_person_name}`);
-              updatedCount++;
-            } else {
-              logger.info(`No project found for ${job.sale_order_name}`);
-            }
+            logger.info(`No project found for ${job.sale_order_name}`);
             continue;
           }
 
-          // Resolve PM: project PM > existing job PM > salesperson fallback
+          // Build the update object - use project PM, never overwrite with null
           const projectPM = project.user_id?.[1] || null;
-          const resolvedPM = projectPM || job.project_manager_name || job.sales_person_name || null;
-
-          // Build the update object - NEVER overwrite PM with null
           const jobUpdate: Record<string, any> = {};
-          if (resolvedPM) {
-            jobUpdate.project_manager_name = resolvedPM;
+          if (projectPM) {
+            jobUpdate.project_manager_name = projectPM;
           }
 
-          // Use project-level stage directly (from project.project.stage_id) — NOT task stages
+          // Use project-level stage directly (from project.project.stage_id)
           if (project.stage_id && project.stage_id[0]) {
             jobUpdate.project_stage_id = project.stage_id[0];
             jobUpdate.project_stage_name = project.stage_id[1];

@@ -365,7 +365,7 @@ export default function Settings() {
           let projectStageName = null;
           let projectManagerName = null;
 
-          let projectFound = false;
+          let project: any = null;
 
           // Primary lookup: Find project via analytic account
           if (order.analytic_account_id) {
@@ -381,22 +381,35 @@ export default function Settings() {
             });
 
             if (projects && projects.length > 0) {
-              const project = projects[0];
-              projectAnalyticAccountId = project.analytic_account_id?.[0] || null;
-              projectAnalyticAccountName = project.analytic_account_id?.[1] || null;
-              projectStageId = project.stage_id?.[0] || null;
-              projectStageName = project.stage_id?.[1] || null;
-              projectManagerName = project.user_id?.[1] || null;
-              projectFound = true;
-              
-              if (!projectManagerName) {
-                console.warn(`⚠ No project manager assigned for order ${order.name} (Project: ${project.name})`);
-              }
+              project = projects[0];
+              console.info(`✓ Found project via analytic_account_id for ${order.name}`);
             }
           }
 
-          // Fallback lookup: Try finding project by sale_order_id
-          if (!projectFound) {
+          // Fallback 1: Find project by name matching opportunity name
+          if (!project && order.opportunity_id && order.opportunity_id[1]) {
+            try {
+              const { data: projectsByName } = await supabase.functions.invoke("odoo-query", {
+                body: {
+                  model: "project.project",
+                  method: "search_read",
+                  args: [
+                    [["name", "=ilike", order.opportunity_id[1]]],
+                    ["id", "name", "analytic_account_id", "stage_id", "user_id"],
+                  ],
+                },
+              });
+              if (projectsByName && projectsByName.length > 0) {
+                project = projectsByName[0];
+                console.info(`✓ Found project via name match for ${order.name}: "${order.opportunity_id[1]}"`);
+              }
+            } catch {
+              // =ilike may not be supported
+            }
+          }
+
+          // Fallback 2: Try finding project by sale_order_id (retained for future use)
+          if (!project) {
             try {
               const { data: projectsBySO } = await supabase.functions.invoke("odoo-query", {
                 body: {
@@ -408,25 +421,26 @@ export default function Settings() {
                   ],
                 },
               });
-
               if (projectsBySO && projectsBySO.length > 0) {
-                const project = projectsBySO[0];
-                projectAnalyticAccountId = project.analytic_account_id?.[0] || null;
-                projectAnalyticAccountName = project.analytic_account_id?.[1] || null;
-                projectStageId = project.stage_id?.[0] || null;
-                projectStageName = project.stage_id?.[1] || null;
-                projectManagerName = project.user_id?.[1] || null;
-                console.info(`✓ Found project via sale_order_id fallback for ${order.name}`);
+                project = projectsBySO[0];
+                console.info(`✓ Found project via sale_order_id for ${order.name}`);
               }
             } catch {
-              // sale_order_id field may not exist on this Odoo instance - skip gracefully
+              // sale_order_id field may not exist on this Odoo instance
             }
           }
 
-          // Last resort: use salesperson as PM fallback
-          if (!projectManagerName && order.user_id && order.user_id[1]) {
-            projectManagerName = order.user_id[1];
-            console.info(`Using salesperson as PM fallback for ${order.name}: ${projectManagerName}`);
+          // Extract fields from the found project
+          if (project) {
+            projectAnalyticAccountId = project.analytic_account_id?.[0] || null;
+            projectAnalyticAccountName = project.analytic_account_id?.[1] || null;
+            projectStageId = project.stage_id?.[0] || null;
+            projectStageName = project.stage_id?.[1] || null;
+            projectManagerName = project.user_id?.[1] || null;
+
+            if (!projectManagerName) {
+              console.warn(`⚠ No project manager assigned for order ${order.name} (Project: ${project.name})`);
+            }
           }
 
           // Create or update job
