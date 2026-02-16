@@ -210,7 +210,7 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
     toast.info("Syncing with Odoo...");
     
     try {
-      // 1. Refresh budget line costs from sale order
+      // 1. Refresh budget lines from sale order with full product categorization
       const { data: orderLines, error: linesError } = await supabase.functions.invoke("odoo-query", {
         body: {
           model: "sale.order.line",
@@ -224,68 +224,111 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
       
       if (linesError) throw linesError;
       
-      const lines = (orderLines as any[]) || [];
-      const updatedBudgetLines = lines.map(line => {
-        // Calculate cost price with proper priority
-        let costPrice = 0;
-        
-        if (line.purchase_price !== undefined && line.purchase_price !== null && line.purchase_price !== false && line.purchase_price > 0) {
-          costPrice = Number(line.purchase_price);
-        } else if (line.margin !== undefined && line.margin !== null && line.margin !== false && line.margin > 0) {
-          costPrice = line.price_unit - line.margin;
-        } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
-          costPrice = line.price_unit * (1 - line.margin_percent / 100);
-        } else if (line.price_subtotal && line.product_uom_qty > 0) {
-          costPrice = line.price_subtotal / line.product_uom_qty;
-        } else {
-          costPrice = line.price_unit;
-        }
-        
-        costPrice = Math.max(0, costPrice);
-        const quantity = line.product_uom_qty;
-        const costSubtotal = costPrice * quantity;
-
-        return {
-          odoo_line_id: line.id,
-          unit_price: costPrice,
-          subtotal: costSubtotal,
-        };
+      // Filter out lines with no product, zero price, or description-only
+      const lines = ((orderLines as any[]) || []).filter(line => {
+        if (!line.product_id || !line.product_id[0]) return false;
+        if (!line.price_subtotal || line.price_subtotal === 0) return false;
+        const productName = line.product_id[1] || '';
+        if (productName.toLowerCase().includes('description of works')) return false;
+        return true;
       });
-      
-      // Update existing budget lines
-      for (const update of updatedBudgetLines) {
-        await supabase
-          .from("job_budget_lines")
-          .update({
-            unit_price: update.unit_price,
-            subtotal: update.subtotal,
-          })
-          .eq("job_id", id)
-          .eq("odoo_line_id", update.odoo_line_id);
-      }
-      
-      // 1b. Re-fetch updated budget lines and recalculate job budget totals
-      const { data: refreshedBudgetLines } = await supabase
-        .from("job_budget_lines")
-        .select("*")
-        .eq("job_id", id);
 
-      if (refreshedBudgetLines) {
-        const newMaterialBudget = refreshedBudgetLines
-          .filter(line => isMaterialBudgetLine(line))
-          .reduce((sum, line) => sum + Number(line.subtotal || 0), 0);
-        const newNonMaterialBudget = refreshedBudgetLines
-          .filter(line => isServiceBudgetLine(line))
-          .reduce((sum, line) => sum + Number(line.subtotal || 0), 0);
+      if (lines.length > 0) {
+        // Fetch product details for type classification
+        const productIds = lines.map((l: any) => l.product_id[0]);
+        const { data: products } = await supabase.functions.invoke("odoo-query", {
+          body: {
+            model: "product.product",
+            method: "search_read",
+            args: [
+              [["id", "in", productIds]],
+              ["id", "detailed_type", "default_code"],
+            ],
+          },
+        });
+        const productMap = new Map(((products as any[]) || []).map((p: any) => [p.id, p]));
 
-        await supabase
-          .from("jobs")
-          .update({
-            material_budget: newMaterialBudget,
-            non_material_budget: newNonMaterialBudget,
-            total_budget: newMaterialBudget + newNonMaterialBudget,
-          })
-          .eq("id", id);
+        const serviceKeywords = [
+          'INSTALLATION', 'FREIGHT', 'CRANAGE', 'ACCOMMODATION', 'TRAVEL',
+          'TRANSPORT', 'DELIVERY', 'LABOUR', 'SERVICE', 'SITE INSPECTION',
+          'WORKSHOP LABOUR', 'SHOP DRAWING', 'MAN DAY', 'EXPENSES', 'SITE LABOUR'
+        ];
+
+        const materialLines: any[] = [];
+        const nonMaterialLines: any[] = [];
+
+        lines.forEach((line: any) => {
+          const product = productMap.get(line.product_id[0]);
+          const productNameUpper = (line.product_id[1] || '').toUpperCase();
+          let productType = ((product?.detailed_type || product?.type || 'product') as string).toLowerCase();
+
+          if (serviceKeywords.some(kw => productNameUpper.includes(kw)) && productType !== 'service') {
+            productType = 'service';
+          }
+
+          // 5-tier cost price priority
+          let costPrice = 0;
+          if (line.purchase_price !== undefined && line.purchase_price !== null && line.purchase_price !== false && line.purchase_price > 0) {
+            costPrice = Number(line.purchase_price);
+          } else if (line.margin !== undefined && line.margin !== null && line.margin !== false && line.margin > 0) {
+            costPrice = line.price_unit - line.margin;
+          } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
+            costPrice = line.price_unit * (1 - line.margin_percent / 100);
+          } else if (line.price_subtotal && line.product_uom_qty > 0) {
+            costPrice = line.price_subtotal / line.product_uom_qty;
+          } else {
+            costPrice = line.price_unit;
+          }
+          costPrice = Math.max(0, costPrice);
+
+          const quantity = line.product_uom_qty;
+          let costSubtotal = quantity > 0 ? costPrice * quantity : line.price_subtotal || 0;
+          if ((!costSubtotal || costSubtotal <= 0) && line.price_subtotal) {
+            costSubtotal = line.price_subtotal;
+          }
+
+          const category = productType === 'service' ? 'non_material' : 'material';
+          const enrichedLine = { ...line, detailed_type: productType, cost_price: costPrice, cost_subtotal: costSubtotal, cost_category: category };
+
+          if (category === 'non_material') {
+            nonMaterialLines.push(enrichedLine);
+          } else {
+            materialLines.push(enrichedLine);
+          }
+        });
+
+        const materialBudget = materialLines.reduce((sum, l) => sum + l.cost_subtotal, 0);
+        const nonMaterialBudget = nonMaterialLines.reduce((sum, l) => sum + l.cost_subtotal, 0);
+
+        // Delete old budget lines and insert fresh ones
+        await supabase.from("job_budget_lines").delete().eq("job_id", id);
+
+        const allBudgetLines = [...materialLines, ...nonMaterialLines];
+        const budgetRows = allBudgetLines.map(line => ({
+          job_id: id,
+          odoo_line_id: line.id,
+          product_id: line.product_id[0],
+          product_name: line.product_id[1],
+          product_type: line.detailed_type,
+          quantity: line.product_uom_qty,
+          unit_price: line.cost_price,
+          subtotal: line.cost_subtotal,
+          cost_category: line.cost_category,
+        }));
+
+        if (budgetRows.length > 0) {
+          const { error: insertErr } = await supabase.from("job_budget_lines").insert(budgetRows);
+          if (insertErr) {
+            console.error('Budget lines insert error:', insertErr);
+          }
+        }
+
+        // Update job budget totals
+        await supabase.from("jobs").update({
+          material_budget: materialBudget,
+          non_material_budget: nonMaterialBudget,
+          total_budget: materialBudget + nonMaterialBudget,
+        }).eq("id", id);
       }
       
       // 2. Update project stage and project manager
