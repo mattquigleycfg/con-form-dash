@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { AICopilot } from "@/components/AICopilot";
+import { DepartmentHeader } from "@/components/kpi";
 import { 
   useWebsiteTraffic, 
   useTopPages, 
@@ -45,30 +47,19 @@ export default function WebsiteAnalytics() {
     return `${(value * 100).toFixed(1)}%`;
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Globe className="h-8 w-8 text-primary" />
-            Website Analytics
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Comprehensive traffic insights from Google Analytics 4
-          </p>
-        </div>
+  const isAnyLoading = isTrafficLoading || isPagesLoading || isSourcesLoading || isTimeSeriesLoading;
 
-        {/* Period Selector */}
-        <Tabs value={period} onValueChange={(v) => setPeriod(v as DatePeriod)}>
-          <TabsList>
-            <TabsTrigger value="week">Week</TabsTrigger>
-            <TabsTrigger value="month">Month</TabsTrigger>
-            <TabsTrigger value="quarter">Quarter</TabsTrigger>
-            <TabsTrigger value="year">Year</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <DepartmentHeader
+          title="Website Analytics"
+          description="Comprehensive traffic insights from Google Analytics 4"
+          icon={Globe}
+          period={period}
+          onPeriodChange={(p) => setPeriod(p as DatePeriod)}
+          isRefreshing={isAnyLoading}
+        />
 
       {/* AI Insights Banner */}
       <AIInsightBanner metrics={trafficData} sources={trafficSources} />
@@ -282,6 +273,9 @@ export default function WebsiteAnalytics() {
           </p>
         </CardContent>
       </Card>
-    </div>
+      </div>
+
+      <AICopilot />
+    </DashboardLayout>
   );
 }
