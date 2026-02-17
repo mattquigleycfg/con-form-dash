@@ -45,8 +45,25 @@ export function ModelHealthPanel() {
 
   const handleRetrain = () => {
     training.mutate(undefined, {
-      onSuccess: () => toast({ title: "Training Complete", description: "All models have been retrained." }),
-      onError: (e) => toast({ title: "Training Failed", description: String(e), variant: "destructive" }),
+      onSuccess: (data) => {
+        if (data?.error) {
+          toast({ title: "Training Issue", description: data.error, variant: "destructive" });
+        } else {
+          toast({ title: "Training Complete", description: "All models have been retrained." });
+        }
+      },
+      onError: (e) => {
+        const msg = String(e);
+        if (msg.includes("non-2xx") || msg.includes("FunctionsHttpError")) {
+          toast({
+            title: "Training Failed",
+            description: "The ML service is unreachable. Ensure the ML service is running and ML_SERVICE_URL is configured in your Supabase Edge Function secrets.",
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Training Failed", description: msg, variant: "destructive" });
+        }
+      },
     });
   };
 

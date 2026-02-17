@@ -12,7 +12,7 @@ const ML_SERVICE_URL = Deno.env.get('ML_SERVICE_URL') || 'http://localhost:8000'
 const ML_API_KEY = Deno.env.get('ML_API_KEY') || '';
 
 interface MLRequest {
-  prediction_type: 'cost' | 'anomaly' | 'waste' | 'overrun' | 'lead_time' | 'demand' | 'customers' | 'suppliers' | 'insights';
+  prediction_type: 'cost' | 'anomaly' | 'waste' | 'overrun' | 'lead_time' | 'demand' | 'customers' | 'suppliers' | 'insights' | 'train';
   job_id?: string;
   job_ids?: string[];
   vendor_name?: string;
@@ -22,6 +22,7 @@ interface MLRequest {
   quantity?: number;
   periods?: number;
   batch?: boolean;
+  model_name?: string;
 }
 
 async function callMLService(endpoint: string, body: any): Promise<any> {
@@ -118,6 +119,14 @@ Deno.serve(async (req) => {
 
       case 'insights':
         result = await callMLService('/insights', { job_id });
+        break;
+
+      case 'train':
+        if (request.model_name) {
+          result = await callMLService(`/train/${request.model_name}`, {});
+        } else {
+          result = await callMLService('/train', {});
+        }
         break;
 
       default:
