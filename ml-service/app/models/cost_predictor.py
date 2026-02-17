@@ -200,19 +200,40 @@ def predict(job_id: str) -> Optional[dict]:
 
 
 def predict_all_active() -> list[dict]:
-    """Run predictions for all active jobs."""
+    """Run predictions for all active jobs using vectorized batch inference."""
+    global _model, _scaler
+
+    if _model is None:
+        if not load_model():
+            return []
+
     features = build_job_features()
     if features.empty:
         return []
 
-    active_jobs = features[
-        (features["status"] == "active") & (features["total_budget"] > 0)
-    ]
+    active_jobs = features[features["total_budget"] > 0].copy()
+    if active_jobs.empty:
+        return []
+
+    feature_cols = get_numeric_feature_columns()
+    X = active_jobs[feature_cols].fillna(0)
+    X_scaled = _scaler.transform(X)
+
+    predictions = _model.predict(X_scaled)
 
     results = []
-    for _, job in active_jobs.iterrows():
-        result = predict(job["id"])
-        if result:
-            results.append(result)
+    for i, (_, job) in enumerate(active_jobs.iterrows()):
+        predicted_cost = max(float(predictions[i]), float(job["total_actual"]))
+        budget = float(job["total_budget"])
+        results.append({
+            "job_id": job["id"],
+            "prediction_type": "cost_prediction",
+            "predicted_value": round(predicted_cost, 2),
+            "current_actual": round(float(job["total_actual"]), 2),
+            "budget": round(budget, 2),
+            "predicted_overrun": round(predicted_cost - budget, 2),
+            "predicted_overrun_pct": round((predicted_cost - budget) / budget * 100, 1) if budget > 0 else 0,
+            "model_version": datetime.now(timezone.utc).strftime("%Y%m%d"),
+        })
 
     return results

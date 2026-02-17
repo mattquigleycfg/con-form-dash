@@ -189,19 +189,44 @@ def score_job(job_id: str) -> Optional[dict]:
 
 
 def score_all_active() -> list[dict]:
-    """Score all active jobs for anomalies."""
+    """Score all active jobs using vectorized batch inference."""
+    global _model, _scaler
+
+    if _model is None:
+        if not load_model():
+            return []
+
     features = build_job_features()
     if features.empty:
         return []
 
     active_jobs = features[
         (features["total_budget"] > 0) & (features["total_actual"] > 0)
-    ]
+    ].copy()
+    if active_jobs.empty:
+        return []
+
+    feature_cols = get_anomaly_feature_columns()
+    X = active_jobs[feature_cols].fillna(0)
+    X_scaled = _scaler.transform(X)
+
+    raw_scores = _model.decision_function(X_scaled)
+    preds = _model.predict(X_scaled)
 
     results = []
-    for _, job in active_jobs.iterrows():
-        result = score_job(job["id"])
-        if result:
-            results.append(result)
+    for i, (_, job) in enumerate(active_jobs.iterrows()):
+        anomaly_score = max(0, min(1, 0.5 - float(raw_scores[i])))
+        severity = "critical" if anomaly_score > 0.7 else "warning" if anomaly_score > 0.4 else "info"
+        results.append({
+            "job_id": job["id"],
+            "prediction_type": "anomaly_score",
+            "anomaly_score": round(anomaly_score, 3),
+            "is_anomaly": bool(preds[i] == -1),
+            "severity": severity,
+            "sale_order_name": str(job.get("sale_order_name", "")),
+            "total_budget": round(float(job.get("total_budget", 0)), 2),
+            "total_actual": round(float(job.get("total_actual", 0)), 2),
+            "model_version": datetime.now(timezone.utc).strftime("%Y%m%d"),
+        })
 
     return results

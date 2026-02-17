@@ -260,19 +260,48 @@ def predict(job_id: str) -> Optional[dict]:
 
 
 def predict_all_active() -> list[dict]:
-    """Score all active jobs for waste risk."""
+    """Score all active jobs using vectorized batch inference."""
+    global _model, _scaler
+
+    if _model is None:
+        if not load_model():
+            return []
+
     features = build_job_features()
     if features.empty:
         return []
 
-    active = features[
-        (features["material_budget"] > 500)
+    active = features[features["material_budget"] > 500].copy()
+    if active.empty:
+        return []
+
+    feature_cols = [
+        "total_budget", "material_budget", "non_material_budget",
+        "material_budget_ratio", "budget_line_count", "unique_products",
+        "bom_component_count", "bom_total_cost", "bom_avg_unit_cost",
+        "po_count", "unique_vendors", "has_subcontractor",
+        "order_month", "order_quarter",
+        "has_installation", "has_freight", "has_cranage",
     ]
+    X = active[feature_cols].fillna(0)
+    X_scaled = _scaler.transform(X)
+
+    probabilities = _model.predict_proba(X_scaled)[:, 1]
 
     results = []
-    for _, job in active.iterrows():
-        result = predict(job["id"])
-        if result:
-            results.append(result)
+    for i, (_, job) in enumerate(active.iterrows()):
+        wp = float(probabilities[i])
+        risk_level = "high" if wp > 0.7 else "medium" if wp > 0.4 else "low"
+        results.append({
+            "job_id": job["id"],
+            "prediction_type": "waste_risk",
+            "waste_probability": round(wp, 3),
+            "risk_level": risk_level,
+            "severity": "critical" if risk_level == "high" else "warning" if risk_level == "medium" else "info",
+            "sale_order_name": str(job.get("sale_order_name", "")),
+            "material_budget": round(float(job.get("material_budget", 0)), 2),
+            "material_actual": round(float(job.get("material_actual", 0)), 2),
+            "model_version": datetime.now(timezone.utc).strftime("%Y%m%d"),
+        })
 
     return results

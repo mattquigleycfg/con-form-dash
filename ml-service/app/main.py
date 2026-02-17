@@ -37,6 +37,14 @@ async def lifespan(app: FastAPI):
     logger.info("Starting ML Service...")
     loaded = load_all_models()
     logger.info(f"Model loading results: {loaded}")
+    models_found = sum(1 for v in loaded.values() if v == "loaded")
+    if models_found == 0:
+        logger.info("No trained models found on disk - auto-training on startup...")
+        try:
+            result = retrain_all()
+            logger.info(f"Auto-training complete: {result.get('models_trained', 0)} trained")
+        except Exception as e:
+            logger.error(f"Auto-training failed: {e}")
     yield
     logger.info("Shutting down ML Service...")
 
@@ -271,10 +279,10 @@ async def ml_insights(request: MLInsightsRequest, api_key: str = Depends(verify_
             if ov:
                 results["overrun_warnings"].append(ov)
         else:
-            results["cost_predictions"] = cost_predictor.predict_all_active()
-            results["anomaly_scores"] = anomaly.score_all_active()
-            results["waste_risks"] = waste_scorer.predict_all_active()
-            results["overrun_warnings"] = overrun.predict_all_active()
+            results["cost_predictions"] = cost_predictor.predict_all_active()[:50]
+            results["anomaly_scores"] = anomaly.score_all_active()[:50]
+            results["waste_risks"] = waste_scorer.predict_all_active()[:50]
+            results["overrun_warnings"] = overrun.predict_all_active()[:50]
     except Exception as e:
         logger.error(f"Error generating insights: {e}")
 

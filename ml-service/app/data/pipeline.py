@@ -122,16 +122,26 @@ def fetch_ml_predictions(prediction_type: Optional[str] = None) -> pd.DataFrame:
 
 def store_ml_prediction(prediction: dict) -> None:
     """Store a prediction result in the database."""
-    client = get_supabase_client()
-    client.table("ml_predictions").upsert(prediction).execute()
+    try:
+        client = get_supabase_client()
+        client.table("ml_predictions").upsert(
+            prediction, on_conflict="job_id,prediction_type"
+        ).execute()
+    except Exception as e:
+        logger.warning(f"Failed to store prediction: {e}")
 
 
 def store_ml_predictions_batch(predictions: list[dict]) -> None:
     """Store multiple prediction results."""
     if not predictions:
         return
-    client = get_supabase_client()
-    client.table("ml_predictions").upsert(predictions).execute()
+    try:
+        client = get_supabase_client()
+        client.table("ml_predictions").upsert(
+            predictions, on_conflict="job_id,prediction_type"
+        ).execute()
+    except Exception as e:
+        logger.warning(f"Failed to store batch predictions: {e}")
 
 
 def update_model_metadata(metadata: dict) -> None:

@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from typing import Optional
 import logging
+import time
 
 from app.data.pipeline import (
     fetch_all_jobs,
@@ -15,12 +16,23 @@ from app.data.pipeline import (
 
 logger = logging.getLogger(__name__)
 
+_feature_cache: Optional[pd.DataFrame] = None
+_feature_cache_time: float = 0
+_FEATURE_CACHE_TTL = 60  # seconds
+
 
 def build_job_features() -> pd.DataFrame:
     """Build a feature matrix from job data for cost prediction and anomaly detection.
 
     Returns a DataFrame with one row per job and engineered features.
+    Results are cached for 60 seconds to avoid redundant DB calls during batch operations.
     """
+    global _feature_cache, _feature_cache_time
+
+    now = time.time()
+    if _feature_cache is not None and (now - _feature_cache_time) < _FEATURE_CACHE_TTL:
+        return _feature_cache.copy()
+
     jobs = fetch_all_jobs()
     if jobs.empty:
         return pd.DataFrame()
@@ -166,6 +178,10 @@ def build_job_features() -> pd.DataFrame:
 
     features["order_month"] = features["date_order"].dt.month.fillna(0).astype(int)
     features["order_quarter"] = features["date_order"].dt.quarter.fillna(0).astype(int)
+
+    _feature_cache = features.copy()
+    _feature_cache_time = time.time()
+    logger.info(f"Built features for {len(features)} jobs (cached for {_FEATURE_CACHE_TTL}s)")
 
     return features
 

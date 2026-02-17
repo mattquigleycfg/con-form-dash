@@ -219,19 +219,55 @@ def predict(job_id: str) -> Optional[dict]:
 
 
 def predict_all_active() -> list[dict]:
-    """Predict overrun risk for all active jobs."""
+    """Predict overrun risk using vectorized batch inference."""
+    global _model, _scaler
+
+    if _model is None:
+        if not load_model():
+            return []
+
     features = build_job_features()
     if features.empty:
         return []
 
-    active = features[
-        (features["status"] == "active") & (features["total_budget"] > 0)
-    ]
+    active = features[features["total_budget"] > 0].copy()
+    if active.empty:
+        return []
+
+    loaded = joblib.load(MODEL_PATH)
+    if isinstance(loaded, tuple):
+        _, feature_cols = loaded
+    else:
+        feature_cols = get_numeric_feature_columns() + [
+            "budget_utilization", "material_variance_pct",
+            "non_material_variance_pct", "variance_imbalance",
+        ]
+        feature_cols = [c for c in feature_cols if c in active.columns]
+        feature_cols = list(dict.fromkeys(feature_cols))
+
+    X = active[feature_cols].fillna(0)
+    X_scaled = _scaler.transform(X)
+
+    probabilities = _model.predict_proba(X_scaled)[:, 1]
 
     results = []
-    for _, job in active.iterrows():
-        result = predict(job["id"])
-        if result:
-            results.append(result)
+    for i, (_, job) in enumerate(active.iterrows()):
+        op = float(probabilities[i])
+        risk_level = "high" if op > 0.7 else "medium" if op > 0.4 else "low"
+        budget = float(job.get("total_budget", 0))
+        actual = float(job.get("total_actual", 0))
+        utilization = actual / budget if budget > 0 else 0
+
+        results.append({
+            "job_id": job["id"],
+            "prediction_type": "overrun_warning",
+            "overrun_probability": round(op, 3),
+            "risk_level": risk_level,
+            "budget_utilization": round(utilization, 3),
+            "budget": round(budget, 2),
+            "actual": round(actual, 2),
+            "sale_order_name": str(job.get("sale_order_name", "")),
+            "model_version": datetime.now(timezone.utc).strftime("%Y%m%d"),
+        })
 
     return results
