@@ -116,7 +116,16 @@ export function useMLInsights(jobId?: string) {
           source: "error",
         };
       }
-      return data as MLInsights;
+      return {
+        cost_predictions: Array.isArray(data.cost_predictions) ? data.cost_predictions : [],
+        anomaly_scores: Array.isArray(data.anomaly_scores) ? data.anomaly_scores : [],
+        waste_risks: Array.isArray(data.waste_risks) ? data.waste_risks : [],
+        overrun_warnings: Array.isArray(data.overrun_warnings) ? data.overrun_warnings : [],
+        generated_at: data.generated_at || new Date().toISOString(),
+        total_insights: data.total_insights || 0,
+        source: data.source,
+        ml_service_error: data.ml_service_error,
+      } as MLInsights;
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,

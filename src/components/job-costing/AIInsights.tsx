@@ -317,7 +317,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                 {loadingML && <Skeleton className="h-4 w-16" />}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {mlInsights.cost_predictions.map((cp) => (
+                {(mlInsights.cost_predictions || []).map((cp) => (
                   <button
                     key={`cp-${cp.job_id}`}
                     onClick={() => setShowMLDetail(`cost-${cp.job_id}`)}
@@ -337,7 +337,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                     <Progress value={Math.min(100, (cp.current_actual / cp.budget) * 100)} className="h-1 mt-2" />
                   </button>
                 ))}
-                {mlInsights.anomaly_scores.filter(a => a.is_anomaly).map((an) => (
+                {(mlInsights.anomaly_scores || []).filter(a => a.is_anomaly).map((an) => (
                   <button
                     key={`an-${an.job_id}`}
                     onClick={() => setShowMLDetail(`anomaly-${an.job_id}`)}
@@ -352,14 +352,14 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                     <div className="text-xs text-muted-foreground">Anomaly Detected</div>
                     <div className="text-sm font-semibold">{an.sale_order_name}</div>
                     <div className="text-xs mt-1">Score: {(an.anomaly_score * 100).toFixed(0)}%</div>
-                    {an.contributing_factors.length > 0 && (
+                    {an.contributing_factors?.length > 0 && (
                       <div className="text-xs text-muted-foreground mt-1 truncate">
                         Top factor: {an.contributing_factors[0].feature.replace(/_/g, ' ')}
                       </div>
                     )}
                   </button>
                 ))}
-                {mlInsights.waste_risks.filter(w => w.risk_level !== "low").map((wr) => (
+                {(mlInsights.waste_risks || []).filter(w => w.risk_level !== "low").map((wr) => (
                   <button
                     key={`wr-${wr.job_id}`}
                     onClick={() => setShowMLDetail(`waste-${wr.job_id}`)}
@@ -376,7 +376,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                     <div className="text-xs mt-1">{(wr.waste_probability * 100).toFixed(0)}% probability</div>
                   </button>
                 ))}
-                {mlInsights.overrun_warnings.filter(o => o.risk_level !== "low").map((ov) => (
+                {(mlInsights.overrun_warnings || []).filter(o => o.risk_level !== "low").map((ov) => (
                   <button
                     key={`ov-${ov.job_id}`}
                     onClick={() => setShowMLDetail(`overrun-${ov.job_id}`)}
@@ -537,7 +537,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                         <div className="text-lg font-bold">{formatCurrency(an.total_actual)}</div>
                       </div>
                     </div>
-                    {an.contributing_factors.length > 0 && (
+                    {an.contributing_factors?.length > 0 && (
                       <SHAPWaterfallChart
                         features={an.contributing_factors.map(f => ({
                           feature: f.feature,
@@ -581,13 +581,13 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                         <div className="text-lg font-bold">{formatCurrency(wr.material_actual)}</div>
                       </div>
                     </div>
-                    {wr.feature_explanations.length > 0 && (
+                    {wr.feature_explanations?.length > 0 && (
                       <SHAPWaterfallChart
                         features={wr.feature_explanations}
                         title="Key Drivers (SHAP Values)"
                       />
                     )}
-                    {wr.recommendations.length > 0 && (
+                    {(wr.recommendations?.length ?? 0) > 0 && (
                       <div>
                         <h4 className="font-semibold text-sm mb-2">Recommendations</h4>
                         {wr.recommendations.map((r, i) => (
@@ -638,7 +638,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                       </div>
                     </div>
                     <Progress value={ov.budget_utilization * 100} className="h-2" />
-                    {ov.recommendations.length > 0 && (
+                    {(ov.recommendations?.length ?? 0) > 0 && (
                       <div>
                         <h4 className="font-semibold text-sm mb-2">Recommended Actions</h4>
                         {ov.recommendations.map((r, i) => (
@@ -729,7 +729,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                 )}
 
                 {/* Recommendations */}
-                {selectedInsight.recommendations.length > 0 && (
+                {(selectedInsight.recommendations?.length ?? 0) > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-3">Recommendations</h4>
                     <div className="space-y-3">
