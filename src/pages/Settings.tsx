@@ -330,33 +330,101 @@ export default function Settings() {
             continue;
           }
 
-          // Fetch sale order lines for this order
+          // Fetch sale order lines for this order (with all cost fields)
           const { data: orderLines } = await supabase.functions.invoke('odoo-query', {
             body: {
               model: 'sale.order.line',
               method: 'search_read',
               args: [
                 [['order_id', '=', order.id]],
-                ['id', 'product_id', 'product_uom_qty', 'price_unit', 'price_subtotal', 'purchase_price']
+                ['id', 'order_id', 'product_id', 'product_uom_qty', 'price_unit', 'price_subtotal', 'purchase_price', 'margin', 'margin_percent']
               ]
             }
           });
 
-          // Calculate budgets
-          const materialLines = (orderLines || []).filter((line: any) => {
-            const productName = line.product_id?.[1] || '';
-            const serviceKeywords = ['INSTALLATION', 'FREIGHT', 'CRANAGE', 'ACCOMMODATION', 'TRAVEL'];
-            return !serviceKeywords.some(keyword => productName.toUpperCase().includes(keyword));
+          // Filter out lines with no product, zero price, or description-only
+          const filteredLines = ((orderLines as any[]) || []).filter((line: any) => {
+            if (!line.product_id || !line.product_id[0]) return false;
+            if (!line.price_subtotal || line.price_subtotal === 0) return false;
+            const productName = line.product_id[1] || '';
+            if (productName.toLowerCase().includes('description of works')) return false;
+            return true;
           });
 
-          const nonMaterialLines = (orderLines || []).filter((line: any) => {
-            const productName = line.product_id?.[1] || '';
-            const serviceKeywords = ['INSTALLATION', 'FREIGHT', 'CRANAGE', 'ACCOMMODATION', 'TRAVEL'];
-            return serviceKeywords.some(keyword => productName.toUpperCase().includes(keyword));
+          // Fetch product details for type classification
+          let productMap = new Map();
+          if (filteredLines.length > 0) {
+            const productIds = filteredLines.map((l: any) => l.product_id[0]);
+            const { data: products } = await supabase.functions.invoke('odoo-query', {
+              body: {
+                model: 'product.product',
+                method: 'search_read',
+                args: [
+                  [['id', 'in', productIds]],
+                  ['id', 'detailed_type', 'default_code'],
+                ],
+              },
+            });
+            productMap = new Map(((products as any[]) || []).map((p: any) => [p.id, p]));
+          }
+
+          const serviceKeywords = [
+            'INSTALLATION', 'FREIGHT', 'CRANAGE', 'ACCOMMODATION', 'TRAVEL',
+            'TRANSPORT', 'DELIVERY', 'LABOUR', 'SERVICE', 'SITE INSPECTION',
+            'WORKSHOP LABOUR', 'SHOP DRAWING', 'MAN DAY', 'EXPENSES', 'SITE LABOUR'
+          ];
+
+          const enrichedMaterialLines: any[] = [];
+          const enrichedNonMaterialLines: any[] = [];
+
+          filteredLines.forEach((line: any) => {
+            const product = productMap.get(line.product_id[0]);
+            const productNameUpper = (line.product_id[1] || '').toUpperCase();
+            let productType = ((product?.detailed_type || product?.type || 'product') as string).toLowerCase();
+
+            if (serviceKeywords.some(kw => productNameUpper.includes(kw)) && productType !== 'service') {
+              productType = 'service';
+            }
+
+            // 5-tier cost price priority
+            let costPrice = 0;
+            if (line.purchase_price !== undefined && line.purchase_price !== null && line.purchase_price !== false && line.purchase_price > 0) {
+              costPrice = Number(line.purchase_price);
+            } else if (line.margin !== undefined && line.margin !== null && line.margin !== false && line.margin > 0) {
+              costPrice = line.price_unit - line.margin;
+            } else if (line.margin_percent && line.margin_percent > 0 && line.margin_percent < 100) {
+              costPrice = line.price_unit * (1 - line.margin_percent / 100);
+            } else if (line.price_subtotal && line.product_uom_qty > 0) {
+              costPrice = line.price_subtotal / line.product_uom_qty;
+            } else {
+              costPrice = line.price_unit;
+            }
+            costPrice = Math.max(0, costPrice);
+
+            const quantity = line.product_uom_qty;
+            let costSubtotal = quantity > 0 ? costPrice * quantity : line.price_subtotal || 0;
+            if ((!costSubtotal || costSubtotal <= 0) && line.price_subtotal) {
+              costSubtotal = line.price_subtotal;
+            }
+
+            const category = productType === 'service' ? 'non_material' : 'material';
+            const enrichedLine = {
+              ...line,
+              detailed_type: productType,
+              cost_price: costPrice,
+              cost_subtotal: costSubtotal,
+              cost_category: category,
+            };
+
+            if (category === 'non_material') {
+              enrichedNonMaterialLines.push(enrichedLine);
+            } else {
+              enrichedMaterialLines.push(enrichedLine);
+            }
           });
 
-          const materialBudget = materialLines.reduce((sum: number, line: any) => sum + (line.price_subtotal || 0), 0);
-          const nonMaterialBudget = nonMaterialLines.reduce((sum: number, line: any) => sum + (line.price_subtotal || 0), 0);
+          const materialBudget = enrichedMaterialLines.reduce((sum: number, l: any) => sum + l.cost_subtotal, 0);
+          const nonMaterialBudget = enrichedNonMaterialLines.reduce((sum: number, l: any) => sum + l.cost_subtotal, 0);
 
           // Get project info if exists
           let projectAnalyticAccountId = null;
@@ -456,7 +524,7 @@ export default function Settings() {
                 last_synced_by_user_id: user.id,
                 sale_order_name: order.name,
                 customer_name: order.partner_id[1],
-                total_budget: order.amount_total,
+                total_budget: materialBudget + nonMaterialBudget,
                 material_budget: materialBudget,
                 non_material_budget: nonMaterialBudget,
                 analytic_account_id: order.analytic_account_id ? order.analytic_account_id[0] : null,
@@ -493,7 +561,7 @@ export default function Settings() {
                 odoo_sale_order_id: order.id,
                 sale_order_name: order.name,
                 customer_name: order.partner_id[1],
-                total_budget: order.amount_total,
+                total_budget: materialBudget + nonMaterialBudget,
                 material_budget: materialBudget,
                 non_material_budget: nonMaterialBudget,
                 total_actual: 0,
@@ -538,6 +606,31 @@ export default function Settings() {
           }
 
           if (jobError) throw jobError;
+
+          // Insert budget lines (delete old ones first for clean slate)
+          if (job && filteredLines.length > 0) {
+            await supabase.from("job_budget_lines").delete().eq("job_id", job.id);
+
+            const allEnrichedLines = [...enrichedMaterialLines, ...enrichedNonMaterialLines];
+            const budgetRows = allEnrichedLines.map((line: any) => ({
+              job_id: job.id,
+              odoo_line_id: line.id,
+              product_id: line.product_id[0],
+              product_name: line.product_id[1],
+              product_type: line.detailed_type,
+              quantity: line.product_uom_qty,
+              unit_price: line.cost_price,
+              subtotal: line.cost_subtotal,
+              cost_category: line.cost_category,
+            }));
+
+            if (budgetRows.length > 0) {
+              const { error: insertErr } = await supabase.from("job_budget_lines").insert(budgetRows);
+              if (insertErr) {
+                logger.error(`Budget lines insert error for ${order.name}:`, insertErr);
+              }
+            }
+          }
 
           // Calculate actual costs from analytic lines
           const analyticAccountIds = [];
