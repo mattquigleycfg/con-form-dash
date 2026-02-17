@@ -2,6 +2,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterBar } from "@/components/filters/FilterBar";
+import { SafeSection } from "@/components/SafeSection";
 import { useOdooHelpdesk } from "@/hooks/useOdooHelpdesk";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -75,6 +76,7 @@ export default function HelpdeskDashboard() {
           />
         </div>
 
+        <SafeSection name="Open Tickets">
         <Card>
           <CardHeader>
             <CardTitle>Open Tickets</CardTitle>
@@ -118,6 +120,7 @@ export default function HelpdeskDashboard() {
             )}
           </CardContent>
         </Card>
+        </SafeSection>
       </div>
       <AICopilot />
     </DashboardLayout>

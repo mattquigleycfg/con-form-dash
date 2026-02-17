@@ -34,7 +34,7 @@ export function SHAPWaterfallChart({ features, title = "Feature Contributions" }
   const chartData = features
     .slice(0, 8)
     .map((f) => ({
-      name: FEATURE_LABELS[f.feature] || f.feature.replace(/_/g, " "),
+      name: FEATURE_LABELS[f.feature] || (f.feature || "unknown").replace(/_/g, " "),
       value: f.shap_value ?? f.z_score ?? f.importance ?? 0,
       direction: f.direction || (f.shap_value && f.shap_value > 0 ? "increases_risk" : "decreases_risk"),
     }))

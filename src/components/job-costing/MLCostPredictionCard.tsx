@@ -136,7 +136,7 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
               </div>
 
               <div className="text-xs text-muted-foreground mb-3">
-                Probability of exceeding budget at {overrunWarning.milestone.replace(/_/g, ' ')} stage
+                Probability of exceeding budget at {(overrunWarning.milestone || 'current').replace(/_/g, ' ')} stage
               </div>
 
               <Progress value={overrunWarning.budget_utilization * 100} className="h-2 mb-3" />

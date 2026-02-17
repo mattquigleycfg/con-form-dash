@@ -354,7 +354,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                     <div className="text-xs mt-1">Score: {(an.anomaly_score * 100).toFixed(0)}%</div>
                     {an.contributing_factors?.length > 0 && (
                       <div className="text-xs text-muted-foreground mt-1 truncate">
-                        Top factor: {an.contributing_factors[0].feature.replace(/_/g, ' ')}
+                        Top factor: {(an.contributing_factors[0].feature || '').replace(/_/g, ' ')}
                       </div>
                     )}
                   </button>
@@ -385,7 +385,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                     <div className="flex items-center justify-between mb-2">
                       <AlertTriangle className="h-4 w-4 text-orange-600" />
                       <Badge variant={ov.risk_level === "high" ? "destructive" : "default"} className="text-xs">
-                        {ov.milestone.replace(/_/g, ' ')}
+                        {(ov.milestone || 'unknown').replace(/_/g, ' ')}
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground">Overrun Warning</div>
@@ -619,7 +619,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                       Budget Overrun Warning - {ov.sale_order_name}
                     </DialogTitle>
                     <DialogDescription>
-                      XGBoost classifier predicting overrun probability at {ov.milestone.replace(/_/g, ' ')} milestone
+                      XGBoost classifier predicting overrun probability at {(ov.milestone || 'current').replace(/_/g, ' ')} milestone
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 mt-4 overflow-y-auto">

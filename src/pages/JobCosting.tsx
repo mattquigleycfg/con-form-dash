@@ -24,6 +24,7 @@ import { formatCompactCurrency } from "@/lib/utils";
 import { KanbanView } from "@/components/job-costing/KanbanView";
 import { GridView } from "@/components/job-costing/GridView";
 import { AIInsights } from "@/components/job-costing/AIInsights";
+import { SafeSection } from "@/components/SafeSection";
 import { processBatched, retryWithBackoff, RateLimiter } from "@/utils/rateLimit";
 import { JobListModal } from "@/components/job-costing/JobListModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -921,6 +922,7 @@ export default function JobCosting() {
         </div>
 
         {/* ML Risk Summary Strip */}
+        <SafeSection name="ML Risk Strip" silent>
         {(mlOverruns > 0 || mlAnomalies > 0 || mlWasteRisks > 0) && (
           <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border bg-muted/50">
             <Brain className="h-4 w-4 text-violet-500 flex-shrink-0" />
@@ -948,8 +950,10 @@ export default function JobCosting() {
             </Button>
           </div>
         )}
+        </SafeSection>
 
         {/* 2. AI Insights (Collapsible) */}
+        <SafeSection name="AI Insights">
         {filteredJobs.length > 0 && (
           <Collapsible open={aiInsightsOpen} onOpenChange={setAiInsightsOpen}>
             <CollapsibleTrigger asChild>
@@ -963,6 +967,7 @@ export default function JobCosting() {
             </CollapsibleContent>
           </Collapsible>
         )}
+        </SafeSection>
 
         {/* 3. Summary Dashboard Cards */}
         {filteredJobs && filteredJobs.length > 0 && (

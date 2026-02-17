@@ -10,6 +10,7 @@ import { SankeyChart } from "@/components/SankeyChart";
 import { AustraliaSalesMap } from "@/components/AustraliaSalesMap";
 import { HuddleMetrics } from "@/components/HuddleMetrics";
 import { YTDPerformanceChart } from "@/components/YTDPerformanceChart";
+import { SafeSection } from "@/components/SafeSection";
 import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,13 +69,18 @@ const Index = () => {
         {/* Huddle Metrics */}
         <div>
           <h2 className="text-xl font-semibold text-foreground mb-4">Huddle Overview</h2>
-          <HuddleMetrics />
+          <SafeSection name="Huddle Overview">
+            <HuddleMetrics />
+          </SafeSection>
         </div>
 
         {/* YTD Performance Chart */}
-        <YTDPerformanceChart />
+        <SafeSection name="YTD Performance Chart">
+          <YTDPerformanceChart />
+        </SafeSection>
 
         {/* Key Metrics */}
+        <SafeSection name="Key Metrics">
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <MetricsCard
             title="Expected Revenue"
@@ -117,20 +123,26 @@ const Index = () => {
             }
           />
         </div>
+        </SafeSection>
 
         {/* Charts */}
+        <SafeSection name="Revenue and Pipeline Charts">
         <div className="grid gap-6 lg:grid-cols-2">
           <RevenueChart />
           <PipelineChart />
         </div>
+        </SafeSection>
 
         {/* Secondary Charts */}
+        <SafeSection name="Sales Map and Sankey">
         <div className="grid gap-6 lg:grid-cols-2">
           <AustraliaSalesMap />
           <SankeyChart />
         </div>
+        </SafeSection>
 
         {/* Performance Insights */}
+        <SafeSection name="Performance Insights">
         <Card>
           <CardHeader>
             <CardTitle>Performance Insights</CardTitle>
@@ -162,8 +174,10 @@ const Index = () => {
             </div>
           </CardContent>
         </Card>
+        </SafeSection>
 
         {/* Performance Table and Target Progress */}
+        <SafeSection name="Performance Table and Targets">
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <PerformanceTable salesReps={salesReps} isLoading={isTeamLoading} />
@@ -172,6 +186,7 @@ const Index = () => {
             <TargetProgress />
           </div>
         </div>
+        </SafeSection>
       </div>
     </DashboardLayout>
     <AICopilot />

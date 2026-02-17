@@ -1,4 +1,5 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { SafeSection } from "@/components/SafeSection";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -152,17 +153,17 @@ export default function MLDashboard() {
           {/* Risk Analysis Tab */}
           <TabsContent value="risk" className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
-              <RiskHeatmapChart data={insights?.overrun_warnings || []} />
-              <FeatureImportanceChart models={models} modelName="cost_predictor" />
+              <SafeSection name="Risk Heatmap"><RiskHeatmapChart data={insights?.overrun_warnings || []} /></SafeSection>
+              <SafeSection name="Feature Importance"><FeatureImportanceChart models={models} modelName="cost_predictor" /></SafeSection>
             </div>
           </TabsContent>
 
           {/* Predictions Tab */}
           <TabsContent value="predictions" className="space-y-4">
-            <PredictionAccuracyChart data={insights?.cost_predictions || []} />
+            <SafeSection name="Prediction Accuracy"><PredictionAccuracyChart data={insights?.cost_predictions || []} /></SafeSection>
             <div className="grid gap-4 lg:grid-cols-2">
-              <FeatureImportanceChart models={models} modelName="waste_scorer" />
-              <FeatureImportanceChart models={models} modelName="overrun_classifier" />
+              <SafeSection name="Waste Features"><FeatureImportanceChart models={models} modelName="waste_scorer" /></SafeSection>
+              <SafeSection name="Overrun Features"><FeatureImportanceChart models={models} modelName="overrun_classifier" /></SafeSection>
             </div>
           </TabsContent>
 

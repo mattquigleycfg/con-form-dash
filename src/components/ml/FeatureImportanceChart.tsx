@@ -28,7 +28,7 @@ export function FeatureImportanceChart({ models, modelName = "cost_predictor" }:
   const features = (model?.top_features || [])
     .slice(0, 10)
     .map((f) => ({
-      name: FEATURE_LABELS[f.name] || f.name.replace(/_/g, " "),
+      name: FEATURE_LABELS[f.name] || (f.name || "unknown").replace(/_/g, " "),
       importance: Math.round(f.importance * 1000) / 10,
     }))
     .reverse();

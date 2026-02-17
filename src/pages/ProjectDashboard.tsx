@@ -2,6 +2,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterBar } from "@/components/filters/FilterBar";
+import { SafeSection } from "@/components/SafeSection";
 import { useOdooProjects, useOdooTasks } from "@/hooks/useOdooProject";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -45,6 +46,7 @@ export default function ProjectDashboard() {
           </TabsList>
 
           <TabsContent value="projects" className="space-y-4">
+            <SafeSection name="Active Projects">
             <Card>
               <CardHeader>
                 <CardTitle>Active Projects</CardTitle>
@@ -84,9 +86,11 @@ export default function ProjectDashboard() {
                 )}
               </CardContent>
             </Card>
+            </SafeSection>
           </TabsContent>
 
           <TabsContent value="tasks" className="space-y-4">
+            <SafeSection name="Active Tasks">
             <Card>
               <CardHeader>
                 <CardTitle>Active Tasks</CardTitle>
@@ -130,6 +134,7 @@ export default function ProjectDashboard() {
                 )}
               </CardContent>
             </Card>
+            </SafeSection>
           </TabsContent>
         </Tabs>
       </div>

@@ -3,6 +3,7 @@ import { MetricsCard } from "@/components/MetricsCard";
 import { InvoicedChart } from "@/components/InvoicedChart";
 import { TopInvoicesTable } from "@/components/TopInvoicesTable";
 import { AICopilot } from "@/components/AICopilot";
+import { SafeSection } from "@/components/SafeSection";
 import { useOdooAccounting } from "@/hooks/useOdooAccounting";
 import { useOdooInvoicing } from "@/hooks/useOdooInvoicing";
 import { useOdooPurchase } from "@/hooks/useOdooPurchase";
@@ -16,9 +17,21 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 
 export default function Accounting() {
-  const { metrics, invoiceData, topInvoices, isLoading } = useOdooAccounting();
+  const { data: accountingData, isLoading } = useOdooAccounting();
   const { data: invoices, isLoading: isInvoicesLoading } = useOdooInvoicing();
   const { data: purchaseOrders, isLoading: isPurchaseLoading } = useOdooPurchase();
+
+  const metrics = {
+    currentIncome: accountingData?.invoicing?.totalRevenue ?? 0,
+    currentIncomeChange: 0,
+    receivables: accountingData?.totalARAmount ?? 0,
+    currentExpense: accountingData?.totalAPAmount ?? 0,
+    currentExpenseChange: 0,
+    payables: accountingData?.totalAPAmount ?? 0,
+  };
+
+  const invoiceData: Array<{ month: string; amount: number }> = [];
+  const topInvoices: Array<{ id: number; name: string; partner: string; amount: number; status: string }> = [];
 
   const formatMetricCurrency = (value: number) => {
     if (value >= 1000000) {
@@ -60,44 +73,46 @@ export default function Accounting() {
 
         <FilterBar />
 
-        {isLoading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-32" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <MetricsCard
-              title="Current income"
-              value={formatMetricCurrency(metrics.currentIncome)}
-              change={parseFloat(metrics.currentIncomeChange.toFixed(1))}
-              icon={DollarSign}
-              trend={metrics.currentIncomeChange >= 0 ? "up" : "down"}
-              footer={<p className="text-xs text-muted-foreground">last period</p>}
-            />
-            <MetricsCard
-              title="Receivables"
-              value={formatMetricCurrency(metrics.receivables)}
-              icon={TrendingUp}
-              footer={<p className="text-xs text-muted-foreground">to receive</p>}
-            />
-            <MetricsCard
-              title="Current expense"
-              value={formatMetricCurrency(metrics.currentExpense)}
-              change={parseFloat(metrics.currentExpenseChange.toFixed(1))}
-              icon={TrendingDown}
-              trend={metrics.currentExpenseChange >= 0 ? "up" : "down"}
-              footer={<p className="text-xs text-muted-foreground">last period</p>}
-            />
-            <MetricsCard
-              title="Payables"
-              value={formatMetricCurrency(metrics.payables)}
-              icon={CreditCard}
-              footer={<p className="text-xs text-muted-foreground">to pay</p>}
-            />
-          </div>
-        )}
+        <SafeSection name="Accounting Metrics">
+          {isLoading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-32" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <MetricsCard
+                title="Current income"
+                value={formatMetricCurrency(metrics.currentIncome)}
+                change={parseFloat(metrics.currentIncomeChange.toFixed(1))}
+                icon={DollarSign}
+                trend={metrics.currentIncomeChange >= 0 ? "up" : "down"}
+                footer={<p className="text-xs text-muted-foreground">last period</p>}
+              />
+              <MetricsCard
+                title="Receivables"
+                value={formatMetricCurrency(metrics.receivables)}
+                icon={TrendingUp}
+                footer={<p className="text-xs text-muted-foreground">to receive</p>}
+              />
+              <MetricsCard
+                title="Current expense"
+                value={formatMetricCurrency(metrics.currentExpense)}
+                change={parseFloat(metrics.currentExpenseChange.toFixed(1))}
+                icon={TrendingDown}
+                trend={metrics.currentExpenseChange >= 0 ? "up" : "down"}
+                footer={<p className="text-xs text-muted-foreground">last period</p>}
+              />
+              <MetricsCard
+                title="Payables"
+                value={formatMetricCurrency(metrics.payables)}
+                icon={CreditCard}
+                footer={<p className="text-xs text-muted-foreground">to pay</p>}
+              />
+            </div>
+          )}
+        </SafeSection>
 
         <Tabs defaultValue="overview" className="w-full">
           <TabsList>
@@ -108,17 +123,21 @@ export default function Accounting() {
 
           <TabsContent value="overview" className="space-y-6">
             <div className="grid gap-6">
-              {isLoading ? (
-                <Skeleton className="h-96" />
-              ) : (
-                <InvoicedChart data={invoiceData} />
-              )}
+              <SafeSection name="Invoiced Chart">
+                {isLoading ? (
+                  <Skeleton className="h-96" />
+                ) : (
+                  <InvoicedChart data={invoiceData} />
+                )}
+              </SafeSection>
               
-              {isLoading ? (
-                <Skeleton className="h-96" />
-              ) : (
-                <TopInvoicesTable invoices={topInvoices} />
-              )}
+              <SafeSection name="Top Invoices">
+                {isLoading ? (
+                  <Skeleton className="h-96" />
+                ) : (
+                  <TopInvoicesTable invoices={topInvoices} />
+                )}
+              </SafeSection>
             </div>
           </TabsContent>
 
