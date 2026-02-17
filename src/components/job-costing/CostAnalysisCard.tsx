@@ -2,24 +2,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CostAnalysis } from "@/hooks/useJobCostAnalysis";
 import { Job } from "@/hooks/useJobs";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 interface CostAnalysisCardProps {
   analysis: CostAnalysis;
   job: Job;
-  materialActualTotal?: number; // Optional: pass calculated material actual
-  nonMaterialActualTotal?: number; // Optional: pass calculated non-material actual
+  materialActualTotal?: number;
+  nonMaterialActualTotal?: number;
 }
 
 export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMaterialActualTotal }: CostAnalysisCardProps) {
-  // Color coding: green for negative variances <100% (under budget), red for positive (over budget)
-  const getVarianceClass = (variancePercent: number) => {
-    if (variancePercent < 0 && Math.abs(variancePercent) < 100) {
-      return "text-green-600 dark:text-green-400";
-    }
-    if (variancePercent > 0) {
-      return "text-red-600 dark:text-red-400";
-    }
+  // Color coding: positive variance = under budget = green, negative = over budget = red
+  const getVarianceClass = (variance: number) => {
+    if (variance > 0) return "text-green-600 dark:text-green-400 font-medium";
+    if (variance < 0) return "text-red-600 dark:text-red-400 font-medium";
+    return "";
+  };
+
+  // Color for margin values: positive = green, negative = red
+  const getMarginClass = (value: number) => {
+    if (value > 0) return "text-green-600 dark:text-green-400";
+    if (value < 0) return "text-red-600 dark:text-red-400";
     return "";
   };
 
@@ -28,12 +31,12 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
   const actualNonMaterialCost = nonMaterialActualTotal ?? job.non_material_actual;
   const totalActualCost = actualMaterialCost + actualNonMaterialCost;
 
-  // Variance = Actual - Budget (negative = under budget/good, positive = over budget/bad)
-  const materialVariance = actualMaterialCost - analysis.materialBudget;
+  // Variance = Budget - Actual (positive = under budget/good, negative = over budget/bad)
+  const materialVariance = analysis.materialBudget - actualMaterialCost;
   const materialVariancePercent = analysis.materialBudget > 0 ? (materialVariance / analysis.materialBudget) * 100 : 0;
-  const nonMaterialVariance = actualNonMaterialCost - analysis.nonMaterialBudget;
+  const nonMaterialVariance = analysis.nonMaterialBudget - actualNonMaterialCost;
   const nonMaterialVariancePercent = analysis.nonMaterialBudget > 0 ? (nonMaterialVariance / analysis.nonMaterialBudget) * 100 : 0;
-  const totalVariance = totalActualCost - analysis.totalBudget;
+  const totalVariance = analysis.totalBudget - totalActualCost;
   const totalVariancePercent = analysis.totalBudget > 0 ? (totalVariance / analysis.totalBudget) * 100 : 0;
   
   const actualMargin = analysis.budgetedRevenue - totalActualCost;
@@ -71,11 +74,11 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
                 <TableCell className="text-right">
                   {formatCurrency(actualMaterialCost)}
                 </TableCell>
-                <TableCell className={`text-right ${getVarianceClass(materialVariancePercent)}`}>
-                  {materialVariance >= 0 ? '+' : ''}{formatCurrency(materialVariance)}
+                <TableCell className={cn("text-right", getVarianceClass(materialVariance))}>
+                  {materialVariance > 0 ? '+' : ''}{formatCurrency(materialVariance)}
                 </TableCell>
-                <TableCell className={`text-right ${getVarianceClass(materialVariancePercent)}`}>
-                  {materialVariance >= 0 ? '+' : ''}{materialVariancePercent.toFixed(1)}%
+                <TableCell className={cn("text-right", getVarianceClass(materialVariance))}>
+                  {materialVariancePercent > 0 ? '+' : ''}{materialVariancePercent.toFixed(1)}%
                 </TableCell>
               </TableRow>
 
@@ -87,11 +90,11 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
                 <TableCell className="text-right">
                   {formatCurrency(actualNonMaterialCost)}
                 </TableCell>
-                <TableCell className={`text-right ${getVarianceClass(nonMaterialVariancePercent)}`}>
-                  {nonMaterialVariance >= 0 ? '+' : ''}{formatCurrency(nonMaterialVariance)}
+                <TableCell className={cn("text-right", getVarianceClass(nonMaterialVariance))}>
+                  {nonMaterialVariance > 0 ? '+' : ''}{formatCurrency(nonMaterialVariance)}
                 </TableCell>
-                <TableCell className={`text-right ${getVarianceClass(nonMaterialVariancePercent)}`}>
-                  {nonMaterialVariance >= 0 ? '+' : ''}{nonMaterialVariancePercent.toFixed(1)}%
+                <TableCell className={cn("text-right", getVarianceClass(nonMaterialVariance))}>
+                  {nonMaterialVariancePercent > 0 ? '+' : ''}{nonMaterialVariancePercent.toFixed(1)}%
                 </TableCell>
               </TableRow>
 
@@ -101,11 +104,11 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
                 <TableCell className="text-right">
                   {formatCurrency(totalActualCost)}
                 </TableCell>
-                <TableCell className={`text-right ${getVarianceClass(totalVariancePercent)}`}>
-                  {totalVariance >= 0 ? '+' : ''}{formatCurrency(totalVariance)}
+                <TableCell className={cn("text-right", getVarianceClass(totalVariance))}>
+                  {totalVariance > 0 ? '+' : ''}{formatCurrency(totalVariance)}
                 </TableCell>
-                <TableCell className={`text-right ${getVarianceClass(totalVariancePercent)}`}>
-                  {totalVariance >= 0 ? '+' : ''}{totalVariancePercent.toFixed(1)}%
+                <TableCell className={cn("text-right", getVarianceClass(totalVariance))}>
+                  {totalVariancePercent > 0 ? '+' : ''}{totalVariancePercent.toFixed(1)}%
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -119,13 +122,17 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
             <TableHeader>
               <TableRow>
                 <TableHead>Metric</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">Budgeted</TableHead>
+                <TableHead className="text-right">Actual</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               <TableRow>
                 <TableCell>Revenue (Sale Price)</TableCell>
                 <TableCell className="text-right">
+                  {formatCurrency(analysis.budgetedRevenue)}
+                </TableCell>
+                <TableCell className="text-right text-muted-foreground">
                   {formatCurrency(analysis.budgetedRevenue)}
                 </TableCell>
               </TableRow>
@@ -135,19 +142,28 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
                 <TableCell className="text-right">
                   {formatCurrency(analysis.totalBudget)}
                 </TableCell>
+                <TableCell className={cn("text-right", totalActualCost > analysis.totalBudget ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
+                  {formatCurrency(totalActualCost)}
+                </TableCell>
               </TableRow>
 
               <TableRow className="font-bold border-t-2">
                 <TableCell>Gross Margin</TableCell>
-                <TableCell className="text-right">
+                <TableCell className={cn("text-right", getMarginClass(analysis.budgetedMargin))}>
                   {formatCurrency(analysis.budgetedMargin)}
+                </TableCell>
+                <TableCell className={cn("text-right", getMarginClass(actualMargin))}>
+                  {formatCurrency(actualMargin)}
                 </TableCell>
               </TableRow>
 
               <TableRow className="font-bold">
                 <TableCell>Gross Margin %</TableCell>
-                <TableCell className="text-right">
+                <TableCell className={cn("text-right", getMarginClass(analysis.budgetedMarginPercent))}>
                   {analysis.budgetedMarginPercent.toFixed(1)}%
+                </TableCell>
+                <TableCell className={cn("text-right", getMarginClass(actualMarginPercent))}>
+                  {actualMarginPercent.toFixed(1)}%
                 </TableCell>
               </TableRow>
             </TableBody>
