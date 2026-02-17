@@ -154,7 +154,7 @@ export default function MLDashboard() {
           <TabsContent value="risk" className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
               <SafeSection name="Risk Heatmap"><RiskHeatmapChart data={insights?.overrun_warnings || []} /></SafeSection>
-              <SafeSection name="Feature Importance"><FeatureImportanceChart models={models} modelName="cost_predictor" /></SafeSection>
+              <SafeSection name="Feature Importance"><FeatureImportanceChart models={models} modelName="overrun_classifier" /></SafeSection>
             </div>
           </TabsContent>
 
@@ -162,8 +162,8 @@ export default function MLDashboard() {
           <TabsContent value="predictions" className="space-y-4">
             <SafeSection name="Prediction Accuracy"><PredictionAccuracyChart data={insights?.cost_predictions || []} /></SafeSection>
             <div className="grid gap-4 lg:grid-cols-2">
+              <SafeSection name="Cost Features"><FeatureImportanceChart models={models} modelName="cost_predictor" /></SafeSection>
               <SafeSection name="Waste Features"><FeatureImportanceChart models={models} modelName="waste_scorer" /></SafeSection>
-              <SafeSection name="Overrun Features"><FeatureImportanceChart models={models} modelName="overrun_classifier" /></SafeSection>
             </div>
           </TabsContent>
 

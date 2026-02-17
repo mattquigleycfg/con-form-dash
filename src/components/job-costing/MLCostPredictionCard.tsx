@@ -62,9 +62,11 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
                 <div className="flex items-center gap-2 mb-3">
                   <Target className="h-4 w-4 text-violet-600" />
                   <span className="text-sm font-semibold">Predicted Final Cost</span>
-                  <Badge variant="outline" className="text-xs ml-auto">
-                    {Math.round(costPrediction.confidence_level * 100)}% confidence
-                  </Badge>
+                  {Number.isFinite(costPrediction.confidence_level) && (
+                    <Badge variant="outline" className="text-xs ml-auto">
+                      {Math.round(costPrediction.confidence_level * 100)}% confidence
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="text-2xl font-bold text-violet-700 dark:text-violet-300 mb-1">

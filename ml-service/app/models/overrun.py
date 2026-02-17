@@ -85,6 +85,9 @@ def train() -> dict:
     joblib.dump((_model, feature_cols), MODEL_PATH)
     joblib.dump(_scaler, SCALER_PATH)
 
+    feature_importance = dict(zip(feature_cols, _model.feature_importances_.tolist()))
+    top_features = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[:10]
+
     metrics = {
         "model_name": "overrun_classifier",
         "trained_at": datetime.now(timezone.utc).isoformat(),
@@ -92,6 +95,7 @@ def train() -> dict:
         "overrun_rate": round(float(y.mean()), 3),
         "auc_score": round(float(auc_mean), 3),
         "auc_std": round(float(auc_std), 3),
+        "top_features": [{"name": k, "importance": round(v, 4)} for k, v in top_features],
         "model_version": datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S"),
     }
 

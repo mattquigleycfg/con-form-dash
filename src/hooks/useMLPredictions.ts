@@ -12,6 +12,7 @@ export interface CostPrediction {
   budget: number;
   predicted_overrun: number;
   predicted_overrun_pct: number;
+  sale_order_name?: string;
   model_version: string;
   generated_at: string;
 }

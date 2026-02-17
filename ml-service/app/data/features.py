@@ -42,11 +42,13 @@ def build_job_features() -> pd.DataFrame:
     non_material_costs = fetch_job_non_material_costs()
     purchase_orders = fetch_job_purchase_orders()
 
-    features = jobs[["id", "total_budget", "material_budget", "non_material_budget",
-                      "total_actual", "material_actual", "non_material_actual",
-                      "customer_name", "project_manager_name", "status",
-                      "date_order", "created_at", "updated_at",
-                      "subcontractor_name", "project_stage_name"]].copy()
+    keep_cols = ["id", "sale_order_name", "total_budget", "material_budget",
+                 "non_material_budget", "total_actual", "material_actual",
+                 "non_material_actual", "customer_name", "project_manager_name",
+                 "status", "date_order", "created_at", "updated_at",
+                 "subcontractor_name", "project_stage_name"]
+    keep_cols = [c for c in keep_cols if c in jobs.columns]
+    features = jobs[keep_cols].copy()
 
     features["material_budget_ratio"] = np.where(
         features["total_budget"] > 0,

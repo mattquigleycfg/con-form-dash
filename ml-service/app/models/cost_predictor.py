@@ -180,6 +180,7 @@ def predict(job_id: str) -> Optional[dict]:
         "budget": round(budget, 2),
         "predicted_overrun": round(predicted_cost - budget, 2),
         "predicted_overrun_pct": round((predicted_cost - budget) / budget * 100, 1) if budget > 0 else 0,
+        "sale_order_name": str(job_data.get("sale_order_name", "")),
         "model_version": datetime.now(timezone.utc).strftime("%Y%m%d"),
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -233,6 +234,7 @@ def predict_all_active() -> list[dict]:
             "budget": round(budget, 2),
             "predicted_overrun": round(predicted_cost - budget, 2),
             "predicted_overrun_pct": round((predicted_cost - budget) / budget * 100, 1) if budget > 0 else 0,
+            "sale_order_name": str(job.get("sale_order_name", "")),
             "model_version": datetime.now(timezone.utc).strftime("%Y%m%d"),
         })
 

@@ -58,6 +58,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
   const [dismissedInsights, setDismissedInsights] = useState<Set<string>>(new Set());
   const [selectedInsight, setSelectedInsight] = useState<Insight | null>(null);
   const [showMLDetail, setShowMLDetail] = useState<string | null>(null);
+  const [mlCardPage, setMlCardPage] = useState(1);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -308,95 +309,156 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
           </div>
         </CardHeader>
         <CardContent>
-          {/* ML Prediction Cards */}
-          {mlInsights && mlInsights.total_insights > 0 && (
-            <div className="mb-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Brain className="h-4 w-4 text-violet-500" />
-                <span className="text-sm font-medium text-muted-foreground">ML Predictions</span>
-                {loadingML && <Skeleton className="h-4 w-16" />}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {(mlInsights.cost_predictions || []).map((cp) => (
-                  <button
-                    key={`cp-${cp.job_id}`}
-                    onClick={() => setShowMLDetail(`cost-${cp.job_id}`)}
-                    className="p-3 rounded-lg border-2 border-violet-500/30 bg-violet-50 dark:bg-violet-950/20 text-left hover:scale-[1.02] transition-all group"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <Target className="h-4 w-4 text-violet-600" />
-                      <Badge variant="outline" className="text-xs">
-                        {Math.round(cp.confidence_level * 100)}% conf
-                      </Badge>
-                    </div>
-                    <div className="text-xs text-muted-foreground">Predicted Final Cost</div>
-                    <div className="text-lg font-bold">{formatCurrency(cp.predicted_value)}</div>
-                    <div className={cn("text-xs mt-1", cp.predicted_overrun > 0 ? "text-red-600" : "text-green-600")}>
-                      {cp.predicted_overrun > 0 ? "+" : ""}{formatCurrency(cp.predicted_overrun)} ({cp.predicted_overrun_pct > 0 ? "+" : ""}{cp.predicted_overrun_pct}%)
-                    </div>
-                    <Progress value={Math.min(100, (cp.current_actual / cp.budget) * 100)} className="h-1 mt-2" />
-                  </button>
-                ))}
-                {(mlInsights.anomaly_scores || []).filter(a => a.is_anomaly).map((an) => (
+          {/* ML Prediction Cards - prioritised, paginated */}
+          {mlInsights && mlInsights.total_insights > 0 && (() => {
+            const ML_PAGE_SIZE = 8;
+            const allCards: Array<{ key: string; severity: number; node: React.ReactNode }> = [];
+
+            (mlInsights.anomaly_scores || []).filter(a => a.is_anomaly).forEach((an) => {
+              allCards.push({
+                key: `an-${an.job_id}`,
+                severity: an.severity === "critical" ? 3 : 2,
+                node: (
                   <button
                     key={`an-${an.job_id}`}
                     onClick={() => setShowMLDetail(`anomaly-${an.job_id}`)}
-                    className="p-3 rounded-lg border-2 border-red-500/30 bg-red-50 dark:bg-red-950/20 text-left hover:scale-[1.02] transition-all group"
+                    className="p-3 rounded-lg border-2 border-red-500/30 bg-red-50 dark:bg-red-950/20 text-left hover:scale-[1.02] transition-all"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <ShieldAlert className="h-4 w-4 text-red-600" />
-                      <Badge variant={an.severity === "critical" ? "destructive" : "default"} className="text-xs">
-                        {an.severity}
-                      </Badge>
+                      <Badge variant={an.severity === "critical" ? "destructive" : "default"} className="text-xs">{an.severity || "warning"}</Badge>
                     </div>
                     <div className="text-xs text-muted-foreground">Anomaly Detected</div>
-                    <div className="text-sm font-semibold">{an.sale_order_name}</div>
-                    <div className="text-xs mt-1">Score: {(an.anomaly_score * 100).toFixed(0)}%</div>
-                    {an.contributing_factors?.length > 0 && (
-                      <div className="text-xs text-muted-foreground mt-1 truncate">
-                        Top factor: {(an.contributing_factors[0].feature || '').replace(/_/g, ' ')}
-                      </div>
-                    )}
+                    <div className="text-sm font-semibold truncate">{an.sale_order_name}</div>
+                    <div className="text-xs mt-1">Score: {Math.round((an.anomaly_score ?? 0) * 100)}%</div>
                   </button>
-                ))}
-                {(mlInsights.waste_risks || []).filter(w => w.risk_level !== "low").map((wr) => (
-                  <button
-                    key={`wr-${wr.job_id}`}
-                    onClick={() => setShowMLDetail(`waste-${wr.job_id}`)}
-                    className="p-3 rounded-lg border-2 border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/20 text-left hover:scale-[1.02] transition-all group"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <Trash2 className="h-4 w-4 text-yellow-600" />
-                      <Badge variant={wr.risk_level === "high" ? "destructive" : "default"} className="text-xs">
-                        {wr.risk_level} risk
-                      </Badge>
-                    </div>
-                    <div className="text-xs text-muted-foreground">Waste Risk</div>
-                    <div className="text-sm font-semibold">{wr.sale_order_name}</div>
-                    <div className="text-xs mt-1">{(wr.waste_probability * 100).toFixed(0)}% probability</div>
-                  </button>
-                ))}
-                {(mlInsights.overrun_warnings || []).filter(o => o.risk_level !== "low").map((ov) => (
+                ),
+              });
+            });
+
+            (mlInsights.overrun_warnings || []).filter(o => o.risk_level !== "low").forEach((ov) => {
+              allCards.push({
+                key: `ov-${ov.job_id}`,
+                severity: ov.risk_level === "high" ? 3 : 2,
+                node: (
                   <button
                     key={`ov-${ov.job_id}`}
                     onClick={() => setShowMLDetail(`overrun-${ov.job_id}`)}
-                    className="p-3 rounded-lg border-2 border-orange-500/30 bg-orange-50 dark:bg-orange-950/20 text-left hover:scale-[1.02] transition-all group"
+                    className="p-3 rounded-lg border-2 border-orange-500/30 bg-orange-50 dark:bg-orange-950/20 text-left hover:scale-[1.02] transition-all"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <AlertTriangle className="h-4 w-4 text-orange-600" />
                       <Badge variant={ov.risk_level === "high" ? "destructive" : "default"} className="text-xs">
-                        {(ov.milestone || 'unknown').replace(/_/g, ' ')}
+                        {(ov.milestone || "budget").replace(/_/g, " ")}
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground">Overrun Warning</div>
-                    <div className="text-sm font-semibold">{ov.sale_order_name}</div>
-                    <div className="text-xs mt-1">{(ov.overrun_probability * 100).toFixed(0)}% overrun risk</div>
-                    <Progress value={ov.budget_utilization * 100} className="h-1 mt-2" />
+                    <div className="text-sm font-semibold truncate">{ov.sale_order_name}</div>
+                    <div className="text-xs mt-1">{Math.round((ov.overrun_probability ?? 0) * 100)}% risk</div>
+                    <Progress value={(ov.budget_utilization ?? 0) * 100} className="h-1 mt-2" />
                   </button>
-                ))}
+                ),
+              });
+            });
+
+            (mlInsights.waste_risks || []).filter(w => w.risk_level !== "low").forEach((wr) => {
+              allCards.push({
+                key: `wr-${wr.job_id}`,
+                severity: wr.risk_level === "high" ? 3 : 2,
+                node: (
+                  <button
+                    key={`wr-${wr.job_id}`}
+                    onClick={() => setShowMLDetail(`waste-${wr.job_id}`)}
+                    className="p-3 rounded-lg border-2 border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/20 text-left hover:scale-[1.02] transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <Trash2 className="h-4 w-4 text-yellow-600" />
+                      <Badge variant={wr.risk_level === "high" ? "destructive" : "default"} className="text-xs">{wr.risk_level} risk</Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground">Waste Risk</div>
+                    <div className="text-sm font-semibold truncate">{wr.sale_order_name}</div>
+                    <div className="text-xs mt-1">{Math.round((wr.waste_probability ?? 0) * 100)}% probability</div>
+                  </button>
+                ),
+              });
+            });
+
+            const topCosts = [...(mlInsights.cost_predictions || [])]
+              .sort((a, b) => Math.abs(b.predicted_overrun_pct ?? 0) - Math.abs(a.predicted_overrun_pct ?? 0))
+              .slice(0, 8);
+            topCosts.forEach((cp) => {
+              const conf = Number.isFinite(cp.confidence_level) ? Math.round(cp.confidence_level * 100) : null;
+              allCards.push({
+                key: `cp-${cp.job_id}`,
+                severity: Math.abs(cp.predicted_overrun_pct ?? 0) > 20 ? 2 : 1,
+                node: (
+                  <button
+                    key={`cp-${cp.job_id}`}
+                    onClick={() => setShowMLDetail(`cost-${cp.job_id}`)}
+                    className="p-3 rounded-lg border-2 border-violet-500/30 bg-violet-50 dark:bg-violet-950/20 text-left hover:scale-[1.02] transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <Target className="h-4 w-4 text-violet-600" />
+                      {conf !== null && <Badge variant="outline" className="text-xs">{conf}% conf</Badge>}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Predicted Final Cost</div>
+                    <div className="text-lg font-bold">{formatCurrency(cp.predicted_value)}</div>
+                    <div className={cn("text-xs mt-1", (cp.predicted_overrun ?? 0) > 0 ? "text-red-600" : "text-green-600")}>
+                      {(cp.predicted_overrun ?? 0) > 0 ? "+" : ""}{formatCurrency(cp.predicted_overrun ?? 0)} ({(cp.predicted_overrun_pct ?? 0) > 0 ? "+" : ""}{cp.predicted_overrun_pct ?? 0}%)
+                    </div>
+                    <Progress value={Math.min(100, ((cp.current_actual ?? 0) / Math.max(cp.budget || 1, 1)) * 100)} className="h-1 mt-2" />
+                  </button>
+                ),
+              });
+            });
+
+            allCards.sort((a, b) => b.severity - a.severity);
+            const visibleCount = mlCardPage * ML_PAGE_SIZE;
+            const visible = allCards.slice(0, visibleCount);
+            const hasMore = visibleCount < allCards.length;
+
+            return (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-violet-500" />
+                    <span className="text-sm font-medium text-muted-foreground">
+                      ML Predictions
+                      <span className="ml-1 text-xs">({allCards.length} total)</span>
+                    </span>
+                    {loadingML && <Skeleton className="h-4 w-16" />}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {visible.map((c) => c.node)}
+                </div>
+                {hasMore && (
+                  <div className="mt-3 text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-muted-foreground"
+                      onClick={() => setMlCardPage((p) => p + 1)}
+                    >
+                      Show more ({allCards.length - visibleCount} remaining)
+                    </Button>
+                  </div>
+                )}
+                {visibleCount > ML_PAGE_SIZE && (
+                  <div className="mt-1 text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-muted-foreground"
+                      onClick={() => setMlCardPage(1)}
+                    >
+                      Show less
+                    </Button>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
           {/* Bento Grid Layout */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {Object.entries(insightsByType).map(([type, insights]) => {
@@ -492,10 +554,12 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                         <div className="text-xs text-muted-foreground">Predicted Final Cost</div>
                         <div className="text-lg font-bold text-violet-700 dark:text-violet-300">{formatCurrency(cp.predicted_value)}</div>
                       </div>
-                      <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-xs text-muted-foreground">Confidence Range (95%)</div>
-                        <div className="text-sm font-semibold">{formatCurrency(cp.confidence_lower)} - {formatCurrency(cp.confidence_upper)}</div>
-                      </div>
+                      {(cp.confidence_lower != null || cp.confidence_upper != null) && (
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="text-xs text-muted-foreground">Confidence Range</div>
+                          <div className="text-sm font-semibold">{formatCurrency(cp.confidence_lower ?? 0)} - {formatCurrency(cp.confidence_upper ?? 0)}</div>
+                        </div>
+                      )}
                     </div>
                     <div className={cn("p-3 rounded-lg", cp.predicted_overrun > 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-green-50 dark:bg-green-950/20")}>
                       <div className="text-sm font-medium">

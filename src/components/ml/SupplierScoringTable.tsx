@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUpDown } from "lucide-react";
@@ -11,7 +11,7 @@ interface SupplierScoringTableProps {
   data: SupplierScore[];
 }
 
-const TIER_COLORS = {
+const TIER_COLORS: Record<string, string> = {
   preferred: "bg-emerald-500/10 text-emerald-600 border-emerald-200",
   standard: "bg-blue-500/10 text-blue-600 border-blue-200",
   review: "bg-red-500/10 text-red-600 border-red-200",
@@ -30,6 +30,12 @@ export function SupplierScoringTable({ data }: SupplierScoringTableProps) {
 
   const sorted = [...data].sort((a, b) => (sortDir === "asc" ? 1 : -1) * (a[sortKey] - b[sortKey]));
 
+  const tierCounts = useMemo(() => {
+    const c = { preferred: 0, standard: 0, review: 0 };
+    data.forEach((d) => { c[d.tier] = (c[d.tier] || 0) + 1; });
+    return c;
+  }, [data]);
+
   const SortHeader = ({ label, field }: { label: string; field: SortKey }) => (
     <Button variant="ghost" size="sm" className="h-auto p-0 font-medium text-xs" onClick={() => toggleSort(field)}>
       {label} <ArrowUpDown className="ml-1 h-3 w-3" />
@@ -40,6 +46,13 @@ export function SupplierScoringTable({ data }: SupplierScoringTableProps) {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">Supplier Performance Scoring</CardTitle>
+        <CardDescription className="text-xs">
+          {data.length} vendors scored —{" "}
+          {tierCounts.preferred > 0 && <span className="text-emerald-600">{tierCounts.preferred} preferred</span>}
+          {tierCounts.preferred > 0 && tierCounts.review > 0 && ", "}
+          {tierCounts.review > 0 && <span className="text-red-500">{tierCounts.review} under review</span>}
+          {tierCounts.preferred === 0 && tierCounts.review === 0 && `${tierCounts.standard} standard`}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {sorted.length === 0 ? (

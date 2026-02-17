@@ -70,7 +70,11 @@ def _build_rfm_features(jobs: pd.DataFrame) -> pd.DataFrame:
 
 
 def train() -> dict:
-    """Train the customer re-order prediction model."""
+    """Train the customer re-order prediction model.
+
+    Uses a composite RFM score to create training labels rather than a
+    simple recency threshold, producing more nuanced probabilities.
+    """
     global _model, _scaler
 
     logger.info("Training customer scoring model...")
@@ -83,8 +87,11 @@ def train() -> dict:
     if len(rfm) < 10:
         raise ValueError(f"Insufficient customers: {len(rfm)}")
 
-    median_recency = rfm["recency_days"].median()
-    y = (rfm["recency_days"] < median_recency * 1.5).astype(int)
+    recency_score = 1 - rfm["recency_days"].rank(pct=True)
+    frequency_score = rfm["total_jobs"].rank(pct=True)
+    monetary_score = rfm["total_revenue"].rank(pct=True)
+    composite = (recency_score * 0.4 + frequency_score * 0.35 + monetary_score * 0.25)
+    y = (composite > composite.median()).astype(int)
 
     feature_cols = [
         "total_jobs", "total_revenue", "avg_job_value", "max_job_value",
@@ -99,8 +106,9 @@ def train() -> dict:
 
     _model = GradientBoostingClassifier(
         n_estimators=100,
-        max_depth=4,
-        learning_rate=0.1,
+        max_depth=3,
+        learning_rate=0.05,
+        min_samples_leaf=3,
         random_state=42,
     )
     _model.fit(X_scaled, y)
@@ -108,11 +116,15 @@ def train() -> dict:
     joblib.dump((_model, feature_cols), MODEL_PATH)
     joblib.dump(_scaler, SCALER_PATH)
 
+    feature_importance = dict(zip(feature_cols, _model.feature_importances_.tolist()))
+    top_features = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[:8]
+
     metrics = {
         "model_name": "customer_scorer",
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "training_samples": len(X),
         "active_customer_rate": round(float(y.mean()), 3),
+        "top_features": [{"name": k, "importance": round(v, 4)} for k, v in top_features],
         "model_version": datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S"),
     }
 
@@ -161,16 +173,26 @@ def score_customers() -> list[dict]:
 
     results = []
     for i, (_, row) in enumerate(rfm.iterrows()):
+        prob = float(probabilities[i])
+
+        recency = int(row["recency_days"])
+        if prob > 0.65 and recency < 180:
+            segment = "high_value"
+        elif prob > 0.4 or recency < 365:
+            segment = "medium_value"
+        else:
+            segment = "at_risk"
+
         results.append({
             "prediction_type": "customer_reorder",
             "customer_name": str(row["customer_name"]),
-            "reorder_probability": round(float(probabilities[i]), 3),
+            "reorder_probability": round(prob, 3),
             "total_jobs": int(row["total_jobs"]),
             "total_revenue": round(float(row["total_revenue"]), 2),
-            "recency_days": int(row["recency_days"]),
+            "recency_days": recency,
             "order_frequency_yearly": round(float(row["order_frequency"]), 2),
             "value_trend": round(float(row["value_trend"]), 2),
-            "segment": "high_value" if probabilities[i] > 0.7 else "medium_value" if probabilities[i] > 0.4 else "at_risk",
+            "segment": segment,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         })
 
