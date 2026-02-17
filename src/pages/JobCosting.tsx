@@ -18,6 +18,7 @@ import { useJobFiltering, ViewMode, BudgetSort, BudgetFilter, DateRange } from "
 import { JobFilterBar } from "@/components/job-costing/JobFilterBar";
 import { ListView } from "@/components/job-costing/ListView";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatCompactCurrency } from "@/lib/utils";
 import { KanbanView } from "@/components/job-costing/KanbanView";
 import { GridView } from "@/components/job-costing/GridView";
 import { AIInsights } from "@/components/job-costing/AIInsights";
@@ -945,7 +946,7 @@ export default function JobCosting() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ${(filteredJobs.reduce((sum, job) => sum + job.total_budget, 0) / 1000).toFixed(0)}K
+                  {formatCompactCurrency(filteredJobs.reduce((sum, job) => sum + job.total_budget, 0))}
                 </div>
               </CardContent>
             </Card>
@@ -956,7 +957,7 @@ export default function JobCosting() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ${(filteredJobs.reduce((sum, job) => sum + job.total_actual, 0) / 1000).toFixed(0)}K
+                  {formatCompactCurrency(filteredJobs.reduce((sum, job) => sum + job.total_actual, 0))}
                 </div>
               </CardContent>
             </Card>

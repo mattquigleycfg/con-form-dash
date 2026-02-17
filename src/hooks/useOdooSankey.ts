@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatCompactCurrency } from "@/lib/utils";
 
 export interface SankeyNode {
   name: string;
@@ -111,12 +112,12 @@ export const useOdooSankey = () => {
 
       // Build multi-stage Sankey: Total Revenue → Sales Reps → Products
       const nodes: SankeyNode[] = [
-        { name: `Total Revenue\n$${(totalRevenue / 1000000).toFixed(2)}M` },
+        { name: `Total Revenue\n${formatCompactCurrency(totalRevenue)}` },
         ...topReps.map(([rep, value]) => ({ 
-          name: `${rep}\n$${(value / 1000).toFixed(0)}K` 
+          name: `${rep}\n${formatCompactCurrency(value)}` 
         })),
         ...topProducts.map(([prod, value]) => ({ 
-          name: `${prod.length > 30 ? prod.substring(0, 30) + '...' : prod}\n$${(value / 1000).toFixed(0)}K` 
+          name: `${prod.length > 30 ? prod.substring(0, 30) + '...' : prod}\n${formatCompactCurrency(value)}` 
         }))
       ];
 

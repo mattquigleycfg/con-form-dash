@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { TrendingUp, TrendingDown, DollarSign, Target, Calendar } from "lucide-react";
+import { formatCompactCurrency } from "@/lib/utils";
 
 export function HuddleMetrics() {
   const metrics = {
@@ -24,12 +25,7 @@ export function HuddleMetrics() {
   const ytdProgress = (metrics.actualYearToDate / metrics.ytdBudget) * 100;
   const monthProgress = (metrics.monthToDate / metrics.monthTarget) * 100;
 
-  const formatCurrency = (value: number) => {
-    if (Math.abs(value) >= 1000000) {
-      return `$${(value / 1000000).toFixed(2)}M`;
-    }
-    return `$${(value / 1000).toFixed(0)}K`;
-  };
+  const formatCurrency = (value: number) => formatCompactCurrency(value);
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

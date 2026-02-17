@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Pencil, Save, X, TrendingUp, TrendingDown } from "lucide-react";
 import { useState } from "react";
 import { MonthlyTarget } from "@/hooks/useMonthlyTargets";
+import { formatCompactCurrency } from "@/lib/utils";
 
 interface MonthlyTargetsTableProps {
   targets: MonthlyTarget[];
@@ -40,9 +41,9 @@ export function MonthlyTargetsTable({ targets, onUpdate }: MonthlyTargetsTablePr
     setEditData({});
   };
 
-  const formatCurrency = (value: number | null | undefined) => {
+  const formatCurrencyValue = (value: number | null | undefined) => {
     if (value === null || value === undefined) return "-";
-    return `$${(value / 1000).toFixed(0)}K`;
+    return formatCompactCurrency(value);
   };
 
   const getVarianceBadge = (variance: number | null) => {
@@ -54,7 +55,7 @@ export function MonthlyTargetsTable({ targets, onUpdate }: MonthlyTargetsTablePr
         className="flex items-center gap-1"
       >
         {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-        {formatCurrency(Math.abs(variance))}
+        {formatCurrencyValue(Math.abs(variance))}
       </Badge>
     );
   };
@@ -111,7 +112,7 @@ export function MonthlyTargetsTable({ targets, onUpdate }: MonthlyTargetsTablePr
                       className="w-24"
                     />
                   ) : (
-                    <span className="text-primary font-medium">{formatCurrency(target.cfg_sales_target)}</span>
+                    <span className="text-primary font-medium">{formatCurrencyValue(target.cfg_sales_target)}</span>
                   )}
                 </TableCell>
                 
@@ -125,14 +126,14 @@ export function MonthlyTargetsTable({ targets, onUpdate }: MonthlyTargetsTablePr
                       className="w-24"
                     />
                   ) : (
-                    <span className="text-primary font-medium">{formatCurrency(target.cfg_invoice_target)}</span>
+                    <span className="text-primary font-medium">{formatCurrencyValue(target.cfg_invoice_target)}</span>
                   )}
                 </TableCell>
                 
                 {/* CFG Actual & Variance */}
                 <TableCell className="border-r">
                   <div className="flex flex-col gap-1">
-                    <span className="font-semibold">{formatCurrency(target.cfg_sales_actual)}</span>
+                    <span className="font-semibold">{formatCurrencyValue(target.cfg_sales_actual)}</span>
                     {getVarianceBadge(target.cfg_sales_variance)}
                   </div>
                 </TableCell>
@@ -147,7 +148,7 @@ export function MonthlyTargetsTable({ targets, onUpdate }: MonthlyTargetsTablePr
                       className="w-24"
                     />
                   ) : (
-                    <span className="text-accent font-medium">{formatCurrency(target.dsf_sales_target)}</span>
+                    <span className="text-accent font-medium">{formatCurrencyValue(target.dsf_sales_target)}</span>
                   )}
                 </TableCell>
                 
@@ -161,14 +162,14 @@ export function MonthlyTargetsTable({ targets, onUpdate }: MonthlyTargetsTablePr
                       className="w-24"
                     />
                   ) : (
-                    <span className="text-accent font-medium">{formatCurrency(target.dsf_invoice_target)}</span>
+                    <span className="text-accent font-medium">{formatCurrencyValue(target.dsf_invoice_target)}</span>
                   )}
                 </TableCell>
                 
                 {/* DSF Actual & Variance */}
                 <TableCell className="border-r">
                   <div className="flex flex-col gap-1">
-                    <span className="font-semibold">{formatCurrency(target.dsf_sales_actual)}</span>
+                    <span className="font-semibold">{formatCurrencyValue(target.dsf_sales_actual)}</span>
                     {getVarianceBadge(target.dsf_sales_variance)}
                   </div>
                 </TableCell>
@@ -177,9 +178,9 @@ export function MonthlyTargetsTable({ targets, onUpdate }: MonthlyTargetsTablePr
                 <TableCell className="bg-secondary/10">
                   <div className="flex flex-col gap-1">
                     <span className="text-xs text-muted-foreground">Target:</span>
-                    <span className="font-bold">{formatCurrency(target.total_sales_target)}</span>
+                    <span className="font-bold">{formatCurrencyValue(target.total_sales_target)}</span>
                     <span className="text-xs text-muted-foreground">Actual:</span>
-                    <span className="font-bold text-accent">{formatCurrency(target.total_sales_actual)}</span>
+                    <span className="font-bold text-accent">{formatCurrencyValue(target.total_sales_actual)}</span>
                   </div>
                 </TableCell>
                 
@@ -187,9 +188,9 @@ export function MonthlyTargetsTable({ targets, onUpdate }: MonthlyTargetsTablePr
                 <TableCell className="border-r bg-secondary/10">
                   <div className="flex flex-col gap-1">
                     <span className="text-xs text-muted-foreground">Target:</span>
-                    <span className="font-bold">{formatCurrency(target.total_invoice_target)}</span>
+                    <span className="font-bold">{formatCurrencyValue(target.total_invoice_target)}</span>
                     <span className="text-xs text-muted-foreground">Actual:</span>
-                    <span className="font-bold text-accent">{formatCurrency(target.total_invoice_actual)}</span>
+                    <span className="font-bold text-accent">{formatCurrencyValue(target.total_invoice_actual)}</span>
                   </div>
                 </TableCell>
                 

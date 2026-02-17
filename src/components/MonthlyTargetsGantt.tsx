@@ -1,14 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MonthlyTarget } from "@/hooks/useMonthlyTargets";
+import { formatCompactCurrency } from "@/lib/utils";
 
 interface MonthlyTargetsGanttProps {
   targets: MonthlyTarget[];
 }
 
 export function MonthlyTargetsGantt({ targets }: MonthlyTargetsGanttProps) {
-  const formatCurrency = (value: number | null | undefined) => {
-    if (value === null || value === undefined) return "$0K";
-    return `$${(value / 1000).toFixed(0)}K`;
+  const formatCurrencyLocal = (value: number | null | undefined) => {
+    if (value === null || value === undefined) return "$0";
+    return formatCompactCurrency(value);
   };
 
   const getPercentage = (actual: number | null, target: number) => {
@@ -53,7 +54,7 @@ export function MonthlyTargetsGantt({ targets }: MonthlyTargetsGanttProps) {
                       />
                     </div>
                     <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-foreground">
-                      {formatCurrency(target.total_sales_actual)} / {formatCurrency(target.total_sales_target)}
+                      {formatCurrencyLocal(target.total_sales_actual)} / {formatCurrencyLocal(target.total_sales_target)}
                     </div>
                   </div>
                   <div className="col-span-2 text-right text-sm font-semibold text-primary">
@@ -92,7 +93,7 @@ export function MonthlyTargetsGantt({ targets }: MonthlyTargetsGanttProps) {
                       />
                     </div>
                     <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-foreground">
-                      {formatCurrency(target.total_invoice_actual)} / {formatCurrency(target.total_invoice_target)}
+                      {formatCurrencyLocal(target.total_invoice_actual)} / {formatCurrencyLocal(target.total_invoice_target)}
                     </div>
                   </div>
                   <div className="col-span-2 text-right text-sm font-semibold text-accent">
