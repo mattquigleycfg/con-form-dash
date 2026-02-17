@@ -28,26 +28,35 @@ const RISK_COLORS: Record<string, string> = {
   low: "#22c55e",
 };
 
-function displayName(soName: string | undefined, jobId: string): string {
-  const name = soName?.trim();
-  if (name && name.length > 0 && name !== jobId) return name;
-  return jobId?.slice(0, 8) + "...";
+/** Resolve the best human-readable name for a job, never returning a UUID */
+function resolveJobName(
+  predictionSoName: string | undefined,
+  jobId: string,
+  jobLookup?: Map<string, Job>,
+): { soName: string; opportunityName: string } {
+  const job = jobLookup?.get(jobId);
+  const soName = job?.sale_order_name || predictionSoName?.trim() || "";
+  const opportunityName = job?.opportunity_name || "";
+  return { soName, opportunityName };
 }
 
 export function RiskHeatmapChart({ data, jobLookup }: RiskHeatmapChartProps) {
   const navigate = useNavigate();
   const [selectedDot, setSelectedDot] = useState<OverrunWarning | null>(null);
 
-  const chartData = data.map((d) => ({
-    x: Math.round(d.budget_utilization * 100),
-    y: Math.round(d.overrun_probability * 100),
-    budget: d.budget,
-    risk: d.risk_level,
-    jobId: d.job_id,
-    name: displayName(d.sale_order_name, d.job_id),
-    opportunityName: jobLookup?.get(d.job_id)?.opportunity_name || "",
-    soName: d.sale_order_name || jobLookup?.get(d.job_id)?.sale_order_name || "",
-  }));
+  const chartData = data.map((d) => {
+    const { soName, opportunityName } = resolveJobName(d.sale_order_name, d.job_id, jobLookup);
+    return {
+      x: Math.round(d.budget_utilization * 100),
+      y: Math.round(d.overrun_probability * 100),
+      budget: d.budget,
+      risk: d.risk_level,
+      jobId: d.job_id,
+      name: soName || opportunityName || "Unknown Job",
+      soName,
+      opportunityName,
+    };
+  });
 
   const maxX = chartData.length > 0 ? Math.max(...chartData.map(d => d.x)) : 100;
   const xDomainMax = Math.min(250, Math.max(110, maxX + 10));
@@ -125,19 +134,17 @@ export function RiskHeatmapChart({ data, jobLookup }: RiskHeatmapChartProps) {
       <Dialog open={!!selectedDot} onOpenChange={() => setSelectedDot(null)}>
         <DialogContent className="max-w-lg">
           {selectedDot && (() => {
-            const job = jobLookup?.get(selectedDot.job_id);
-            const soName = selectedDot.sale_order_name || job?.sale_order_name || selectedDot.job_id.slice(0, 8);
-            const oppName = job?.opportunity_name;
+            const { soName, opportunityName: oppName } = resolveJobName(selectedDot.sale_order_name, selectedDot.job_id, jobLookup);
             return (
               <>
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-orange-500" />
-                    Overrun Risk - {soName}
+                    Overrun Risk — {soName || "Unknown Job"}
                   </DialogTitle>
-                  {oppName && (
-                    <DialogDescription>{oppName}</DialogDescription>
-                  )}
+                  <DialogDescription>
+                    {oppName ? oppName : soName ? "" : "Job details unavailable"}
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 mt-2">
                   <div className="grid grid-cols-3 gap-3">

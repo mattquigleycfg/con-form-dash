@@ -4,9 +4,14 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Brain, Target, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from "recharts";
-import { formatCurrency } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { useCostPrediction, useOverrunWarning } from "@/hooks/useMLPredictions";
+
+/** Return 0 for any non-finite / null / undefined value */
+const safe = (v: unknown): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
 
 interface MLCostPredictionCardProps {
   jobId: string;
@@ -19,7 +24,13 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
   const { data: overrunWarning, isLoading: loadingOverrun } = useOverrunWarning(jobId);
 
   const isLoading = loadingCost || loadingOverrun;
-  const hasPredictions = costPrediction || overrunWarning;
+
+  // Validate cost prediction has usable numeric data
+  const validCostPrediction = costPrediction && Number.isFinite(Number(costPrediction.predicted_value));
+  // Validate overrun warning has usable numeric data
+  const validOverrunWarning = overrunWarning && Number.isFinite(Number(overrunWarning.overrun_probability));
+
+  const hasPredictions = validCostPrediction || validOverrunWarning;
 
   if (isLoading) {
     return (
@@ -51,37 +62,46 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Cost Prediction with Mini Chart */}
-          {costPrediction && (() => {
+          {validCostPrediction && (() => {
+            const predictedValue = safe(costPrediction.predicted_value);
+            const overrun = safe(costPrediction.predicted_overrun);
+            const overrunPct = safe(costPrediction.predicted_overrun_pct);
+            const confLevel = safe(costPrediction.confidence_level);
+            const confLower = safe(costPrediction.confidence_lower);
+            const confUpper = safe(costPrediction.confidence_upper);
+
             const chartData = [
-              { name: "Budget", value: budget, fill: "hsl(var(--chart-4))" },
-              { name: "Actual", value: actual, fill: "hsl(var(--chart-1))" },
-              { name: "Predicted", value: costPrediction.predicted_value, fill: "hsl(var(--primary))" },
+              { name: "Budget", value: safe(budget), fill: "hsl(var(--chart-4))" },
+              { name: "Actual", value: safe(actual), fill: "hsl(var(--chart-1))" },
+              { name: "Predicted", value: predictedValue, fill: "hsl(var(--primary))" },
             ];
             return (
               <div className="p-4 rounded-lg border bg-violet-50/50 dark:bg-violet-950/20">
                 <div className="flex items-center gap-2 mb-3">
                   <Target className="h-4 w-4 text-violet-600" />
                   <span className="text-sm font-semibold">Predicted Final Cost</span>
-                  {Number.isFinite(costPrediction.confidence_level) && (
+                  {confLevel > 0 && (
                     <Badge variant="outline" className="text-xs ml-auto">
-                      {Math.round(costPrediction.confidence_level * 100)}% confidence
+                      {Math.round(confLevel * 100)}% confidence
                     </Badge>
                   )}
                 </div>
 
                 <div className="text-2xl font-bold text-violet-700 dark:text-violet-300 mb-1">
-                  {formatCurrency(costPrediction.predicted_value)}
+                  {formatCurrency(predictedValue)}
                 </div>
-                <div className="text-[10px] text-muted-foreground mb-2">
-                  Range: {formatCurrency(costPrediction.confidence_lower)} - {formatCurrency(costPrediction.confidence_upper)}
-                </div>
+                {(confLower > 0 || confUpper > 0) && (
+                  <div className="text-[10px] text-muted-foreground mb-2">
+                    Range: {formatCurrency(confLower)} - {formatCurrency(confUpper)}
+                  </div>
+                )}
 
                 <ResponsiveContainer width="100%" height={100}>
                   <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 5, bottom: 0, left: 50 }}>
                     <XAxis type="number" hide />
                     <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={48} />
                     <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                    <ReferenceLine x={budget} stroke="hsl(var(--chart-4))" strokeDasharray="3 3" />
+                    <ReferenceLine x={safe(budget)} stroke="hsl(var(--chart-4))" strokeDasharray="3 3" />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
                       {chartData.map((entry, i) => (
                         <Cell key={i} fill={entry.fill} />
@@ -92,69 +112,74 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
 
                 <div className={cn(
                   "flex items-center gap-1 text-xs font-medium mt-1",
-                  costPrediction.predicted_overrun > 0 ? "text-red-600" : "text-green-600"
+                  overrun > 0 ? "text-red-600" : "text-green-600"
                 )}>
-                  {costPrediction.predicted_overrun > 0 ? (
+                  {overrun > 0 ? (
                     <TrendingUp className="h-3 w-3" />
                   ) : (
                     <TrendingDown className="h-3 w-3" />
                   )}
-                  {costPrediction.predicted_overrun > 0 ? "+" : ""}
-                  {formatCurrency(costPrediction.predicted_overrun)}
-                  {" "}({costPrediction.predicted_overrun_pct > 0 ? "+" : ""}
-                  {costPrediction.predicted_overrun_pct}% vs budget)
+                  {overrun > 0 ? "+" : ""}
+                  {formatCurrency(overrun)}
+                  {" "}({overrunPct > 0 ? "+" : ""}
+                  {overrunPct.toFixed(1)}% vs budget)
                 </div>
               </div>
             );
           })()}
 
           {/* Overrun Warning */}
-          {overrunWarning && (
-            <div className={cn(
-              "p-4 rounded-lg border",
-              overrunWarning.risk_level === "high"
-                ? "bg-red-50/50 dark:bg-red-950/20"
-                : overrunWarning.risk_level === "medium"
-                ? "bg-orange-50/50 dark:bg-orange-950/20"
-                : "bg-green-50/50 dark:bg-green-950/20"
-            )}>
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className={cn(
-                  "h-4 w-4",
-                  overrunWarning.risk_level === "high" ? "text-red-600" :
-                  overrunWarning.risk_level === "medium" ? "text-orange-600" : "text-green-600"
-                )} />
-                <span className="text-sm font-semibold">Budget Overrun Risk</span>
-                <Badge
-                  variant={overrunWarning.risk_level === "high" ? "destructive" : "secondary"}
-                  className="text-xs ml-auto"
-                >
-                  {overrunWarning.risk_level}
-                </Badge>
-              </div>
+          {validOverrunWarning && (() => {
+            const probability = safe(overrunWarning.overrun_probability);
+            const utilization = safe(overrunWarning.budget_utilization);
 
-              <div className="text-2xl font-bold mb-2">
-                {Math.round(overrunWarning.overrun_probability * 100)}%
-              </div>
-
-              <div className="text-xs text-muted-foreground mb-3">
-                Probability of exceeding budget at {(overrunWarning.milestone || 'current').replace(/_/g, ' ')} stage
-              </div>
-
-              <Progress value={overrunWarning.budget_utilization * 100} className="h-2 mb-3" />
-
-              {(overrunWarning.recommendations?.length ?? 0) > 0 && (
-                <div className="space-y-1">
-                  {overrunWarning.recommendations!.slice(0, 2).map((rec, i) => (
-                    <div key={i} className="text-xs p-2 rounded bg-background/50 flex items-start gap-1">
-                      <Badge variant="outline" className="text-[10px] px-1 shrink-0">{rec.impact}</Badge>
-                      <span>{rec.action}</span>
-                    </div>
-                  ))}
+            return (
+              <div className={cn(
+                "p-4 rounded-lg border",
+                overrunWarning.risk_level === "high"
+                  ? "bg-red-50/50 dark:bg-red-950/20"
+                  : overrunWarning.risk_level === "medium"
+                  ? "bg-orange-50/50 dark:bg-orange-950/20"
+                  : "bg-green-50/50 dark:bg-green-950/20"
+              )}>
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className={cn(
+                    "h-4 w-4",
+                    overrunWarning.risk_level === "high" ? "text-red-600" :
+                    overrunWarning.risk_level === "medium" ? "text-orange-600" : "text-green-600"
+                  )} />
+                  <span className="text-sm font-semibold">Budget Overrun Risk</span>
+                  <Badge
+                    variant={overrunWarning.risk_level === "high" ? "destructive" : "secondary"}
+                    className="text-xs ml-auto"
+                  >
+                    {overrunWarning.risk_level}
+                  </Badge>
                 </div>
-              )}
-            </div>
-          )}
+
+                <div className="text-2xl font-bold mb-2">
+                  {Math.round(probability * 100)}%
+                </div>
+
+                <div className="text-xs text-muted-foreground mb-3">
+                  Probability of exceeding budget at {(overrunWarning.milestone || 'current').replace(/_/g, ' ')} stage
+                </div>
+
+                <Progress value={Math.min(100, utilization * 100)} className="h-2 mb-3" />
+
+                {(overrunWarning.recommendations?.length ?? 0) > 0 && (
+                  <div className="space-y-1">
+                    {overrunWarning.recommendations!.slice(0, 2).map((rec, i) => (
+                      <div key={i} className="text-xs p-2 rounded bg-background/50 flex items-start gap-1">
+                        <Badge variant="outline" className="text-[10px] px-1 shrink-0">{rec.impact}</Badge>
+                        <span>{rec.action}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </CardContent>
     </Card>

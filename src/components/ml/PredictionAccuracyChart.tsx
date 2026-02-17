@@ -8,12 +8,6 @@ interface PredictionAccuracyChartProps {
   jobLookup?: Map<string, Job>;
 }
 
-function shortenName(d: CostPrediction): string {
-  const name = d.sale_order_name?.trim();
-  if (name && name.length > 0 && name !== d.job_id) return name;
-  return d.job_id?.slice(0, 8) ?? "—";
-}
-
 export function PredictionAccuracyChart({ data, jobLookup }: PredictionAccuracyChartProps) {
   const sorted = [...data]
     .filter((d) => d.budget > 0)
@@ -24,10 +18,12 @@ export function PredictionAccuracyChart({ data, jobLookup }: PredictionAccuracyC
     const hasConfidence = d.confidence_lower != null && d.confidence_upper != null &&
       d.confidence_lower > 0 && d.confidence_upper > 0;
     const job = jobLookup?.get(d.job_id);
+    const soName = job?.sale_order_name || d.sale_order_name?.trim() || "";
+    const opportunityName = job?.opportunity_name || "";
     return {
-      name: shortenName(d),
-      soName: d.sale_order_name || job?.sale_order_name || "",
-      opportunityName: job?.opportunity_name || "",
+      name: soName || opportunityName || "Unknown",
+      soName,
+      opportunityName,
       budget: Math.round(d.budget),
       actual: Math.round(d.current_actual),
       predicted: Math.round(d.predicted_value),

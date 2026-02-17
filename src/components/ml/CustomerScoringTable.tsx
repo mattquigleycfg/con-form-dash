@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, ArrowUpDown, TrendingUp, TrendingDown, Minus, Filter } from "lucide-react";
+import { AlertCircle, ArrowUpDown, TrendingUp, TrendingDown, Minus, Filter, Mail, Phone, FileText, Users, DollarSign, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -94,13 +94,103 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
   );
 
   const getTrendIcon = (trend: number) => {
-    if (trend > 0.05) return <TrendingUp className="h-3 w-3 text-emerald-500" />;
-    if (trend < -0.05) return <TrendingDown className="h-3 w-3 text-red-500" />;
+    if (trend > 0) return <TrendingUp className="h-3 w-3 text-emerald-500" />;
+    if (trend < 0) return <TrendingDown className="h-3 w-3 text-red-500" />;
     return <Minus className="h-3 w-3 text-muted-foreground" />;
   };
 
+  /**
+   * Format value_trend into a readable description.
+   * The ML model returns raw coefficients that can be very large —
+   * we classify into qualitative bands rather than showing raw %.
+   */
+  const formatTrend = (trend: number): { label: string; description: string } => {
+    const abs = Math.abs(trend);
+    if (abs < 0.01) return { label: "Stable", description: "Order values are stable. Maintain current relationship." };
+    if (trend > 0) {
+      if (abs > 10) return { label: "Strong growth", description: "Order values are trending significantly upward. This is a high-growth customer." };
+      if (abs > 1) return { label: "Growing", description: "Order values are trending upward. This customer is growing." };
+      return { label: "Slight growth", description: "Order values show a slight upward trend." };
+    }
+    if (abs > 10) return { label: "Sharp decline", description: "Order values are trending significantly downward. Consider urgent engagement." };
+    if (abs > 1) return { label: "Declining", description: "Order values are trending downward. Consider proactive engagement." };
+    return { label: "Slight decline", description: "Order values show a slight downward trend." };
+  };
+
+  // Aggregate stats for summary
+  const summaryStats = useMemo(() => {
+    if (data.length === 0) return null;
+    const totalRevenue = data.reduce((sum, c) => sum + c.total_revenue, 0);
+    const totalJobs = data.reduce((sum, c) => sum + c.total_jobs, 0);
+    const avgRecency = Math.round(data.reduce((sum, c) => sum + c.recency_days, 0) / data.length);
+    const avgFrequency = (data.reduce((sum, c) => sum + c.order_frequency_yearly, 0) / data.length).toFixed(1);
+    const activeCustomers = data.filter(c => c.recency_days <= 90).length;
+    const topCustomer = [...data].sort((a, b) => b.total_revenue - a.total_revenue)[0];
+    return { totalRevenue, totalJobs, avgRecency, avgFrequency, activeCustomers, topCustomer };
+  }, [data]);
+
   return (
     <>
+      {/* Customer Summary Cards */}
+      {summaryStats && (
+        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6 mb-4">
+          <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Users className="h-3.5 w-3.5 text-emerald-600" />
+                <span className="text-[10px] text-muted-foreground font-medium">Total Customers</span>
+              </div>
+              <p className="text-lg font-bold">{data.length}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <DollarSign className="h-3.5 w-3.5 text-blue-600" />
+                <span className="text-[10px] text-muted-foreground font-medium">Total Revenue</span>
+              </div>
+              <p className="text-lg font-bold">{formatCurrency(summaryStats.totalRevenue)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-[10px] text-muted-foreground font-medium">Total Jobs</span>
+              </div>
+              <p className="text-lg font-bold">{summaryStats.totalJobs}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-[10px] text-muted-foreground font-medium">Avg Recency</span>
+              </div>
+              <p className="text-lg font-bold">{summaryStats.avgRecency}d</p>
+            </CardContent>
+          </Card>
+          <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="h-3.5 w-3.5 text-amber-600" />
+                <span className="text-[10px] text-muted-foreground font-medium">Active (90d)</span>
+              </div>
+              <p className="text-lg font-bold">{summaryStats.activeCustomers}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                <span className="text-[10px] text-muted-foreground font-medium">At Risk</span>
+              </div>
+              <p className="text-lg font-bold">{segmentCounts.at_risk}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -163,6 +253,7 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
                     <TableHead className="text-xs"><SortHeader label="Jobs" field="total_jobs" /></TableHead>
                     <TableHead className="text-xs"><SortHeader label="Revenue" field="total_revenue" /></TableHead>
                     <TableHead className="text-xs"><SortHeader label="Recency" field="recency_days" /></TableHead>
+                    <TableHead className="text-xs">Trend</TableHead>
                     <TableHead className="text-xs">Segment</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -178,6 +269,12 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
                       <TableCell className="text-xs">{c.total_jobs}</TableCell>
                       <TableCell className="text-xs">{formatCurrency(c.total_revenue)}</TableCell>
                       <TableCell className="text-xs">{c.recency_days}d ago</TableCell>
+                      <TableCell className="text-xs">
+                        <div className="flex items-center gap-1">
+                          {getTrendIcon(c.value_trend)}
+                          <span className="text-[10px] text-muted-foreground">{formatTrend(c.value_trend).label}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`text-[10px] ${SEGMENT_COLORS[c.segment] || ""}`}>
                           {SEGMENT_LABELS[c.segment] || c.segment}
@@ -237,13 +334,12 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-sm font-medium">Value Trend</span>
                     {getTrendIcon(selectedCustomer.value_trend)}
+                    <Badge variant="outline" className="text-[10px] ml-auto">
+                      {formatTrend(selectedCustomer.value_trend).label}
+                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {selectedCustomer.value_trend > 0.05
-                      ? `Order values are trending upward (${(selectedCustomer.value_trend * 100).toFixed(0)}%). This customer is growing.`
-                      : selectedCustomer.value_trend < -0.05
-                        ? `Order values are trending downward (${(selectedCustomer.value_trend * 100).toFixed(0)}%). Consider proactive engagement.`
-                        : "Order values are stable. Maintain current relationship."}
+                    {formatTrend(selectedCustomer.value_trend).description}
                   </p>
                 </div>
 
@@ -257,6 +353,37 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
                     </p>
                   </div>
                 )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-2 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs"
+                    onClick={() => {
+                      window.open(`mailto:?subject=Expression%20of%20Interest%20-%20Con-Form%20Group&body=${encodeURIComponent(
+                        `Dear ${selectedCustomer.customer_name},\n\n` +
+                        `Thank you for your continued partnership with Con-Form Group. We wanted to reach out regarding potential upcoming projects and express our interest in continuing to work together.\n\n` +
+                        `As a valued ${selectedCustomer.segment === 'high_value' ? 'premium' : ''} customer with ${selectedCustomer.total_jobs} completed projects, we appreciate the trust you have placed in us.\n\n` +
+                        `We would welcome the opportunity to discuss any upcoming requirements you may have. Our team is ready to provide competitive pricing and our full range of formwork and construction services.\n\n` +
+                        `Please don't hesitate to get in touch to arrange a meeting or request a quote.\n\n` +
+                        `Kind regards,\nCon-Form Group\nwww.con-formgroup.com.au\nPhone: 1300 266 367`
+                      )}`, '_blank');
+                    }}
+                  >
+                    <Mail className="h-3.5 w-3.5 mr-1.5" />
+                    Send EOI
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs"
+                    onClick={() => window.open('tel:1300266367')}
+                  >
+                    <Phone className="h-3.5 w-3.5 mr-1.5" />
+                    Call
+                  </Button>
+                </div>
               </div>
             </>
           )}
