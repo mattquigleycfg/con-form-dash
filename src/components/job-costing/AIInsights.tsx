@@ -552,7 +552,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
             const jobIdKey = showMLDetail.slice(dashIdx + 1);
             const matchedJob = jobLookup.get(jobIdKey);
             if (type === 'cost') {
-              const cp = mlInsights.cost_predictions.find(p => p.job_id === jobIdKey);
+              const cp = (mlInsights.cost_predictions || []).find(p => p.job_id === jobIdKey);
               if (!cp) return null;
               const displayName = cp.sale_order_name || matchedJob?.sale_order_name || '';
               const oppName = matchedJob?.opportunity_name;
@@ -601,7 +601,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
               );
             }
             if (type === 'anomaly') {
-              const an = mlInsights.anomaly_scores.find(a => a.job_id === jobIdKey);
+              const an = (mlInsights.anomaly_scores || []).find(a => a.job_id === jobIdKey);
               if (!an) return null;
               const oppName = matchedJob?.opportunity_name;
               return (
@@ -647,7 +647,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
               );
             }
             if (type === 'waste') {
-              const wr = mlInsights.waste_risks.find(w => w.job_id === jobIdKey);
+              const wr = (mlInsights.waste_risks || []).find(w => w.job_id === jobIdKey);
               if (!wr) return null;
               const oppName = matchedJob?.opportunity_name;
               return (
@@ -705,7 +705,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
               );
             }
             if (type === 'overrun') {
-              const ov = mlInsights.overrun_warnings.find(o => o.job_id === jobIdKey);
+              const ov = (mlInsights.overrun_warnings || []).find(o => o.job_id === jobIdKey);
               if (!ov) return null;
               const oppName = matchedJob?.opportunity_name;
               return (

@@ -167,10 +167,10 @@ export function RiskHeatmapChart({ data, jobLookup }: RiskHeatmapChartProps) {
                     </div>
                   </div>
                   <Progress value={selectedDot.budget_utilization * 100} className="h-2" />
-                  {selectedDot.recommendations?.length > 0 && (
+                  {(selectedDot.recommendations?.length ?? 0) > 0 && (
                     <div>
                       <h4 className="font-semibold text-sm mb-2">Recommendations</h4>
-                      {selectedDot.recommendations.map((r, i) => (
+                      {selectedDot.recommendations!.map((r, i) => (
                         <div key={i} className="p-3 rounded-lg border bg-card mb-2">
                           <div className="flex items-center gap-2 mb-1">
                             <Badge variant="outline" className="text-xs">{r.impact}</Badge>

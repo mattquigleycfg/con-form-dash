@@ -143,9 +143,9 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
 
               <Progress value={overrunWarning.budget_utilization * 100} className="h-2 mb-3" />
 
-              {overrunWarning.recommendations.length > 0 && (
+              {(overrunWarning.recommendations?.length ?? 0) > 0 && (
                 <div className="space-y-1">
-                  {overrunWarning.recommendations.slice(0, 2).map((rec, i) => (
+                  {overrunWarning.recommendations!.slice(0, 2).map((rec, i) => (
                     <div key={i} className="text-xs p-2 rounded bg-background/50 flex items-start gap-1">
                       <Badge variant="outline" className="text-[10px] px-1 shrink-0">{rec.impact}</Badge>
                       <span>{rec.action}</span>
