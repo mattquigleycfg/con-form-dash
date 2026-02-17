@@ -54,12 +54,29 @@ DEPLOYMENT_INSTRUCTIONS.md
 IMPLEMENTATION_SUMMARY.md
 
 # Migration backups (already applied)
+supabase/migrations/20250119000000_add_subcontractor_to_jobs.sql
+supabase/migrations/20250119000001_fix_rls_policies_for_team_access.sql
+supabase/migrations/20250122000000_fix_cost_type_constraint.sql
+supabase/migrations/20251008044255_a1bd1992-f72f-4071-9acf-6610bd844320.sql
+supabase/migrations/20251022224631_58da81bd-5856-4c7c-8ef9-dc2adfde61e7.sql
+supabase/migrations/20251028062240_738a3846-2fb9-4ff4-9c75-279b43c3911b.sql
+supabase/migrations/20251028083705_0540656c-7a9e-47f9-b992-73219c55f9c7.sql
+supabase/migrations/20251028084258_20e337d1-fbba-4f3e-be26-dfa2f0d7ead0.sql
+supabase/migrations/20251028230412_4755e442-b5c2-4dc0-ba7d-5109647867bb.sql
+supabase/migrations/20251031000003_fix_rls_policies.sql
+supabase/migrations/20251031000004_fix_rls_select_policies.sql
+supabase/migrations/20251104000001_create_salesperson_targets.sql
+supabase/migrations/20251104000002_fix_all_rls_policies.sql
+supabase/migrations/20251104120000_allow_all_jobs_view.sql
+supabase/migrations/20251111000001_team_shared_jobs.sql
 supabase/migrations/20251111000002_add_project_analytic_account.sql
 supabase/migrations/20251112000001_create_ai_job_insights.sql
+supabase/migrations/20251212000001_create_kpi_entries.sql
+supabase/migrations/20260206000001_create_settings_table.sql
+supabase/migrations/20260217_create_ml_tables.sql
+supabase/migrations/20260217100000_add_ml_model_metadata_unique.sql
 README.md
 DEPLOYMENT_DIAGNOSIS.md
-supabase/migrations/20250122000000_fix_cost_type_constraint.sql
-supabase/migrations/20251212000001_create_kpi_entries.sql
 docs/PRODUCTION_DESIGN_KPI_ENHANCEMENTS.md
 docs/FINANCE_KPI_INTEGRATION.md
 docs/CRITICAL_BUG_FIX_EMPTY_ARRAYS.md

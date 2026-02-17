@@ -1,12 +1,63 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
-import { Calculator as CalcIcon } from "lucide-react";
+import { Calculator as CalcIcon, Brain, TrendingUp } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+function MLMarginSuggestion({ costPrice, productType }: { costPrice: number; productType: string }) {
+  const { data: marginData } = useQuery({
+    queryKey: ["ml-margin-suggestion", productType, Math.round(costPrice)],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("ml-predict", {
+        body: {
+          prediction_type: "insights",
+        },
+      });
+      if (error || !data) return null;
+      return data;
+    },
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+    enabled: costPrice > 0,
+  });
+
+  const avgMargin = marginData?.cost_predictions?.length > 0
+    ? marginData.cost_predictions.reduce((sum: number, p: any) => {
+        const margin = p.budget > 0 ? ((p.budget - p.predicted_value) / p.budget) * 100 : 0;
+        return sum + margin;
+      }, 0) / marginData.cost_predictions.length
+    : null;
+
+  if (!avgMargin) return null;
+
+  return (
+    <div className="mt-3 p-3 rounded-lg border border-violet-200 bg-violet-50/50 dark:bg-violet-950/20 dark:border-violet-800">
+      <div className="flex items-center gap-2 text-xs">
+        <Brain className="h-3.5 w-3.5 text-violet-600" />
+        <span className="font-medium text-violet-700 dark:text-violet-300">ML Margin Insight</span>
+        <Badge variant="outline" className="text-[10px] px-1 ml-auto">Beta</Badge>
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground">
+        Historical jobs average{' '}
+        <span className="font-semibold text-violet-700 dark:text-violet-300">
+          {avgMargin.toFixed(1)}% actual margin
+        </span>
+        {' '}after cost overruns. Consider pricing at{' '}
+        <span className="font-semibold">
+          ${(costPrice / (1 - Math.max(0.3, avgMargin / 100))).toFixed(2)}
+        </span>
+        {' '}for a target {avgMargin.toFixed(0)}% margin.
+      </div>
+    </div>
+  );
+}
 
 export default function Calculator() {
   // EasyMech MR state
@@ -262,6 +313,7 @@ export default function Calculator() {
                       <span>GP %</span>
                       <span>{mrGpPercent.toFixed(1)}%</span>
                     </div>
+                    <MLMarginSuggestion costPrice={mrTotalCostPrice} productType="EasyMech MR" />
                   </div>
                 </CardContent>
               </Card>

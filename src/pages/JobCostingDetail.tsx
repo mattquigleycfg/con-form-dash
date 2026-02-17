@@ -56,6 +56,7 @@ import { useOdooSaleOrderLines } from "@/hooks/useOdooSaleOrderLines";
 import { JobCostingSummary } from "@/components/job-costing/JobCostingSummary";
 import { BudgetCircleChart } from "@/components/job-costing/BudgetCircleChart";
 import { AIInsights } from "@/components/job-costing/AIInsights";
+import { MLCostPredictionCard } from "@/components/job-costing/MLCostPredictionCard";
 import { Database } from "@/integrations/supabase/types";
 import confetti from "canvas-confetti";
 import { SubcontractorSelector } from "@/components/job-costing/SubcontractorSelector";
@@ -1230,6 +1231,9 @@ const handleActualSave = async (
 
         {/* AI Insights */}
         {job && <AIInsights jobId={id} analysisType="all" detailed={true} />}
+
+        {/* ML Cost Prediction */}
+        {job && id && <MLCostPredictionCard jobId={id} budget={job.total_budget} actual={job.total_actual} />}
 
         {/* Cost Analysis Breakdown */}
         <Card>

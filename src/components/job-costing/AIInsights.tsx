@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -23,9 +24,14 @@ import {
   X, 
   Sparkles,
   ArrowUpRight,
+  Brain,
+  Target,
+  Trash2,
+  ShieldAlert,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { useMLInsights, type MLInsights, type CostPrediction, type AnomalyScore, type WasteRisk, type OverrunWarning } from "@/hooks/useMLPredictions";
 
 interface AIInsightsProps {
   jobs?: any[];
@@ -50,8 +56,11 @@ interface Insight {
 export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false }: AIInsightsProps) {
   const [dismissedInsights, setDismissedInsights] = useState<Set<string>>(new Set());
   const [selectedInsight, setSelectedInsight] = useState<Insight | null>(null);
+  const [showMLDetail, setShowMLDetail] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const { data: mlInsights, isLoading: loadingML } = useMLInsights(jobId);
 
   // Fetch existing insights from database
   const { data: existingInsights, isLoading: loadingExisting, refetch: refetchExisting } = useQuery({
@@ -224,7 +233,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                 AI Insights
               </CardTitle>
               <CardDescription>
-                Rule-based cost analysis and recommendations for your jobs
+                Rule-based cost analysis and ML-powered predictions for your jobs
               </CardDescription>
             </div>
             <Button 
@@ -257,7 +266,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
               <Sparkles className="h-4 w-4" />
               <AlertTitle>No insights yet</AlertTitle>
               <AlertDescription>
-                Click "Run Analysis" to generate cost insights for your jobs. This analyzes budget variances, anomalies, predictions, optimization opportunities, and material waste.
+                Click "Run Analysis" to generate cost insights for your jobs. This analyzes budget variances, anomalies, predictions, optimization opportunities, and material waste. ML models provide confidence-scored predictions when available.
               </AlertDescription>
             </Alert>
           )}
@@ -278,7 +287,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                 <Badge variant="secondary">{visibleInsights.length}</Badge>
               </CardTitle>
               <CardDescription>
-                Rule-based cost analysis and recommendations
+                Rule-based cost analysis and ML-powered predictions
               </CardDescription>
             </div>
             <Button 
@@ -298,6 +307,95 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
           </div>
         </CardHeader>
         <CardContent>
+          {/* ML Prediction Cards */}
+          {mlInsights && mlInsights.total_insights > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Brain className="h-4 w-4 text-violet-500" />
+                <span className="text-sm font-medium text-muted-foreground">ML Predictions</span>
+                {loadingML && <Skeleton className="h-4 w-16" />}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                {mlInsights.cost_predictions.map((cp) => (
+                  <button
+                    key={`cp-${cp.job_id}`}
+                    onClick={() => setShowMLDetail(`cost-${cp.job_id}`)}
+                    className="p-3 rounded-lg border-2 border-violet-500/30 bg-violet-50 dark:bg-violet-950/20 text-left hover:scale-[1.02] transition-all group"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <Target className="h-4 w-4 text-violet-600" />
+                      <Badge variant="outline" className="text-xs">
+                        {Math.round(cp.confidence_level * 100)}% conf
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground">Predicted Final Cost</div>
+                    <div className="text-lg font-bold">{formatCurrency(cp.predicted_value)}</div>
+                    <div className={cn("text-xs mt-1", cp.predicted_overrun > 0 ? "text-red-600" : "text-green-600")}>
+                      {cp.predicted_overrun > 0 ? "+" : ""}{formatCurrency(cp.predicted_overrun)} ({cp.predicted_overrun_pct > 0 ? "+" : ""}{cp.predicted_overrun_pct}%)
+                    </div>
+                    <Progress value={Math.min(100, (cp.current_actual / cp.budget) * 100)} className="h-1 mt-2" />
+                  </button>
+                ))}
+                {mlInsights.anomaly_scores.filter(a => a.is_anomaly).map((an) => (
+                  <button
+                    key={`an-${an.job_id}`}
+                    onClick={() => setShowMLDetail(`anomaly-${an.job_id}`)}
+                    className="p-3 rounded-lg border-2 border-red-500/30 bg-red-50 dark:bg-red-950/20 text-left hover:scale-[1.02] transition-all group"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <ShieldAlert className="h-4 w-4 text-red-600" />
+                      <Badge variant={an.severity === "critical" ? "destructive" : "default"} className="text-xs">
+                        {an.severity}
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground">Anomaly Detected</div>
+                    <div className="text-sm font-semibold">{an.sale_order_name}</div>
+                    <div className="text-xs mt-1">Score: {(an.anomaly_score * 100).toFixed(0)}%</div>
+                    {an.contributing_factors.length > 0 && (
+                      <div className="text-xs text-muted-foreground mt-1 truncate">
+                        Top factor: {an.contributing_factors[0].feature.replace(/_/g, ' ')}
+                      </div>
+                    )}
+                  </button>
+                ))}
+                {mlInsights.waste_risks.filter(w => w.risk_level !== "low").map((wr) => (
+                  <button
+                    key={`wr-${wr.job_id}`}
+                    onClick={() => setShowMLDetail(`waste-${wr.job_id}`)}
+                    className="p-3 rounded-lg border-2 border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/20 text-left hover:scale-[1.02] transition-all group"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <Trash2 className="h-4 w-4 text-yellow-600" />
+                      <Badge variant={wr.risk_level === "high" ? "destructive" : "default"} className="text-xs">
+                        {wr.risk_level} risk
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground">Waste Risk</div>
+                    <div className="text-sm font-semibold">{wr.sale_order_name}</div>
+                    <div className="text-xs mt-1">{(wr.waste_probability * 100).toFixed(0)}% probability</div>
+                  </button>
+                ))}
+                {mlInsights.overrun_warnings.filter(o => o.risk_level !== "low").map((ov) => (
+                  <button
+                    key={`ov-${ov.job_id}`}
+                    onClick={() => setShowMLDetail(`overrun-${ov.job_id}`)}
+                    className="p-3 rounded-lg border-2 border-orange-500/30 bg-orange-50 dark:bg-orange-950/20 text-left hover:scale-[1.02] transition-all group"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <AlertTriangle className="h-4 w-4 text-orange-600" />
+                      <Badge variant={ov.risk_level === "high" ? "destructive" : "default"} className="text-xs">
+                        {ov.milestone.replace(/_/g, ' ')}
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground">Overrun Warning</div>
+                    <div className="text-sm font-semibold">{ov.sale_order_name}</div>
+                    <div className="text-xs mt-1">{(ov.overrun_probability * 100).toFixed(0)}% overrun risk</div>
+                    <Progress value={ov.budget_utilization * 100} className="h-1 mt-2" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Bento Grid Layout */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {Object.entries(insightsByType).map(([type, insights]) => {
@@ -359,6 +457,222 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
           </div>
         </CardContent>
       </Card>
+
+      {/* ML Detail Dialog */}
+      <Dialog open={!!showMLDetail} onOpenChange={() => setShowMLDetail(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col [&>button]:hidden">
+          {showMLDetail && mlInsights && (() => {
+            const [type, jobIdKey] = showMLDetail.split('-');
+            if (type === 'cost') {
+              const cp = mlInsights.cost_predictions.find(p => p.job_id === jobIdKey);
+              if (!cp) return null;
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Target className="h-5 w-5 text-violet-500" />
+                      ML Cost Prediction
+                    </DialogTitle>
+                    <DialogDescription>
+                      XGBoost model prediction based on historical job patterns
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-4 overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Budget</div>
+                        <div className="text-lg font-bold">{formatCurrency(cp.budget)}</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Current Actual</div>
+                        <div className="text-lg font-bold">{formatCurrency(cp.current_actual)}</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-950/30">
+                        <div className="text-xs text-muted-foreground">Predicted Final Cost</div>
+                        <div className="text-lg font-bold text-violet-700 dark:text-violet-300">{formatCurrency(cp.predicted_value)}</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Confidence Range (95%)</div>
+                        <div className="text-sm font-semibold">{formatCurrency(cp.confidence_lower)} - {formatCurrency(cp.confidence_upper)}</div>
+                      </div>
+                    </div>
+                    <div className={cn("p-3 rounded-lg", cp.predicted_overrun > 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-green-50 dark:bg-green-950/20")}>
+                      <div className="text-sm font-medium">
+                        {cp.predicted_overrun > 0
+                          ? `Projected to exceed budget by ${formatCurrency(cp.predicted_overrun)} (${cp.predicted_overrun_pct}%)`
+                          : `Projected to come in under budget by ${formatCurrency(Math.abs(cp.predicted_overrun))}`}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            }
+            if (type === 'anomaly') {
+              const an = mlInsights.anomaly_scores.find(a => a.job_id === jobIdKey);
+              if (!an) return null;
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <ShieldAlert className="h-5 w-5 text-red-500" />
+                      ML Anomaly Detection - {an.sale_order_name}
+                    </DialogTitle>
+                    <DialogDescription>
+                      Isolation Forest model detected unusual cost patterns
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-4 overflow-y-auto">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Anomaly Score</div>
+                        <div className="text-lg font-bold">{(an.anomaly_score * 100).toFixed(0)}%</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Budget</div>
+                        <div className="text-lg font-bold">{formatCurrency(an.total_budget)}</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Actual</div>
+                        <div className="text-lg font-bold">{formatCurrency(an.total_actual)}</div>
+                      </div>
+                    </div>
+                    {an.contributing_factors.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2">Contributing Factors</h4>
+                        <div className="space-y-2">
+                          {an.contributing_factors.map((f, i) => (
+                            <div key={i} className="flex items-center justify-between p-2 rounded bg-muted/30">
+                              <span className="text-sm">{f.feature.replace(/_/g, ' ')}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">z={f.z_score}</span>
+                                <Badge variant={f.direction === "above" ? "destructive" : "secondary"} className="text-xs">
+                                  {f.direction}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            }
+            if (type === 'waste') {
+              const wr = mlInsights.waste_risks.find(w => w.job_id === jobIdKey);
+              if (!wr) return null;
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Trash2 className="h-5 w-5 text-yellow-500" />
+                      ML Waste Risk - {wr.sale_order_name}
+                    </DialogTitle>
+                    <DialogDescription>
+                      Random Forest classifier with SHAP explanations
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-4 overflow-y-auto">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Waste Probability</div>
+                        <div className="text-lg font-bold">{(wr.waste_probability * 100).toFixed(0)}%</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Material Budget</div>
+                        <div className="text-lg font-bold">{formatCurrency(wr.material_budget)}</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Material Actual</div>
+                        <div className="text-lg font-bold">{formatCurrency(wr.material_actual)}</div>
+                      </div>
+                    </div>
+                    {wr.feature_explanations.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2">Key Drivers (SHAP)</h4>
+                        {wr.feature_explanations.map((f, i) => (
+                          <div key={i} className="flex items-center justify-between p-2 rounded bg-muted/30 mb-1">
+                            <span className="text-sm">{f.feature.replace(/_/g, ' ')}</span>
+                            <Badge variant={f.direction === "increases_risk" ? "destructive" : "secondary"} className="text-xs">
+                              {f.direction?.replace(/_/g, ' ') || 'neutral'}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {wr.recommendations.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2">Recommendations</h4>
+                        {wr.recommendations.map((r, i) => (
+                          <div key={i} className="p-3 rounded-lg border bg-card mb-2">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline">{r.impact}</Badge>
+                              <span className="text-sm font-medium">{r.action}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{r.description}</p>
+                            {r.expected_savings && (
+                              <p className="text-xs text-green-600 mt-1">Expected savings: {formatCurrency(r.expected_savings)}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            }
+            if (type === 'overrun') {
+              const ov = mlInsights.overrun_warnings.find(o => o.job_id === jobIdKey);
+              if (!ov) return null;
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-orange-500" />
+                      Budget Overrun Warning - {ov.sale_order_name}
+                    </DialogTitle>
+                    <DialogDescription>
+                      XGBoost classifier predicting overrun probability at {ov.milestone.replace(/_/g, ' ')} milestone
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-4 overflow-y-auto">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Overrun Probability</div>
+                        <div className="text-lg font-bold">{(ov.overrun_probability * 100).toFixed(0)}%</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Budget</div>
+                        <div className="text-lg font-bold">{formatCurrency(ov.budget)}</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-xs text-muted-foreground">Spent</div>
+                        <div className="text-lg font-bold">{(ov.budget_utilization * 100).toFixed(0)}%</div>
+                      </div>
+                    </div>
+                    <Progress value={ov.budget_utilization * 100} className="h-2" />
+                    {ov.recommendations.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2">Recommended Actions</h4>
+                        {ov.recommendations.map((r, i) => (
+                          <div key={i} className="p-3 rounded-lg border bg-card mb-2">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline">{r.impact}</Badge>
+                              <span className="text-sm font-medium">{r.action}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{r.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            }
+            return null;
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Detail Dialog */}
       <Dialog open={!!selectedInsight} onOpenChange={() => setSelectedInsight(null)}>

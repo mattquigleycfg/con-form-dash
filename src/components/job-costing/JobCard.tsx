@@ -1,10 +1,12 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Job } from "@/hooks/useJobs";
 import { format } from "date-fns";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
-import { Truck } from "lucide-react";
+import { Truck, Brain, AlertTriangle, Trash2 } from "lucide-react";
+import { useCachedMLPredictions } from "@/hooks/useMLPredictions";
 
 interface JobCardProps {
   job: Job;
@@ -13,6 +15,16 @@ interface JobCardProps {
 }
 
 export function JobCard({ job, onClick, compact = false }: JobCardProps) {
+  const { data: mlPredictions } = useCachedMLPredictions(job.id);
+
+  const overrunPrediction = mlPredictions?.find((p: any) => p.prediction_type === "overrun_warning");
+  const wastePrediction = mlPredictions?.find((p: any) => p.prediction_type === "waste_risk");
+  const anomalyPrediction = mlPredictions?.find((p: any) => p.prediction_type === "anomaly_score");
+
+  const hasMLWarning = overrunPrediction?.predicted_value > 0.5 ||
+    wastePrediction?.predicted_value > 0.5 ||
+    (anomalyPrediction?.metadata as any)?.is_anomaly;
+
   const budgetUtilization = job.total_budget > 0 
     ? (job.total_actual / job.total_budget) * 100 
     : 0;
@@ -127,6 +139,53 @@ export function JobCard({ job, onClick, compact = false }: JobCardProps) {
             <Badge variant="outline" className="text-xs">
               {job.project_stage_name}
             </Badge>
+          )}
+          
+          {/* ML Risk Badges */}
+          {hasMLWarning && (
+            <TooltipProvider>
+              <div className="flex items-center gap-1 mt-1">
+                {overrunPrediction?.predicted_value > 0.5 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="destructive" className="text-[10px] px-1 py-0 gap-0.5">
+                        <AlertTriangle className="h-2.5 w-2.5" />
+                        {Math.round(overrunPrediction.predicted_value * 100)}%
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>ML: {Math.round(overrunPrediction.predicted_value * 100)}% overrun probability</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {wastePrediction?.predicted_value > 0.5 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="default" className="text-[10px] px-1 py-0 gap-0.5 bg-yellow-600">
+                        <Trash2 className="h-2.5 w-2.5" />
+                        waste
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>ML: {Math.round(wastePrediction.predicted_value * 100)}% waste probability</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {(anomalyPrediction?.metadata as any)?.is_anomaly && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="default" className="text-[10px] px-1 py-0 gap-0.5 bg-red-600">
+                        <Brain className="h-2.5 w-2.5" />
+                        anomaly
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>ML: Unusual cost pattern detected</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            </TooltipProvider>
           )}
         </div>
       </CardContent>
