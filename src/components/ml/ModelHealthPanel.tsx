@@ -23,7 +23,7 @@ function getMetricValue(model: any): string {
     case "anomaly_detector": return m.contamination_rate ? `${(m.contamination_rate * 100).toFixed(1)}%` : "N/A";
     case "waste_scorer": return m.f1_score !== undefined ? m.f1_score.toFixed(3) : "N/A";
     case "overrun_classifier": return m.auc_score !== undefined ? m.auc_score.toFixed(3) : "N/A";
-    case "customer_scorer": return m.active_customer_rate ? `${(m.active_customer_rate * 100).toFixed(0)}%` : "N/A";
+    case "customer_scorer": return m.active_customer_rate != null ? `${(m.active_customer_rate * 100).toFixed(0)}%` : "N/A";
     case "supplier_scorer": return m.vendors_scored !== undefined ? String(m.vendors_scored) : "N/A";
     default: return "N/A";
   }

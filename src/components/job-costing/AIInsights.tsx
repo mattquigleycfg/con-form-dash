@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,9 +33,10 @@ import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useMLInsights, type MLInsights, type CostPrediction, type AnomalyScore, type WasteRisk, type OverrunWarning } from "@/hooks/useMLPredictions";
 import { SHAPWaterfallChart } from "@/components/ml";
+import type { Job } from "@/hooks/useJobs";
 
 interface AIInsightsProps {
-  jobs?: any[];
+  jobs?: Job[];
   jobId?: string;
   analysisType?: 'all' | 'budget_variance' | 'anomalies' | 'predictions' | 'optimization' | 'waste';
   detailed?: boolean;
@@ -63,6 +64,12 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
   const { toast } = useToast();
 
   const { data: mlInsights, isLoading: loadingML } = useMLInsights(jobId);
+
+  const jobLookup = useMemo(() => {
+    const map = new Map<string, Job>();
+    (jobs || []).forEach(j => map.set(j.id, j));
+    return map;
+  }, [jobs]);
 
   // Fetch existing insights from database
   const { data: existingInsights, isLoading: loadingExisting, refetch: refetchExisting } = useQuery({
@@ -97,7 +104,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
   const { data: newInsights, isLoading: loadingNew, refetch, isError, error } = useQuery({
     queryKey: ['ai-insights-analysis', jobId, analysisType],
     queryFn: async () => {
-      console.log('Starting AI insights analysis...', { jobId, analysisType });
+      
       
       const { data, error } = await supabase.functions.invoke('analyze-job-insights', {
         body: { job_id: jobId, analysis_type: analysisType },
@@ -108,7 +115,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
         throw error;
       }
       
-      console.log('AI insights analysis completed:', data);
+      
       
       // After analysis completes, refresh the existing insights to show new results
       await refetchExisting();
@@ -322,7 +329,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                   <button
                     key={`an-${an.job_id}`}
                     onClick={() => setShowMLDetail(`anomaly-${an.job_id}`)}
-                    className="p-3 rounded-lg border-2 border-red-500/30 bg-red-50 dark:bg-red-950/20 text-left hover:scale-[1.02] transition-all"
+                    className="p-3 rounded-lg border-2 border-red-500/30 bg-red-50 dark:bg-red-950/20 text-left hover:scale-[1.02] hover:shadow-md hover:border-red-500/60 hover:bg-red-100 dark:hover:bg-red-950/40 transition-all cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <ShieldAlert className="h-4 w-4 text-red-600" />
@@ -330,6 +337,9 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                     </div>
                     <div className="text-xs text-muted-foreground">Anomaly Detected</div>
                     <div className="text-sm font-semibold truncate">{an.sale_order_name}</div>
+                    {jobLookup.get(an.job_id)?.opportunity_name && (
+                      <div className="text-xs text-muted-foreground truncate">{jobLookup.get(an.job_id)?.opportunity_name}</div>
+                    )}
                     <div className="text-xs mt-1">Score: {Math.round((an.anomaly_score ?? 0) * 100)}%</div>
                   </button>
                 ),
@@ -344,7 +354,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                   <button
                     key={`ov-${ov.job_id}`}
                     onClick={() => setShowMLDetail(`overrun-${ov.job_id}`)}
-                    className="p-3 rounded-lg border-2 border-orange-500/30 bg-orange-50 dark:bg-orange-950/20 text-left hover:scale-[1.02] transition-all"
+                    className="p-3 rounded-lg border-2 border-orange-500/30 bg-orange-50 dark:bg-orange-950/20 text-left hover:scale-[1.02] hover:shadow-md hover:border-orange-500/60 hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-all cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <AlertTriangle className="h-4 w-4 text-orange-600" />
@@ -354,6 +364,9 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                     </div>
                     <div className="text-xs text-muted-foreground">Overrun Warning</div>
                     <div className="text-sm font-semibold truncate">{ov.sale_order_name}</div>
+                    {jobLookup.get(ov.job_id)?.opportunity_name && (
+                      <div className="text-xs text-muted-foreground truncate">{jobLookup.get(ov.job_id)?.opportunity_name}</div>
+                    )}
                     <div className="text-xs mt-1">{Math.round((ov.overrun_probability ?? 0) * 100)}% risk</div>
                     <Progress value={(ov.budget_utilization ?? 0) * 100} className="h-1 mt-2" />
                   </button>
@@ -369,7 +382,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                   <button
                     key={`wr-${wr.job_id}`}
                     onClick={() => setShowMLDetail(`waste-${wr.job_id}`)}
-                    className="p-3 rounded-lg border-2 border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/20 text-left hover:scale-[1.02] transition-all"
+                    className="p-3 rounded-lg border-2 border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/20 text-left hover:scale-[1.02] hover:shadow-md hover:border-yellow-500/60 hover:bg-yellow-100 dark:hover:bg-yellow-950/40 transition-all cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <Trash2 className="h-4 w-4 text-yellow-600" />
@@ -377,6 +390,9 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                     </div>
                     <div className="text-xs text-muted-foreground">Waste Risk</div>
                     <div className="text-sm font-semibold truncate">{wr.sale_order_name}</div>
+                    {jobLookup.get(wr.job_id)?.opportunity_name && (
+                      <div className="text-xs text-muted-foreground truncate">{jobLookup.get(wr.job_id)?.opportunity_name}</div>
+                    )}
                     <div className="text-xs mt-1">{Math.round((wr.waste_probability ?? 0) * 100)}% probability</div>
                   </button>
                 ),
@@ -395,13 +411,19 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                   <button
                     key={`cp-${cp.job_id}`}
                     onClick={() => setShowMLDetail(`cost-${cp.job_id}`)}
-                    className="p-3 rounded-lg border-2 border-violet-500/30 bg-violet-50 dark:bg-violet-950/20 text-left hover:scale-[1.02] transition-all"
+                    className="p-3 rounded-lg border-2 border-violet-500/30 bg-violet-50 dark:bg-violet-950/20 text-left hover:scale-[1.02] hover:shadow-md hover:border-violet-500/60 hover:bg-violet-100 dark:hover:bg-violet-950/40 transition-all cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <Target className="h-4 w-4 text-violet-600" />
                       {conf !== null && <Badge variant="outline" className="text-xs">{conf}% conf</Badge>}
                     </div>
                     <div className="text-xs text-muted-foreground">Predicted Final Cost</div>
+                    {(cp.sale_order_name || jobLookup.get(cp.job_id)?.sale_order_name) && (
+                      <div className="text-xs font-medium truncate">{cp.sale_order_name || jobLookup.get(cp.job_id)?.sale_order_name}</div>
+                    )}
+                    {jobLookup.get(cp.job_id)?.opportunity_name && (
+                      <div className="text-xs text-muted-foreground truncate">{jobLookup.get(cp.job_id)?.opportunity_name}</div>
+                    )}
                     <div className="text-lg font-bold">{formatCurrency(cp.predicted_value)}</div>
                     <div className={cn("text-xs mt-1", (cp.predicted_overrun ?? 0) > 0 ? "text-red-600" : "text-green-600")}>
                       {(cp.predicted_overrun ?? 0) > 0 ? "+" : ""}{formatCurrency(cp.predicted_overrun ?? 0)} ({(cp.predicted_overrun_pct ?? 0) > 0 ? "+" : ""}{cp.predicted_overrun_pct ?? 0}%)
@@ -525,18 +547,24 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
       <Dialog open={!!showMLDetail} onOpenChange={() => setShowMLDetail(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col [&>button]:hidden">
           {showMLDetail && mlInsights && (() => {
-            const [type, jobIdKey] = showMLDetail.split('-');
+            const dashIdx = showMLDetail.indexOf('-');
+            const type = showMLDetail.slice(0, dashIdx);
+            const jobIdKey = showMLDetail.slice(dashIdx + 1);
+            const matchedJob = jobLookup.get(jobIdKey);
             if (type === 'cost') {
               const cp = mlInsights.cost_predictions.find(p => p.job_id === jobIdKey);
               if (!cp) return null;
+              const displayName = cp.sale_order_name || matchedJob?.sale_order_name || '';
+              const oppName = matchedJob?.opportunity_name;
               return (
                 <>
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <Target className="h-5 w-5 text-violet-500" />
-                      ML Cost Prediction
+                      ML Cost Prediction {displayName && `- ${displayName}`}
                     </DialogTitle>
                     <DialogDescription>
+                      {oppName && <span className="font-medium">{oppName} — </span>}
                       XGBoost model prediction based on historical job patterns
                     </DialogDescription>
                   </DialogHeader>
@@ -575,6 +603,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
             if (type === 'anomaly') {
               const an = mlInsights.anomaly_scores.find(a => a.job_id === jobIdKey);
               if (!an) return null;
+              const oppName = matchedJob?.opportunity_name;
               return (
                 <>
                   <DialogHeader>
@@ -583,6 +612,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                       ML Anomaly Detection - {an.sale_order_name}
                     </DialogTitle>
                     <DialogDescription>
+                      {oppName && <span className="font-medium">{oppName} — </span>}
                       Isolation Forest model detected unusual cost patterns
                     </DialogDescription>
                   </DialogHeader>
@@ -619,6 +649,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
             if (type === 'waste') {
               const wr = mlInsights.waste_risks.find(w => w.job_id === jobIdKey);
               if (!wr) return null;
+              const oppName = matchedJob?.opportunity_name;
               return (
                 <>
                   <DialogHeader>
@@ -627,6 +658,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                       ML Waste Risk - {wr.sale_order_name}
                     </DialogTitle>
                     <DialogDescription>
+                      {oppName && <span className="font-medium">{oppName} — </span>}
                       Random Forest classifier with SHAP explanations
                     </DialogDescription>
                   </DialogHeader>
@@ -675,6 +707,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
             if (type === 'overrun') {
               const ov = mlInsights.overrun_warnings.find(o => o.job_id === jobIdKey);
               if (!ov) return null;
+              const oppName = matchedJob?.opportunity_name;
               return (
                 <>
                   <DialogHeader>
@@ -683,6 +716,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                       Budget Overrun Warning - {ov.sale_order_name}
                     </DialogTitle>
                     <DialogDescription>
+                      {oppName && <span className="font-medium">{oppName} — </span>}
                       XGBoost classifier predicting overrun probability at {(ov.milestone || 'current').replace(/_/g, ' ')} milestone
                     </DialogDescription>
                   </DialogHeader>
@@ -737,6 +771,9 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                   </div>
                   <div className="flex-1 min-w-0">
                     <DialogTitle className="text-xl pr-8">{selectedInsight.title}</DialogTitle>
+                    {jobLookup.get(selectedInsight.job_id)?.opportunity_name && (
+                      <p className="text-sm text-muted-foreground mt-0.5">{jobLookup.get(selectedInsight.job_id)?.opportunity_name}</p>
+                    )}
                     <DialogDescription className="flex items-center gap-2 mt-1">
                       <Badge variant={getSeverityColor(selectedInsight.severity) as any}>
                         {selectedInsight.severity}

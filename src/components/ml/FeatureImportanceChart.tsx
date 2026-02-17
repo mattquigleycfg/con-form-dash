@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Lightbulb } from "lucide-react";
 import type { ModelHealthInfo } from "@/hooks/useMLPredictions";
 
 interface FeatureImportanceChartProps {
@@ -63,6 +64,37 @@ const MODEL_TITLES: Record<string, string> = {
   supplier_scorer: "Supplier Scoring",
 };
 
+const MODEL_NOTES: Record<string, (topFeatures: string[]) => string[]> = {
+  cost_predictor: (top) => [
+    `The top drivers for cost prediction are ${top.slice(0, 3).join(", ")}. Jobs with higher values in these features tend to have larger cost deviations.`,
+    "Material costs and BOM complexity are consistently the strongest predictors of final project cost.",
+    "Consider monitoring jobs with unusual BOM patterns or high unit costs for early cost intervention.",
+  ],
+  overrun_classifier: (top) => [
+    `Budget overrun risk is most influenced by ${top.slice(0, 3).join(", ")}.`,
+    "Jobs with high budget utilization early in the project lifecycle are at significantly higher overrun risk.",
+    "Non-material cost categories (installation, freight) often contribute to unexpected overruns.",
+  ],
+  waste_scorer: (top) => [
+    `Material waste risk is primarily driven by ${top.slice(0, 3).join(", ")}.`,
+    "Higher BOM total costs and average unit costs correlate with increased waste probability.",
+    "Jobs with many unique products or complex BOM structures should be flagged for material waste monitoring.",
+  ],
+  anomaly_detector: (top) => [
+    `Anomaly detection weighs ${top.slice(0, 3).join(", ")} most heavily when identifying unusual cost patterns.`,
+    "Cost anomalies often signal data entry errors, scope changes, or procurement issues worth investigating.",
+  ],
+  customer_scorer: (top) => [
+    `Customer re-order likelihood depends most on ${top.slice(0, 3).join(", ")}.`,
+    "Customers with consistent order frequency and recent activity are most likely to place repeat orders.",
+    "Value trends help identify growing vs declining customer relationships.",
+  ],
+  supplier_scorer: (top) => [
+    `Supplier scoring is driven by ${top.slice(0, 3).join(", ")}.`,
+    "Reliable delivery and consistent pricing are the strongest indicators of supplier quality.",
+  ],
+};
+
 export function FeatureImportanceChart({ models, modelName = "cost_predictor" }: FeatureImportanceChartProps) {
   const model = models.find((m) => m.model_name === modelName);
   const features = (model?.top_features || [])
@@ -70,10 +102,20 @@ export function FeatureImportanceChart({ models, modelName = "cost_predictor" }:
     .map((f) => ({
       name: FEATURE_LABELS[f.name] || (f.name || "unknown").replace(/_/g, " "),
       importance: Math.round(f.importance * 1000) / 10,
+      rawName: f.name,
     }))
     .reverse();
 
   const title = MODEL_TITLES[modelName] || modelName.replace(/_/g, " ");
+
+  const topFeatureNames = features
+    .slice()
+    .reverse()
+    .slice(0, 5)
+    .map(f => f.name);
+
+  const notesGenerator = MODEL_NOTES[modelName];
+  const notes = notesGenerator && topFeatureNames.length > 0 ? notesGenerator(topFeatureNames) : [];
 
   return (
     <Card>
@@ -90,15 +132,33 @@ export function FeatureImportanceChart({ models, modelName = "cost_predictor" }:
             <span className="text-xs text-muted-foreground/70">Retrain the model from the Model Health tab to generate feature data</span>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={features} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis type="number" tick={{ fontSize: 10 }} unit="%" />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
-              <Tooltip formatter={(v: number) => `${v}%`} />
-              <Bar dataKey="importance" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={16} />
-            </BarChart>
-          </ResponsiveContainer>
+          <>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={features} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis type="number" tick={{ fontSize: 10 }} unit="%" />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
+                <Tooltip formatter={(v: number) => `${v}%`} />
+                <Bar dataKey="importance" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={16} />
+              </BarChart>
+            </ResponsiveContainer>
+
+            {notes.length > 0 && (
+              <div className="mt-4 p-3 rounded-lg bg-muted/40 border border-muted">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lightbulb className="h-4 w-4 text-amber-500" />
+                  <span className="text-xs font-semibold text-muted-foreground">ML Insights</span>
+                </div>
+                <ul className="space-y-1.5">
+                  {notes.map((note, i) => (
+                    <li key={i} className="text-xs text-muted-foreground leading-relaxed pl-2 border-l-2 border-muted-foreground/20">
+                      {note}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
