@@ -65,9 +65,14 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
 
   const { data: mlInsights, isLoading: loadingML } = useMLInsights(jobId);
 
+  // Multi-key lookup: by Supabase UUID, sale_order_name, and odoo_sale_order_id
   const jobLookup = useMemo(() => {
     const map = new Map<string, Job>();
-    (jobs || []).forEach(j => map.set(j.id, j));
+    (jobs || []).forEach(j => {
+      map.set(j.id, j);
+      if (j.sale_order_name) map.set(j.sale_order_name, j);
+      if (j.odoo_sale_order_id) map.set(String(j.odoo_sale_order_id), j);
+    });
     return map;
   }, [jobs]);
 

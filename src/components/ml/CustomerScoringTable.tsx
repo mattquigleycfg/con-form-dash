@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, ArrowUpDown, TrendingUp, TrendingDown, Minus, Filter, Mail, Phone, FileText, Users, DollarSign, Clock } from "lucide-react";
+import { AlertCircle, ArrowUpDown, TrendingUp, TrendingDown, Minus, Filter, Mail, Phone, FileText, Users, DollarSign, Clock, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -14,6 +15,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { CustomerScore } from "@/hooks/useMLPredictions";
 
 interface CustomerScoringTableProps {
@@ -40,6 +43,52 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
   const [segmentFilter, setSegmentFilter] = useState<string>("all");
   const [recencyFilter, setRecencyFilter] = useState<string>("all");
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerScore | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Batch-fetch customer emails from Odoo (res.partner with customer_rank > 0)
+  const customerNames = useMemo(() => data.map(c => c.customer_name), [data]);
+  const { data: customerEmails } = useQuery({
+    queryKey: ["odoo-customer-emails", customerNames.length],
+    queryFn: async () => {
+      if (customerNames.length === 0) return new Map<string, { email: string; phone: string }>();
+
+      // Fetch in batches of 100 to avoid Odoo limits
+      const batchSize = 100;
+      const allResults: any[] = [];
+      for (let i = 0; i < customerNames.length; i += batchSize) {
+        const batch = customerNames.slice(i, i + batchSize);
+        const { data: partners, error } = await supabase.functions.invoke("odoo-query", {
+          body: {
+            model: "res.partner",
+            method: "search_read",
+            args: [
+              [["name", "in", batch], ["customer_rank", ">", 0]],
+              ["id", "name", "email", "phone", "mobile"],
+              0,
+              batchSize,
+            ],
+          },
+        });
+        if (!error && Array.isArray(partners)) {
+          allResults.push(...partners);
+        }
+      }
+
+      const map = new Map<string, { email: string; phone: string }>();
+      for (const p of allResults) {
+        const email = (p.email && p.email !== false) ? String(p.email) : "";
+        const phone = (p.phone && p.phone !== false) ? String(p.phone) : (p.mobile && p.mobile !== false) ? String(p.mobile) : "";
+        if (!map.has(p.name)) {
+          map.set(p.name, { email, phone });
+        }
+      }
+      return map;
+    },
+    staleTime: 10 * 60 * 1000,
+    enabled: customerNames.length > 0,
+  });
+
+  const getCustomerContact = (name: string) => customerEmails?.get(name) || { email: "", phone: "" };
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -128,6 +177,65 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
     const topCustomer = [...data].sort((a, b) => b.total_revenue - a.total_revenue)[0];
     return { totalRevenue, totalJobs, avgRecency, avgFrequency, activeCustomers, topCustomer };
   }, [data]);
+
+  // CSV Export
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const SEGMENT_LABELS_MAP: Record<string, string> = {
+        high_value: "High Value",
+        medium_value: "Medium",
+        at_risk: "At Risk",
+      };
+
+      const headers = [
+        "Customer",
+        "Email",
+        "Phone",
+        "Re-order %",
+        "Total Jobs",
+        "Total Revenue",
+        "Recency (days)",
+        "Order Frequency (yr)",
+        "Value Trend",
+        "Segment",
+      ];
+
+      const rows = sorted.map((c) => {
+        const contact = getCustomerContact(c.customer_name);
+        return [
+          `"${c.customer_name.replace(/"/g, '""')}"`,
+          `"${contact.email}"`,
+          `"${contact.phone}"`,
+          `${Math.round(c.reorder_probability * 100)}%`,
+          c.total_jobs,
+          c.total_revenue.toFixed(2),
+          c.recency_days,
+          c.order_frequency_yearly.toFixed(1),
+          formatTrend(c.value_trend).label,
+          SEGMENT_LABELS_MAP[c.segment] || c.segment,
+        ].join(",");
+      });
+
+      const csv = [headers.join(","), ...rows].join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `customer-scoring-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Exported ${rows.length} customers to CSV`);
+    } catch (err) {
+      console.error("Export failed:", err);
+      toast.error("Failed to export customer data");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [sorted, customerEmails]);
 
   return (
     <>
@@ -229,6 +337,16 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
                   <SelectItem value="365">Last Year</SelectItem>
                 </SelectContent>
               </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={handleExport}
+                disabled={isExporting || sorted.length === 0}
+              >
+                {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Export CSV
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -249,6 +367,7 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs">Customer</TableHead>
+                    <TableHead className="text-xs">Email</TableHead>
                     <TableHead className="text-xs"><SortHeader label="Re-order %" field="reorder_probability" /></TableHead>
                     <TableHead className="text-xs"><SortHeader label="Jobs" field="total_jobs" /></TableHead>
                     <TableHead className="text-xs"><SortHeader label="Revenue" field="total_revenue" /></TableHead>
@@ -265,6 +384,9 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
                       onClick={() => setSelectedCustomer(c)}
                     >
                       <TableCell className="text-xs font-medium max-w-[200px] truncate">{c.customer_name}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">
+                        {getCustomerContact(c.customer_name).email || "—"}
+                      </TableCell>
                       <TableCell className="text-xs">{Math.round(c.reorder_probability * 100)}%</TableCell>
                       <TableCell className="text-xs">{c.total_jobs}</TableCell>
                       <TableCell className="text-xs">{formatCurrency(c.total_revenue)}</TableCell>
@@ -302,6 +424,23 @@ export function CustomerScoringTable({ data }: CustomerScoringTableProps) {
                 </DialogTitle>
                 <DialogDescription>Customer insights and scoring breakdown</DialogDescription>
               </DialogHeader>
+              {(() => {
+                const contact = getCustomerContact(selectedCustomer.customer_name);
+                return (contact.email || contact.phone) ? (
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground -mt-1 mb-1">
+                    {contact.email && (
+                      <a href={`mailto:${contact.email}`} className="flex items-center gap-1 hover:text-foreground transition-colors">
+                        <Mail className="h-3 w-3" />{contact.email}
+                      </a>
+                    )}
+                    {contact.phone && (
+                      <a href={`tel:${contact.phone}`} className="flex items-center gap-1 hover:text-foreground transition-colors">
+                        <Phone className="h-3 w-3" />{contact.phone}
+                      </a>
+                    )}
+                  </div>
+                ) : null;
+              })()}
               <div className="space-y-4 mt-2">
                 <div className="p-4 rounded-lg bg-muted/50">
                   <div className="flex items-center justify-between mb-2">

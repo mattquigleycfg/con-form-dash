@@ -28,7 +28,9 @@ import { SafeSection } from "@/components/SafeSection";
 import { processBatched, retryWithBackoff, RateLimiter } from "@/utils/rateLimit";
 import { JobListModal } from "@/components/job-costing/JobListModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { formatCurrency } from "@/lib/utils";
 
 export default function JobCosting() {
   const navigate = useNavigate();
@@ -969,131 +971,190 @@ export default function JobCosting() {
         )}
         </SafeSection>
 
-        {/* 3. Summary Dashboard Cards */}
-        {filteredJobs && filteredJobs.length > 0 && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Active Jobs</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{filteredJobs.length}</div>
-              </CardContent>
-            </Card>
+        {/* 3. Summary Dashboard Cards with hover details */}
+        {filteredJobs && filteredJobs.length > 0 && (() => {
+          const totalBudget = filteredJobs.reduce((sum, job) => sum + job.total_budget, 0);
+          const totalActual = filteredJobs.reduce((sum, job) => sum + job.total_actual, 0);
+          const utilPct = totalBudget > 0 ? (totalActual / totalBudget) * 100 : 0;
+          const topByBudget = [...filteredJobs].sort((a, b) => b.total_budget - a.total_budget).slice(0, 5);
+          const topByActual = [...filteredJobs].sort((a, b) => b.total_actual - a.total_actual).slice(0, 5);
+          const avgBudget = totalBudget / filteredJobs.length;
+          const avgActual = totalActual / filteredJobs.length;
+          const noBudgetCount = filteredJobs.filter(j => j.total_budget === 0).length;
+          const topByUtil = [...filteredJobs]
+            .filter(j => j.total_budget > 0)
+            .map(j => ({ ...j, util: (j.total_actual / j.total_budget) * 100 }))
+            .sort((a, b) => b.util - a.util)
+            .slice(0, 5);
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Budget</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCompactCurrency(filteredJobs.reduce((sum, job) => sum + job.total_budget, 0))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Actual</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCompactCurrency(filteredJobs.reduce((sum, job) => sum + job.total_actual, 0))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Utilization</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div 
-                  className={`text-2xl font-bold ${
-                    (() => {
-                      const totalBudget = filteredJobs.reduce((sum, job) => sum + job.total_budget, 0);
-                      const totalActual = filteredJobs.reduce((sum, job) => sum + job.total_actual, 0);
-                      const util = totalBudget > 0 ? (totalActual / totalBudget) * 100 : 0;
-                      return util > 100 ? 'text-red-600' : util > 80 ? 'text-yellow-600' : 'text-green-600';
-                    })()
-                  }`}
-                >
-                  {(() => {
-                    const totalBudget = filteredJobs.reduce((sum, job) => sum + job.total_budget, 0);
-                    const totalActual = filteredJobs.reduce((sum, job) => sum + job.total_actual, 0);
-                    return totalBudget > 0 ? ((totalActual / totalBudget) * 100).toFixed(1) : 0;
-                  })()}%
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card
-              className="cursor-pointer transition-all hover:shadow-md hover:border-red-300 hover:bg-red-50/50"
-              onClick={() => overBudgetJobs.length > 0 && setJobListModalType("overBudget")}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                  <TrendingUp className="h-3.5 w-3.5 text-red-500" />
-                  Over Budget
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
-                  {overBudgetJobs.length}
-                </div>
-                {overBudgetJobs.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">Click to view jobs</p>
-                )}
-              </CardContent>
-            </Card>
-
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Card
-                    className="cursor-pointer transition-all hover:shadow-md hover:border-yellow-300 hover:bg-yellow-50/50"
-                    onClick={() => atRiskJobs.length > 0 && setJobListModalType("atRisk")}
-                  >
+          return (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <HoverCard openDelay={200} closeDelay={100}>
+                <HoverCardTrigger asChild>
+                  <Card className="cursor-default transition-all hover:shadow-md">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
-                        At Risk
-                      </CardTitle>
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Active Jobs</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-yellow-600">
-                        {atRiskJobs.length}
-                      </div>
-                      {atRiskJobs.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">Click to view jobs</p>
-                      )}
+                      <div className="text-2xl font-bold">{filteredJobs.length}</div>
                     </CardContent>
                   </Card>
-                </TooltipTrigger>
-                {atRiskJobs.length > 0 && (
-                  <TooltipContent side="bottom" className="max-w-xs">
-                    <p className="font-semibold mb-1">At Risk Jobs (80-100% utilized):</p>
-                    <ul className="text-xs space-y-0.5">
-                      {atRiskJobs.slice(0, 10).map((job) => (
-                        <li key={job.id} className="flex justify-between gap-3">
-                          <span className="truncate">{job.sale_order_name} — {job.customer_name}</span>
-                          <span className="text-yellow-600 font-medium whitespace-nowrap">
-                            {(job.total_budget > 0 ? (job.total_actual / job.total_budget) * 100 : 0).toFixed(0)}%
-                          </span>
+                </HoverCardTrigger>
+                <HoverCardContent side="bottom" className="w-72">
+                  <p className="font-semibold text-sm mb-2">Top Jobs by Budget</p>
+                  <ul className="space-y-1">
+                    {topByBudget.map(j => (
+                      <li key={j.id} className="flex justify-between text-xs gap-2">
+                        <span className="truncate">{j.sale_order_name} — {j.customer_name}</span>
+                        <span className="font-medium whitespace-nowrap">{formatCurrency(j.total_budget)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {noBudgetCount > 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-2">{noBudgetCount} job(s) have no budget set</p>
+                  )}
+                </HoverCardContent>
+              </HoverCard>
+
+              <HoverCard openDelay={200} closeDelay={100}>
+                <HoverCardTrigger asChild>
+                  <Card className="cursor-default transition-all hover:shadow-md">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Total Budget</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{formatCompactCurrency(totalBudget)}</div>
+                    </CardContent>
+                  </Card>
+                </HoverCardTrigger>
+                <HoverCardContent side="bottom" className="w-72">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Average per job</span>
+                      <span className="font-medium">{formatCurrency(avgBudget)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Material</span>
+                      <span className="font-medium">{formatCurrency(filteredJobs.reduce((s, j) => s + j.material_budget, 0))}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Non-Material</span>
+                      <span className="font-medium">{formatCurrency(filteredJobs.reduce((s, j) => s + j.non_material_budget, 0))}</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground pt-1 border-t">Largest: {topByBudget[0]?.sale_order_name} ({formatCurrency(topByBudget[0]?.total_budget)})</p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+
+              <HoverCard openDelay={200} closeDelay={100}>
+                <HoverCardTrigger asChild>
+                  <Card className="cursor-default transition-all hover:shadow-md">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Total Actual</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{formatCompactCurrency(totalActual)}</div>
+                    </CardContent>
+                  </Card>
+                </HoverCardTrigger>
+                <HoverCardContent side="bottom" className="w-72">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Average per job</span>
+                      <span className="font-medium">{formatCurrency(avgActual)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Material</span>
+                      <span className="font-medium">{formatCurrency(filteredJobs.reduce((s, j) => s + j.material_actual, 0))}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Non-Material</span>
+                      <span className="font-medium">{formatCurrency(filteredJobs.reduce((s, j) => s + j.non_material_actual, 0))}</span>
+                    </div>
+                    <p className="font-semibold text-xs mt-2">Top Spending Jobs</p>
+                    <ul className="space-y-0.5">
+                      {topByActual.slice(0, 3).map(j => (
+                        <li key={j.id} className="flex justify-between text-xs gap-2">
+                          <span className="truncate">{j.sale_order_name}</span>
+                          <span className="font-medium whitespace-nowrap">{formatCurrency(j.total_actual)}</span>
                         </li>
                       ))}
-                      {atRiskJobs.length > 10 && (
-                        <li className="text-muted-foreground italic">
-                          +{atRiskJobs.length - 10} more...
-                        </li>
-                      )}
                     </ul>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        )}
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+
+              <HoverCard openDelay={200} closeDelay={100}>
+                <HoverCardTrigger asChild>
+                  <Card className="cursor-default transition-all hover:shadow-md">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Utilization</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className={`text-2xl font-bold ${utilPct > 100 ? 'text-red-600' : utilPct > 80 ? 'text-yellow-600' : 'text-green-600'}`}>
+                        {utilPct.toFixed(1)}%
+                      </div>
+                    </CardContent>
+                  </Card>
+                </HoverCardTrigger>
+                <HoverCardContent side="bottom" className="w-72">
+                  <p className="font-semibold text-sm mb-2">Highest Utilization Jobs</p>
+                  <ul className="space-y-1">
+                    {topByUtil.map(j => (
+                      <li key={j.id} className="flex justify-between text-xs gap-2">
+                        <span className="truncate">{j.sale_order_name} — {j.customer_name}</span>
+                        <span className={`font-medium whitespace-nowrap ${j.util > 100 ? 'text-red-600' : j.util > 80 ? 'text-yellow-600' : 'text-green-600'}`}>
+                          {j.util.toFixed(0)}%
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-2 pt-2 border-t text-xs text-muted-foreground space-y-0.5">
+                    <div className="flex justify-between"><span>Under 80%</span><span>{filteredJobs.filter(j => j.total_budget > 0 && (j.total_actual / j.total_budget) * 100 <= 80).length} jobs</span></div>
+                    <div className="flex justify-between"><span>80-100%</span><span>{atRiskJobs.length} jobs</span></div>
+                    <div className="flex justify-between"><span>Over 100%</span><span>{overBudgetJobs.length} jobs</span></div>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+
+              <Card
+                className="cursor-pointer transition-all hover:shadow-md hover:border-red-300 hover:bg-red-50/50"
+                onClick={() => overBudgetJobs.length > 0 && setJobListModalType("overBudget")}
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                    <TrendingUp className="h-3.5 w-3.5 text-red-500" />
+                    Over Budget
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-600">{overBudgetJobs.length}</div>
+                  {overBudgetJobs.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">Click to view jobs</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card
+                className="cursor-pointer transition-all hover:shadow-md hover:border-yellow-300 hover:bg-yellow-50/50"
+                onClick={() => atRiskJobs.length > 0 && setJobListModalType("atRisk")}
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
+                    At Risk
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-yellow-600">{atRiskJobs.length}</div>
+                  {atRiskJobs.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">Click to view jobs</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })()}
 
         {/* 4. Search + Filter Bar (combined row) */}
         <JobFilterBar

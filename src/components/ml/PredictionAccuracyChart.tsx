@@ -17,7 +17,7 @@ export function PredictionAccuracyChart({ data, jobLookup }: PredictionAccuracyC
   const chartData = sorted.map((d) => {
     const hasConfidence = d.confidence_lower != null && d.confidence_upper != null &&
       d.confidence_lower > 0 && d.confidence_upper > 0;
-    const job = jobLookup?.get(d.job_id);
+    const job = jobLookup?.get(d.job_id) || (d.sale_order_name ? jobLookup?.get(d.sale_order_name) : undefined);
     const soName = job?.sale_order_name || d.sale_order_name?.trim() || "";
     const opportunityName = job?.opportunity_name || "";
     return {

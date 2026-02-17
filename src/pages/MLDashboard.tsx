@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, ShieldAlert, Trash2, Target } from "lucide-react";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import { formatCurrency } from "@/lib/utils";
 import { useJobs, type Job } from "@/hooks/useJobs";
 import { BrainIcon } from "@/components/ui/animated-icons";
 import { SparklesIcon } from "@/components/ui/animated-icons";
@@ -73,11 +75,17 @@ export default function MLDashboard() {
   const { data: customers = [], isLoading: customersLoading } = useCustomerScoring();
   const { data: suppliers = [], isLoading: suppliersLoading } = useSupplierScoring();
   const { data: models = [], isLoading: modelsLoading } = useModelHealth();
-  const { data: jobs = [] } = useJobs();
+  const { jobs: jobsList } = useJobs();
+  const jobs = jobsList ?? [];
 
+  // Multi-key lookup: by Supabase UUID, sale_order_name, and odoo_sale_order_id
   const jobLookup = useMemo(() => {
     const map = new Map<string, Job>();
-    jobs.forEach(j => map.set(j.id, j));
+    jobs.forEach(j => {
+      map.set(j.id, j);
+      if (j.sale_order_name) map.set(j.sale_order_name, j);
+      if (j.odoo_sale_order_id) map.set(String(j.odoo_sale_order_id), j);
+    });
     return map;
   }, [jobs]);
 
@@ -106,45 +114,130 @@ export default function MLDashboard() {
           </Badge>
         </div>
 
-        {/* Risk Overview KPI Strip */}
+        {/* Risk Overview KPI Strip with Hover Cards */}
         {insightsLoading ? (
           <div className="grid gap-4 md:grid-cols-4">
             {[...Array(4)].map((_, i) => (
               <Skeleton key={i} className="h-[90px]" />
             ))}
           </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-4">
-            <RiskKPICard
-              title="Overrun Risk"
-              value={overrunCount}
-              subtitle="jobs at medium/high risk"
-              icon={AlertTriangle}
-              color={overrunCount > 10 ? "red" : overrunCount > 0 ? "amber" : "emerald"}
-            />
-            <RiskKPICard
-              title="Anomalies"
-              value={anomalyCount}
-              subtitle="anomalous cost patterns"
-              icon={ShieldAlert}
-              color={anomalyCount > 5 ? "red" : anomalyCount > 0 ? "amber" : "emerald"}
-            />
-            <RiskKPICard
-              title="Waste Risk"
-              value={wasteCount}
-              subtitle="high material waste risk"
-              icon={Trash2}
-              color={wasteCount > 5 ? "red" : wasteCount > 0 ? "amber" : "emerald"}
-            />
-            <RiskKPICard
-              title="Total Insights"
-              value={totalInsights}
-              subtitle="ML predictions generated"
-              icon={Target}
-              color="blue"
-            />
-          </div>
-        )}
+        ) : (() => {
+          const resolveJob = (jobId: string, soName?: string) => {
+            const j = jobLookup.get(jobId) || (soName ? jobLookup.get(soName) : undefined);
+            return j?.sale_order_name || soName || "Unknown";
+          };
+          const overrunJobs = (insights?.overrun_warnings || []).filter(o => o.risk_level === "high" || o.risk_level === "medium");
+          const anomalyJobs = (insights?.anomaly_scores || []).filter(a => a.is_anomaly);
+          const wasteJobs = (insights?.waste_risks || []).filter(w => w.risk_level === "high" || w.risk_level === "medium");
+
+          return (
+            <div className="grid gap-4 md:grid-cols-4">
+              <HoverCard openDelay={200} closeDelay={100}>
+                <HoverCardTrigger asChild>
+                  <div>
+                    <RiskKPICard title="Overrun Risk" value={overrunCount} subtitle="jobs at medium/high risk" icon={AlertTriangle} color={overrunCount > 10 ? "red" : overrunCount > 0 ? "amber" : "emerald"} />
+                  </div>
+                </HoverCardTrigger>
+                {overrunJobs.length > 0 && (
+                  <HoverCardContent side="bottom" className="w-80">
+                    <p className="font-semibold text-sm mb-2">Overrun Risk Jobs</p>
+                    <ul className="space-y-1.5">
+                      {overrunJobs.slice(0, 6).map((o, i) => {
+                        const job = jobLookup.get(o.job_id) || (o.sale_order_name ? jobLookup.get(o.sale_order_name) : undefined);
+                        return (
+                          <li key={i} className="flex justify-between text-xs gap-2">
+                            <span className="truncate">{resolveJob(o.job_id, o.sale_order_name)}{job?.customer_name ? ` — ${job.customer_name}` : ""}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Badge variant={o.risk_level === "high" ? "destructive" : "default"} className="text-[10px] px-1 py-0">{o.risk_level}</Badge>
+                              <span className="text-muted-foreground">{Math.round(o.overrun_probability * 100)}%</span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {overrunJobs.length > 6 && <p className="text-[10px] text-muted-foreground mt-1">+{overrunJobs.length - 6} more...</p>}
+                  </HoverCardContent>
+                )}
+              </HoverCard>
+
+              <HoverCard openDelay={200} closeDelay={100}>
+                <HoverCardTrigger asChild>
+                  <div>
+                    <RiskKPICard title="Anomalies" value={anomalyCount} subtitle="anomalous cost patterns" icon={ShieldAlert} color={anomalyCount > 5 ? "red" : anomalyCount > 0 ? "amber" : "emerald"} />
+                  </div>
+                </HoverCardTrigger>
+                {anomalyJobs.length > 0 && (
+                  <HoverCardContent side="bottom" className="w-80">
+                    <p className="font-semibold text-sm mb-2">Anomalous Jobs</p>
+                    <ul className="space-y-1.5">
+                      {anomalyJobs.slice(0, 6).map((a, i) => {
+                        const job = jobLookup.get(a.job_id) || (a.sale_order_name ? jobLookup.get(a.sale_order_name) : undefined);
+                        return (
+                          <li key={i} className="flex justify-between text-xs gap-2">
+                            <span className="truncate">{resolveJob(a.job_id, a.sale_order_name)}{job?.customer_name ? ` — ${job.customer_name}` : ""}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Badge variant={a.severity === "critical" ? "destructive" : "default"} className="text-[10px] px-1 py-0">{a.severity}</Badge>
+                              <span className="text-muted-foreground">{Math.round(a.anomaly_score * 100)}%</span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {anomalyJobs.length > 6 && <p className="text-[10px] text-muted-foreground mt-1">+{anomalyJobs.length - 6} more...</p>}
+                  </HoverCardContent>
+                )}
+              </HoverCard>
+
+              <HoverCard openDelay={200} closeDelay={100}>
+                <HoverCardTrigger asChild>
+                  <div>
+                    <RiskKPICard title="Waste Risk" value={wasteCount} subtitle="high material waste risk" icon={Trash2} color={wasteCount > 5 ? "red" : wasteCount > 0 ? "amber" : "emerald"} />
+                  </div>
+                </HoverCardTrigger>
+                {wasteJobs.length > 0 && (
+                  <HoverCardContent side="bottom" className="w-80">
+                    <p className="font-semibold text-sm mb-2">Waste Risk Jobs</p>
+                    <ul className="space-y-1.5">
+                      {wasteJobs.slice(0, 6).map((w, i) => {
+                        const job = jobLookup.get(w.job_id) || (w.sale_order_name ? jobLookup.get(w.sale_order_name) : undefined);
+                        return (
+                          <li key={i} className="flex justify-between text-xs gap-2">
+                            <span className="truncate">{resolveJob(w.job_id, w.sale_order_name)}{job?.customer_name ? ` — ${job.customer_name}` : ""}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Badge variant={w.risk_level === "high" ? "destructive" : "default"} className="text-[10px] px-1 py-0">{w.risk_level}</Badge>
+                              <span className="text-muted-foreground">{Math.round(w.waste_probability * 100)}%</span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {wasteJobs.length > 6 && <p className="text-[10px] text-muted-foreground mt-1">+{wasteJobs.length - 6} more...</p>}
+                  </HoverCardContent>
+                )}
+              </HoverCard>
+
+              <HoverCard openDelay={200} closeDelay={100}>
+                <HoverCardTrigger asChild>
+                  <div>
+                    <RiskKPICard title="Total Insights" value={totalInsights} subtitle="ML predictions generated" icon={Target} color="blue" />
+                  </div>
+                </HoverCardTrigger>
+                <HoverCardContent side="bottom" className="w-72">
+                  <p className="font-semibold text-sm mb-2">Prediction Breakdown</p>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Cost Predictions</span><span className="font-medium">{insights?.cost_predictions?.length ?? 0}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Anomaly Scores</span><span className="font-medium">{insights?.anomaly_scores?.length ?? 0}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Overrun Warnings</span><span className="font-medium">{insights?.overrun_warnings?.length ?? 0}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Waste Risks</span><span className="font-medium">{insights?.waste_risks?.length ?? 0}</span></div>
+                  </div>
+                  {insights?.generated_at && (
+                    <p className="text-[10px] text-muted-foreground mt-2 pt-1 border-t">Generated: {new Date(insights.generated_at).toLocaleString()}</p>
+                  )}
+                </HoverCardContent>
+              </HoverCard>
+            </div>
+          );
+        })()}
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="risk" className="space-y-4">
@@ -163,7 +256,7 @@ export default function MLDashboard() {
           <TabsContent value="risk" className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
               <SafeSection name="Risk Heatmap"><RiskHeatmapChart data={insights?.overrun_warnings || []} jobLookup={jobLookup} /></SafeSection>
-              <SafeSection name="Feature Importance"><FeatureImportanceChart models={models} modelName="overrun_classifier" /></SafeSection>
+              <SafeSection name="Feature Importance"><FeatureImportanceChart models={models} modelName="overrun_classifier" jobs={jobs} /></SafeSection>
             </div>
           </TabsContent>
 
@@ -171,8 +264,8 @@ export default function MLDashboard() {
           <TabsContent value="predictions" className="space-y-4">
             <SafeSection name="Prediction Accuracy"><PredictionAccuracyChart data={insights?.cost_predictions || []} jobLookup={jobLookup} /></SafeSection>
             <div className="grid gap-4 lg:grid-cols-2">
-              <SafeSection name="Cost Features"><FeatureImportanceChart models={models} modelName="cost_predictor" /></SafeSection>
-              <SafeSection name="Waste Features"><FeatureImportanceChart models={models} modelName="waste_scorer" /></SafeSection>
+              <SafeSection name="Cost Features"><FeatureImportanceChart models={models} modelName="cost_predictor" jobs={jobs} /></SafeSection>
+              <SafeSection name="Waste Features"><FeatureImportanceChart models={models} modelName="waste_scorer" jobs={jobs} /></SafeSection>
             </div>
           </TabsContent>
 

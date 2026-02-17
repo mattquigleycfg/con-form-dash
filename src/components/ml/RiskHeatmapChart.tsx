@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceArea, ReferenceLine } from "recharts";
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, Cell } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ExternalLink } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
@@ -28,104 +28,160 @@ const RISK_COLORS: Record<string, string> = {
   low: "#22c55e",
 };
 
-/** Resolve the best human-readable name for a job, never returning a UUID */
 function resolveJobName(
   predictionSoName: string | undefined,
   jobId: string,
   jobLookup?: Map<string, Job>,
-): { soName: string; opportunityName: string } {
-  const job = jobLookup?.get(jobId);
+): { soName: string; opportunityName: string; customerName: string; budget: number } {
+  const job = jobLookup?.get(jobId) || (predictionSoName ? jobLookup?.get(predictionSoName) : undefined);
   const soName = job?.sale_order_name || predictionSoName?.trim() || "";
   const opportunityName = job?.opportunity_name || "";
-  return { soName, opportunityName };
+  const customerName = job?.customer_name || "";
+  const budget = job?.total_budget || 0;
+  return { soName, opportunityName, customerName, budget };
 }
 
 export function RiskHeatmapChart({ data, jobLookup }: RiskHeatmapChartProps) {
   const navigate = useNavigate();
   const [selectedDot, setSelectedDot] = useState<OverrunWarning | null>(null);
 
-  const chartData = data.map((d) => {
-    const { soName, opportunityName } = resolveJobName(d.sale_order_name, d.job_id, jobLookup);
-    return {
-      x: Math.round(d.budget_utilization * 100),
-      y: Math.round(d.overrun_probability * 100),
-      budget: d.budget,
-      risk: d.risk_level,
-      jobId: d.job_id,
-      name: soName || opportunityName || "Unknown Job",
-      soName,
-      opportunityName,
-    };
-  });
+  // Focus on higher-value jobs, sorted by budget descending, capped at 30
+  const chartData = useMemo(() => {
+    const enriched = data.map((d) => {
+      const { soName, opportunityName, customerName, budget: jobBudget } = resolveJobName(d.sale_order_name, d.job_id, jobLookup);
+      const displayBudget = d.budget > 0 ? d.budget : jobBudget;
+      return {
+        raw: d,
+        name: soName || opportunityName || "Unknown",
+        soName,
+        opportunityName,
+        customerName,
+        budget: Math.round(displayBudget),
+        actual: Math.round((d.budget_utilization || 0) * displayBudget),
+        overrunPct: Math.round(d.overrun_probability * 100),
+        utilization: Math.round((d.budget_utilization || 0) * 100),
+        risk: d.risk_level,
+        jobId: d.job_id,
+      };
+    });
 
-  const maxX = chartData.length > 0 ? Math.max(...chartData.map(d => d.x)) : 100;
-  const xDomainMax = Math.min(250, Math.max(110, maxX + 10));
+    return enriched
+      .sort((a, b) => b.budget - a.budget)
+      .slice(0, 30);
+  }, [data, jobLookup]);
 
   const highRiskCount = chartData.filter((d) => d.risk === "high").length;
   const medRiskCount = chartData.filter((d) => d.risk === "medium").length;
+  const fmt = (v: number) => `$${(v / 1000).toFixed(0)}k`;
 
   return (
     <>
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Risk Heatmap</CardTitle>
+          <CardTitle className="text-sm font-medium">Risk Analysis — Top Jobs by Budget</CardTitle>
           <CardDescription className="text-xs">
-            {chartData.length} jobs plotted — {highRiskCount > 0 ? `${highRiskCount} high risk` : ""}
+            {chartData.length} highest-value jobs —{" "}
+            {highRiskCount > 0 ? <span className="text-red-500">{highRiskCount} high risk</span> : ""}
             {highRiskCount > 0 && medRiskCount > 0 ? ", " : ""}
-            {medRiskCount > 0 ? `${medRiskCount} medium risk` : ""}
-            {highRiskCount === 0 && medRiskCount === 0 ? "all jobs within safe range" : ""}
-            {" "}| Click a dot for details
+            {medRiskCount > 0 ? <span className="text-amber-500">{medRiskCount} medium risk</span> : ""}
+            {highRiskCount === 0 && medRiskCount === 0 ? "all within safe range" : ""}
+            {" "}| Click a bar for details
           </CardDescription>
         </CardHeader>
         <CardContent>
           {chartData.length === 0 ? (
             <div className="flex items-center justify-center h-[300px] text-muted-foreground text-sm">No risk data available</div>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 10 }}>
+            <ResponsiveContainer width="100%" height={340}>
+              <ComposedChart data={chartData} margin={{ top: 10, right: 20, bottom: 30, left: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <ReferenceArea y1={70} y2={100} fill="#ef4444" fillOpacity={0.04} />
-                <ReferenceArea y1={40} y2={70} fill="#f59e0b" fillOpacity={0.04} />
-                <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.4} />
-                <ReferenceLine y={40} stroke="#f59e0b" strokeDasharray="3 3" strokeOpacity={0.4} />
-                <ReferenceLine x={100} stroke="#94a3b8" strokeDasharray="3 3" strokeOpacity={0.5} />
-                <XAxis type="number" dataKey="x" name="Budget Used" unit="%" domain={[0, xDomainMax]} tick={{ fontSize: 11 }} label={{ value: "Budget Utilization %", position: "bottom", fontSize: 11 }} />
-                <YAxis type="number" dataKey="y" name="Overrun Risk" unit="%" domain={[0, 100]} tick={{ fontSize: 11 }} label={{ value: "Overrun Probability %", angle: -90, position: "insideLeft", fontSize: 11 }} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 9 }}
+                  angle={-35}
+                  textAnchor="end"
+                  interval={0}
+                  height={55}
+                />
+                <YAxis
+                  yAxisId="cost"
+                  tickFormatter={fmt}
+                  tick={{ fontSize: 10 }}
+                  label={{ value: "Cost ($)", angle: -90, position: "insideLeft", fontSize: 10, offset: -5 }}
+                />
+                <YAxis
+                  yAxisId="pct"
+                  orientation="right"
+                  domain={[0, 100]}
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(v: number) => `${v}%`}
+                  label={{ value: "Overrun Risk %", angle: 90, position: "insideRight", fontSize: 10, offset: -5 }}
+                />
+                <ReferenceLine yAxisId="pct" y={70} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
+                <ReferenceLine yAxisId="pct" y={40} stroke="#f59e0b" strokeDasharray="3 3" strokeOpacity={0.4} />
                 <Tooltip
-                  cursor={{ strokeDasharray: "3 3" }}
                   content={({ payload }) => {
                     if (!payload?.length) return null;
                     const d = payload[0].payload;
                     return (
                       <div className="bg-popover border rounded-lg shadow-lg p-3 text-sm space-y-0.5">
                         <p className="font-semibold text-foreground">{d.soName || d.name}</p>
-                        {d.opportunityName && (
-                          <p className="text-xs text-muted-foreground">{d.opportunityName}</p>
-                        )}
-                        <div className="flex items-center gap-1.5">
+                        {d.opportunityName && <p className="text-xs text-muted-foreground">{d.opportunityName}</p>}
+                        {d.customerName && <p className="text-xs text-muted-foreground">{d.customerName}</p>}
+                        <div className="flex items-center gap-1.5 pt-1">
                           <span className="inline-block h-2 w-2 rounded-full" style={{ background: RISK_COLORS[d.risk] }} />
                           <span className="capitalize">{d.risk} Risk</span>
                         </div>
-                        <p className="text-muted-foreground">Budget used: {d.x}%</p>
-                        <p className="text-muted-foreground">Overrun likelihood: {d.y}%</p>
-                        <p className="text-muted-foreground">Budget: ${d.budget?.toLocaleString()}</p>
+                        <p className="text-muted-foreground">Budget: {formatCurrency(d.budget)}</p>
+                        <p className="text-muted-foreground">Actual: {formatCurrency(d.actual)}</p>
+                        <p className="text-muted-foreground">Utilization: {d.utilization}%</p>
+                        <p className="text-muted-foreground">Overrun likelihood: {d.overrunPct}%</p>
                       </div>
                     );
                   }}
                 />
-                <Scatter
-                  data={chartData}
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar
+                  yAxisId="cost"
+                  dataKey="budget"
+                  fill="hsl(var(--chart-4))"
+                  opacity={0.3}
+                  name="Budget"
+                  barSize={10}
+                  radius={[2, 2, 0, 0]}
+                />
+                <Bar
+                  yAxisId="cost"
+                  dataKey="actual"
+                  name="Actual Spend"
+                  barSize={10}
+                  radius={[2, 2, 0, 0]}
                   onClick={(d: any) => {
                     if (!d?.jobId) return;
                     const warning = data.find(w => w.job_id === d.jobId);
                     if (warning) setSelectedDot(warning);
                   }}
+                  cursor="pointer"
                 >
                   {chartData.map((entry, i) => (
-                    <Cell key={i} fill={RISK_COLORS[entry.risk] || RISK_COLORS.low} fillOpacity={0.7} cursor="pointer" />
+                    <Cell
+                      key={i}
+                      fill={RISK_COLORS[entry.risk] || RISK_COLORS.low}
+                      fillOpacity={0.7}
+                    />
                   ))}
-                </Scatter>
-              </ScatterChart>
+                </Bar>
+                <Line
+                  yAxisId="pct"
+                  type="monotone"
+                  dataKey="overrunPct"
+                  stroke="#ef4444"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: "#ef4444", strokeWidth: 0 }}
+                  activeDot={{ r: 5 }}
+                  name="Overrun Risk %"
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           )}
         </CardContent>
@@ -134,7 +190,7 @@ export function RiskHeatmapChart({ data, jobLookup }: RiskHeatmapChartProps) {
       <Dialog open={!!selectedDot} onOpenChange={() => setSelectedDot(null)}>
         <DialogContent className="max-w-lg">
           {selectedDot && (() => {
-            const { soName, opportunityName: oppName } = resolveJobName(selectedDot.sale_order_name, selectedDot.job_id, jobLookup);
+            const { soName, opportunityName: oppName, customerName } = resolveJobName(selectedDot.sale_order_name, selectedDot.job_id, jobLookup);
             return (
               <>
                 <DialogHeader>
@@ -143,7 +199,7 @@ export function RiskHeatmapChart({ data, jobLookup }: RiskHeatmapChartProps) {
                     Overrun Risk — {soName || "Unknown Job"}
                   </DialogTitle>
                   <DialogDescription>
-                    {oppName ? oppName : soName ? "" : "Job details unavailable"}
+                    {oppName ? oppName : customerName ? customerName : soName ? "" : "Job details unavailable"}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 mt-2">
