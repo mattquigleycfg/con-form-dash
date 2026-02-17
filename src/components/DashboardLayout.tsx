@@ -1,5 +1,5 @@
 import { ReactNode, useState, useEffect } from "react";
-import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt, Briefcase, Gauge, Megaphone, Compass, HardHat, Factory, Palette, Wallet, UserCog, Globe } from "lucide-react";
+import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt, Briefcase, Gauge, Megaphone, Compass, HardHat, Factory, Palette, Wallet, UserCog, Globe, Brain } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -52,6 +52,7 @@ const navigation: NavSection[] = [
     items: [
       { name: "Overview", href: "/project", icon: FolderKanban },
       { name: "Job Costing", href: "/job-costing", icon: Briefcase },
+      { name: "ML Intelligence", href: "/ml-dashboard", icon: Brain },
     ],
   },
   {
@@ -96,7 +97,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Determine which section should be open based on current route
   const getActiveSectionFromPath = (path: string): string => {
     if (path.startsWith("/accounting")) return "Accounting";
-    if (path.startsWith("/project") || path.startsWith("/job-costing")) return "Project";
+    if (path.startsWith("/project") || path.startsWith("/job-costing") || path.startsWith("/ml-dashboard")) return "Project";
     if (path.startsWith("/helpdesk")) return "Helpdesk";
     if (path.startsWith("/kpis")) return "KPIs";
     if (path.startsWith("/calculator")) return "Tools";

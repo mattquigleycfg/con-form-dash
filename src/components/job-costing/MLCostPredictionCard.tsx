@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Brain, Target, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Cell } from "recharts";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useCostPrediction, useOverrunWarning } from "@/hooks/useMLPredictions";
@@ -49,40 +50,46 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Cost Prediction */}
-          {costPrediction && (
-            <div className="p-4 rounded-lg border bg-violet-50/50 dark:bg-violet-950/20">
-              <div className="flex items-center gap-2 mb-3">
-                <Target className="h-4 w-4 text-violet-600" />
-                <span className="text-sm font-semibold">Predicted Final Cost</span>
-                <Badge variant="outline" className="text-xs ml-auto">
-                  {Math.round(costPrediction.confidence_level * 100)}% confidence
-                </Badge>
-              </div>
-
-              <div className="text-2xl font-bold text-violet-700 dark:text-violet-300 mb-2">
-                {formatCurrency(costPrediction.predicted_value)}
-              </div>
-
-              <div className="text-xs text-muted-foreground mb-3">
-                Range: {formatCurrency(costPrediction.confidence_lower)} - {formatCurrency(costPrediction.confidence_upper)}
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span>Budget</span>
-                  <span>{formatCurrency(budget)}</span>
+          {/* Cost Prediction with Mini Chart */}
+          {costPrediction && (() => {
+            const chartData = [
+              { name: "Budget", value: budget, fill: "hsl(var(--chart-4))" },
+              { name: "Actual", value: actual, fill: "hsl(var(--chart-1))" },
+              { name: "Predicted", value: costPrediction.predicted_value, fill: "hsl(var(--primary))" },
+            ];
+            return (
+              <div className="p-4 rounded-lg border bg-violet-50/50 dark:bg-violet-950/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <Target className="h-4 w-4 text-violet-600" />
+                  <span className="text-sm font-semibold">Predicted Final Cost</span>
+                  <Badge variant="outline" className="text-xs ml-auto">
+                    {Math.round(costPrediction.confidence_level * 100)}% confidence
+                  </Badge>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span>Current Spent</span>
-                  <span>{formatCurrency(actual)}</span>
+
+                <div className="text-2xl font-bold text-violet-700 dark:text-violet-300 mb-1">
+                  {formatCurrency(costPrediction.predicted_value)}
                 </div>
-                <Progress
-                  value={Math.min(100, (costPrediction.predicted_value / budget) * 100)}
-                  className="h-2"
-                />
+                <div className="text-[10px] text-muted-foreground mb-2">
+                  Range: {formatCurrency(costPrediction.confidence_lower)} - {formatCurrency(costPrediction.confidence_upper)}
+                </div>
+
+                <ResponsiveContainer width="100%" height={100}>
+                  <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 5, bottom: 0, left: 50 }}>
+                    <XAxis type="number" hide />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={48} />
+                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <ReferenceLine x={budget} stroke="hsl(var(--chart-4))" strokeDasharray="3 3" />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
+                      {chartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+
                 <div className={cn(
-                  "flex items-center gap-1 text-xs font-medium",
+                  "flex items-center gap-1 text-xs font-medium mt-1",
                   costPrediction.predicted_overrun > 0 ? "text-red-600" : "text-green-600"
                 )}>
                   {costPrediction.predicted_overrun > 0 ? (
@@ -96,8 +103,8 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
                   {costPrediction.predicted_overrun_pct}% vs budget)
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Overrun Warning */}
           {overrunWarning && (

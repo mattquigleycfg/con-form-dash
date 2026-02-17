@@ -3,9 +3,11 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, RefreshCw, AlertTriangle, TrendingUp, ChevronDown } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Download, RefreshCw, AlertTriangle, TrendingUp, ChevronDown, ShieldAlert, Trash2, Brain } from "lucide-react";
 import { useJobs } from "@/hooks/useJobs";
 import { useNavigate } from "react-router-dom";
+import { useMLInsights } from "@/hooks/useMLPredictions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useJobCostingSalesOrders } from "@/hooks/useJobCostingSalesOrders";
 import { toast } from "sonner";
@@ -110,6 +112,11 @@ export default function JobCosting() {
       }),
     [filteredJobs]
   );
+
+  const { data: mlInsights } = useMLInsights();
+  const mlOverruns = mlInsights?.overrun_warnings?.filter((o) => o.risk_level === "high" || o.risk_level === "medium").length ?? 0;
+  const mlAnomalies = mlInsights?.anomaly_scores?.filter((a) => a.is_anomaly).length ?? 0;
+  const mlWasteRisks = mlInsights?.waste_risks?.filter((w) => w.risk_level === "high" || w.risk_level === "medium").length ?? 0;
 
   // Determine if any filter deviates from default values
   const hasActiveFilters = useMemo(() => {
@@ -912,6 +919,35 @@ export default function JobCosting() {
             </Button>
           </div>
         </div>
+
+        {/* ML Risk Summary Strip */}
+        {(mlOverruns > 0 || mlAnomalies > 0 || mlWasteRisks > 0) && (
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border bg-muted/50">
+            <Brain className="h-4 w-4 text-violet-500 flex-shrink-0" />
+            <span className="text-xs font-medium text-muted-foreground mr-1">ML Risks:</span>
+            {mlOverruns > 0 && (
+              <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                {mlOverruns} overrun
+              </Badge>
+            )}
+            {mlAnomalies > 0 && (
+              <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400">
+                <ShieldAlert className="h-3 w-3 mr-1" />
+                {mlAnomalies} anomal{mlAnomalies === 1 ? "y" : "ies"}
+              </Badge>
+            )}
+            {mlWasteRisks > 0 && (
+              <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/30 dark:text-yellow-400">
+                <Trash2 className="h-3 w-3 mr-1" />
+                {mlWasteRisks} waste risk
+              </Badge>
+            )}
+            <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs" onClick={() => navigate("/ml-dashboard")}>
+              View Dashboard
+            </Button>
+          </div>
+        )}
 
         {/* 2. AI Insights (Collapsible) */}
         {filteredJobs.length > 0 && (

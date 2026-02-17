@@ -32,6 +32,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useMLInsights, type MLInsights, type CostPrediction, type AnomalyScore, type WasteRisk, type OverrunWarning } from "@/hooks/useMLPredictions";
+import { SHAPWaterfallChart } from "@/components/ml";
 
 interface AIInsightsProps {
   jobs?: any[];
@@ -537,22 +538,15 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                       </div>
                     </div>
                     {an.contributing_factors.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2">Contributing Factors</h4>
-                        <div className="space-y-2">
-                          {an.contributing_factors.map((f, i) => (
-                            <div key={i} className="flex items-center justify-between p-2 rounded bg-muted/30">
-                              <span className="text-sm">{f.feature.replace(/_/g, ' ')}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">z={f.z_score}</span>
-                                <Badge variant={f.direction === "above" ? "destructive" : "secondary"} className="text-xs">
-                                  {f.direction}
-                                </Badge>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                      <SHAPWaterfallChart
+                        features={an.contributing_factors.map(f => ({
+                          feature: f.feature,
+                          z_score: f.z_score,
+                          direction: f.direction,
+                          value: f.value,
+                        }))}
+                        title="Contributing Factors (Z-Score)"
+                      />
                     )}
                   </div>
                 </>
@@ -588,17 +582,10 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
                       </div>
                     </div>
                     {wr.feature_explanations.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-sm mb-2">Key Drivers (SHAP)</h4>
-                        {wr.feature_explanations.map((f, i) => (
-                          <div key={i} className="flex items-center justify-between p-2 rounded bg-muted/30 mb-1">
-                            <span className="text-sm">{f.feature.replace(/_/g, ' ')}</span>
-                            <Badge variant={f.direction === "increases_risk" ? "destructive" : "secondary"} className="text-xs">
-                              {f.direction?.replace(/_/g, ' ') || 'neutral'}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
+                      <SHAPWaterfallChart
+                        features={wr.feature_explanations}
+                        title="Key Drivers (SHAP Values)"
+                      />
                     )}
                     {wr.recommendations.length > 0 && (
                       <div>

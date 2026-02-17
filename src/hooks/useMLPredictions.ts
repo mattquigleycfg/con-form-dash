@@ -236,3 +236,103 @@ export function useCachedMLPredictions(jobId: string) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export interface CustomerScore {
+  prediction_type: "customer_reorder";
+  customer_name: string;
+  reorder_probability: number;
+  total_jobs: number;
+  total_revenue: number;
+  recency_days: number;
+  order_frequency_yearly: number;
+  value_trend: number;
+  segment: "high_value" | "medium_value" | "at_risk";
+  generated_at: string;
+}
+
+export interface SupplierScore {
+  prediction_type: "supplier_score";
+  vendor_name: string;
+  composite_score: number;
+  delivery_score: number;
+  reliability_score: number;
+  pricing_score: number;
+  volume_score: number;
+  on_time_rate: number;
+  avg_delay_days: number;
+  total_orders: number;
+  total_value: number;
+  tier: "preferred" | "standard" | "review";
+  generated_at: string;
+}
+
+export interface ModelHealthInfo {
+  model_name: string;
+  model_version: string;
+  trained_at: string;
+  training_samples: number;
+  metrics: Record<string, any>;
+  top_features: Array<{ name: string; importance: number }>;
+  status: string;
+}
+
+export function useCustomerScoring() {
+  return useQuery({
+    queryKey: ["ml-customer-scoring"],
+    queryFn: async (): Promise<CustomerScore[]> => {
+      const data = await fetchMLPrediction("customers");
+      return data?.customers || [];
+    },
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useSupplierScoring() {
+  return useQuery({
+    queryKey: ["ml-supplier-scoring"],
+    queryFn: async (): Promise<SupplierScore[]> => {
+      const data = await fetchMLPrediction("suppliers");
+      return data?.vendors || [];
+    },
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useModelHealth() {
+  return useQuery({
+    queryKey: ["ml-model-health"],
+    queryFn: async (): Promise<ModelHealthInfo[]> => {
+      const { data, error } = await supabase
+        .from("ml_model_metadata")
+        .select("*")
+        .order("trained_at", { ascending: false });
+
+      if (error) {
+        console.warn("Failed to fetch model health:", error);
+        return [];
+      }
+
+      const seen = new Set<string>();
+      const latest: ModelHealthInfo[] = [];
+      for (const row of data || []) {
+        if (!seen.has(row.model_name)) {
+          seen.add(row.model_name);
+          latest.push({
+            model_name: row.model_name,
+            model_version: row.model_version || "",
+            trained_at: row.trained_at,
+            training_samples: row.training_samples || 0,
+            metrics: row.metrics || {},
+            top_features: row.top_features || [],
+            status: row.status || "active",
+          });
+        }
+      }
+      return latest;
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
