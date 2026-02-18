@@ -18,6 +18,7 @@ from app.config import get_settings
 from app.training.scheduler import retrain_all, retrain_model, load_all_models
 from app.models import cost_predictor, anomaly, waste_scorer, overrun
 from app.models import lead_time, demand, customer_scoring, supplier_scoring
+from app.models import supplier_analytics, mrp_engine, reorder_engine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -290,3 +291,86 @@ async def ml_insights(request: MLInsightsRequest, api_key: str = Depends(verify_
     results["total_insights"] = sum(len(v) for v in results.values() if isinstance(v, list))
 
     return results
+
+
+# ── Supplier Analytics ────────────────────────────────────────────────────────
+
+class SupplierDetailRequest(BaseModel):
+    vendor_name: str
+
+
+@app.post("/predict/supplier-analytics")
+async def predict_supplier_analytics(api_key: str = Depends(verify_api_key)):
+    return supplier_analytics.get_full_analytics()
+
+
+@app.post("/predict/supplier-detail")
+async def predict_supplier_detail(request: SupplierDetailRequest, api_key: str = Depends(verify_api_key)):
+    return supplier_analytics.get_supplier_detail(request.vendor_name)
+
+
+@app.post("/predict/lead-time-distribution")
+async def predict_lead_time_dist(api_key: str = Depends(verify_api_key)):
+    return {"distributions": supplier_analytics.calculate_lead_time_distribution()}
+
+
+# ── Demand Analytics ──────────────────────────────────────────────────────────
+
+class DemandAnalyticsRequest(BaseModel):
+    product_id: Optional[str] = None
+    method: str = "auto"
+    granularity: str = "monthly"
+    periods: int = 6
+
+
+@app.post("/predict/demand/analytics")
+async def predict_demand_analytics(request: DemandAnalyticsRequest, api_key: str = Depends(verify_api_key)):
+    if request.product_id:
+        result = demand.forecast_product_analytics(
+            request.product_id, request.periods, request.method, request.granularity
+        )
+        if result is None:
+            raise HTTPException(status_code=404, detail="Insufficient data for product forecast")
+        return result
+    else:
+        results = demand.forecast_all_analytics(periods=request.periods)
+        return {"forecasts": results}
+
+
+# ── MRP Netting ──────────────────────────────────────────────────────────────
+
+class MRPRequest(BaseModel):
+    product_id: Optional[str] = None
+    weeks: int = 12
+
+
+@app.post("/predict/mrp-netting")
+async def predict_mrp_netting(request: MRPRequest, api_key: str = Depends(verify_api_key)):
+    if request.product_id:
+        result = mrp_engine.calculate_net_requirements(request.product_id, request.weeks)
+        return result
+    else:
+        results = mrp_engine.run_mrp_all(request.weeks)
+        return {"products": results}
+
+
+# ── Reorder Rules ────────────────────────────────────────────────────────────
+
+class ReorderRequest(BaseModel):
+    product_id: Optional[str] = None
+    service_level: float = 0.95
+    reorder_model: str = "eoq"
+
+
+@app.post("/predict/reorder-rules")
+async def predict_reorder_rules(request: ReorderRequest, api_key: str = Depends(verify_api_key)):
+    if request.product_id:
+        result = reorder_engine.calculate_reorder_rules_for_product(
+            request.product_id, request.service_level, request.reorder_model
+        )
+        if result is None:
+            raise HTTPException(status_code=404, detail="Insufficient data for product")
+        return result
+    else:
+        results = reorder_engine.compare_all_reorder_rules(request.service_level)
+        return {"rules": results}

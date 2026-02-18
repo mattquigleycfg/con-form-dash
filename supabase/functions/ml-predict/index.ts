@@ -12,7 +12,7 @@ const ML_SERVICE_URL = Deno.env.get('ML_SERVICE_URL') || 'http://localhost:8000'
 const ML_API_KEY = Deno.env.get('ML_API_KEY') || '';
 
 interface MLRequest {
-  prediction_type: 'cost' | 'anomaly' | 'waste' | 'overrun' | 'lead_time' | 'demand' | 'customers' | 'suppliers' | 'insights' | 'train';
+  prediction_type: string;
   job_id?: string;
   job_ids?: string[];
   vendor_name?: string;
@@ -21,8 +21,13 @@ interface MLRequest {
   amount?: number;
   quantity?: number;
   periods?: number;
+  weeks?: number;
   batch?: boolean;
   model_name?: string;
+  method?: string;
+  granularity?: string;
+  service_level?: number;
+  reorder_model?: string;
 }
 
 async function callMLService(endpoint: string, body: any): Promise<any> {
@@ -115,6 +120,44 @@ Deno.serve(async (req) => {
 
       case 'suppliers':
         result = await callMLService('/predict/suppliers', {});
+        break;
+
+      case 'supplier-analytics':
+        result = await callMLService('/predict/supplier-analytics', {});
+        break;
+
+      case 'supplier-detail':
+        result = await callMLService('/predict/supplier-detail', {
+          vendor_name: request.vendor_name || '',
+        });
+        break;
+
+      case 'lead-time-distribution':
+        result = await callMLService('/predict/lead-time-distribution', {});
+        break;
+
+      case 'demand/analytics':
+        result = await callMLService('/predict/demand/analytics', {
+          product_id: request.product_id,
+          method: request.method || 'auto',
+          granularity: request.granularity || 'monthly',
+          periods: request.periods || 6,
+        });
+        break;
+
+      case 'mrp-netting':
+        result = await callMLService('/predict/mrp-netting', {
+          product_id: request.product_id,
+          weeks: request.weeks || 12,
+        });
+        break;
+
+      case 'reorder-rules':
+        result = await callMLService('/predict/reorder-rules', {
+          product_id: request.product_id,
+          service_level: request.service_level || 0.95,
+          reorder_model: request.reorder_model || 'eoq',
+        });
         break;
 
       case 'insights':

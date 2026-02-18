@@ -12,6 +12,7 @@ from typing import Optional
 
 from app.data.pipeline import (
     fetch_po_delivery_history, fetch_vendor_metrics, fetch_job_purchase_orders,
+    fetch_supplier_product_metrics,
     store_ml_prediction, update_model_metadata,
 )
 
@@ -121,6 +122,91 @@ def score_vendors() -> list[dict]:
 
     results.sort(key=lambda x: x["composite_score"], reverse=True)
     return results
+
+
+def rank_suppliers_by_product(product_id: str,
+                              weights: Optional[dict] = None) -> list[dict]:
+    """Rank suppliers for a specific product on configurable weighted score."""
+    w = weights or {"price": 0.3, "lead_time": 0.3, "reliability": 0.25, "moq": 0.15}
+
+    spm = fetch_supplier_product_metrics()
+    if spm.empty:
+        return []
+
+    prod = spm[spm["product_id"] == product_id]
+    if prod.empty:
+        return []
+
+    results = []
+    max_spend = prod["total_spend"].max() or 1
+    min_price = prod["avg_unit_price"].min() or 1
+
+    for _, row in prod.iterrows():
+        price_score = (min_price / row["avg_unit_price"] * 100) if row["avg_unit_price"] > 0 else 50
+        lt_score = max(0, 100 - float(row.get("avg_lead_time", 0)) * 2)
+        reliability_score = float(row.get("on_time_rate", 0)) * 100
+        volume_score = (float(row.get("total_spend", 0)) / max_spend) * 100
+
+        composite = (
+            price_score * w["price"] +
+            lt_score * w["lead_time"] +
+            reliability_score * w["reliability"] +
+            volume_score * w["moq"]
+        )
+
+        results.append({
+            "vendor_name": str(row["vendor_name"]),
+            "product_id": product_id,
+            "product_name": str(row.get("product_name", "")),
+            "composite_score": round(composite, 1),
+            "price_score": round(price_score, 1),
+            "lead_time_score": round(lt_score, 1),
+            "reliability_score": round(reliability_score, 1),
+            "volume_score": round(volume_score, 1),
+            "avg_unit_price": float(row.get("avg_unit_price", 0)),
+            "avg_lead_time": float(row.get("avg_lead_time", 0)),
+            "on_time_rate": float(row.get("on_time_rate", 0)),
+            "total_orders": int(row.get("total_orders", 0)),
+        })
+
+    results.sort(key=lambda x: x["composite_score"], reverse=True)
+    return results
+
+
+def suggest_alternatives(vendor_name: str, product_id: str) -> list[dict]:
+    """Suggest alternative suppliers based on similar product categories."""
+    spm = fetch_supplier_product_metrics()
+    if spm.empty:
+        return []
+
+    target = spm[(spm["vendor_name"] == vendor_name) & (spm["product_id"] == product_id)]
+    if target.empty:
+        return []
+
+    target_name = str(target.iloc[0].get("product_name", ""))
+    category = target_name.split(" ")[0] if target_name else ""
+
+    if not category:
+        return []
+
+    alternatives = spm[
+        (spm["vendor_name"] != vendor_name) &
+        (spm["product_name"].str.contains(category, case=False, na=False))
+    ]
+
+    results = []
+    for _, row in alternatives.iterrows():
+        results.append({
+            "vendor_name": str(row["vendor_name"]),
+            "product_name": str(row.get("product_name", "")),
+            "avg_unit_price": float(row.get("avg_unit_price", 0)),
+            "avg_lead_time": float(row.get("avg_lead_time", 0)),
+            "on_time_rate": float(row.get("on_time_rate", 0)),
+            "total_orders": int(row.get("total_orders", 0)),
+        })
+
+    results.sort(key=lambda x: x["on_time_rate"], reverse=True)
+    return results[:10]
 
 
 def train() -> dict:

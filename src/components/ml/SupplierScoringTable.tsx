@@ -9,6 +9,7 @@ import type { SupplierScore } from "@/hooks/useMLPredictions";
 
 interface SupplierScoringTableProps {
   data: SupplierScore[];
+  onRowClick?: (vendorName: string) => void;
 }
 
 const TIER_COLORS: Record<string, string> = {
@@ -19,7 +20,7 @@ const TIER_COLORS: Record<string, string> = {
 
 type SortKey = "composite_score" | "on_time_rate" | "total_value" | "total_orders";
 
-export function SupplierScoringTable({ data }: SupplierScoringTableProps) {
+export function SupplierScoringTable({ data, onRowClick }: SupplierScoringTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("composite_score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -73,7 +74,7 @@ export function SupplierScoringTable({ data }: SupplierScoringTableProps) {
               </TableHeader>
               <TableBody>
                 {sorted.slice(0, 50).map((s) => (
-                  <TableRow key={s.vendor_name}>
+                  <TableRow key={s.vendor_name} className={onRowClick ? "cursor-pointer hover:bg-muted/50" : ""} onClick={() => onRowClick?.(s.vendor_name)}>
                     <TableCell className="text-xs font-medium max-w-[180px] truncate">{s.vendor_name}</TableCell>
                     <TableCell className="text-xs">
                       <div className="flex items-center gap-2">

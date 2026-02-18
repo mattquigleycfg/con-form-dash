@@ -231,8 +231,11 @@ export interface MLSyncResult {
   results: {
     po_delivery?: { synced: number; total: number; error?: string };
     production?: { synced: number; total: number; error?: string };
-    demand?: { synced: number; sale_orders: number; error?: string };
+    demand?: { synced: number; sale_orders?: number; error?: string };
     vendor_metrics?: { synced: number; vendors: number; error?: string };
+    supplier_product_metrics?: { synced: number; total: number; error?: string };
+    inventory?: { synced: number; total: number; error?: string };
+    orderpoints?: { synced: number; total: number; error?: string };
   };
   error?: string;
 }
@@ -250,6 +253,10 @@ export function useMLDataSync() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ml-supplier-scoring"] });
+      queryClient.invalidateQueries({ queryKey: ["ml-supplier-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["ml-demand-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["ml-mrp-netting"] });
+      queryClient.invalidateQueries({ queryKey: ["ml-reorder-rules"] });
       queryClient.invalidateQueries({ queryKey: ["ml-model-health"] });
     },
   });
@@ -333,6 +340,177 @@ export function useSupplierScoring() {
     queryFn: async (): Promise<SupplierScore[]> => {
       const data = await fetchMLPrediction("suppliers");
       return data?.vendors || [];
+    },
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+// ── Supply Chain Analytics Hooks ──────────────────────────────────────────
+
+export interface SupplierDetail {
+  vendor_name: string;
+  product_count: number;
+  total_spend: number;
+  avg_on_time_rate: number;
+  products: Array<{
+    product_id: string;
+    product_name: string;
+    avg_lead_time: number;
+    lead_time_stddev: number;
+    on_time_rate: number;
+    avg_delay_days: number;
+    avg_unit_price: number;
+    price_trend_pct: number;
+    total_orders: number;
+    total_qty: number;
+    total_spend: number;
+  }>;
+  generated_at: string;
+}
+
+export interface LeadTimeDistribution {
+  vendor_name: string;
+  mean: number;
+  std: number;
+  median: number;
+  min: number;
+  max: number;
+  p90: number;
+  sample_count: number;
+  histogram: Array<{ bin_start: number; bin_end: number; count: number }>;
+}
+
+export interface PriceTrend {
+  vendor_name: string;
+  data_points: Array<{ date: string; avg_price: number }>;
+  overall_avg: number;
+  trend_pct: number;
+  months_of_data: number;
+}
+
+export interface SingleSourceRisk {
+  product_id: string;
+  product_name: string;
+  sole_vendor: string;
+  total_spend: number;
+  risk_level: "high" | "medium";
+}
+
+export interface DemandAnalytics {
+  prediction_type: string;
+  product_id: string;
+  product_name: string;
+  method: string;
+  granularity: string;
+  forecast: Array<{ date: string; predicted_quantity: number; lower_bound: number; upper_bound: number }>;
+  history: Array<{ date: string; quantity: number }>;
+  total_forecasted: number;
+  avg_historical: number;
+  cv: number;
+  high_variability: boolean;
+  seasonality: { is_seasonal: boolean; period: number | null; strength: number };
+  trend_direction: string;
+  recommended_method: string;
+  generated_at: string;
+}
+
+export interface MRPNettingResult {
+  product_id: string;
+  product_name: string;
+  on_hand: number;
+  safety_stock: number;
+  weeks: Array<{
+    week_start: string;
+    gross_requirement: number;
+    scheduled_receipts: number;
+    projected_on_hand: number;
+    net_requirement: number;
+    planned_order_release: number;
+  }>;
+  generated_at: string;
+}
+
+export interface ReorderRule {
+  product_id: string;
+  product_name: string;
+  warehouse_name: string;
+  service_level: number;
+  reorder_model: string;
+  safety_stock: number;
+  reorder_point: number;
+  order_quantity: number;
+  max_quantity: number;
+  on_hand: number;
+  odoo_min_qty: number;
+  odoo_max_qty: number;
+  min_qty_delta: number;
+  max_qty_delta: number;
+  is_discrepant: boolean;
+  is_below_rop: boolean;
+  urgency: "critical" | "warning" | "ok";
+  demand_stats: { avg_daily: number; std_daily: number; annual: number; cv: number };
+  lead_time_stats: { avg_days: number; std_days: number; primary_vendor: string };
+}
+
+export function useSupplierDetail(vendorName: string) {
+  return useQuery({
+    queryKey: ["ml-supplier-detail", vendorName],
+    queryFn: async (): Promise<SupplierDetail | null> => {
+      return fetchMLPrediction("supplier-detail", { vendor_name: vendorName });
+    },
+    enabled: !!vendorName,
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useSupplierAnalytics() {
+  return useQuery({
+    queryKey: ["ml-supplier-analytics"],
+    queryFn: async () => {
+      const data = await fetchMLPrediction("supplier-analytics");
+      return {
+        leadTimeDistributions: (data?.lead_time_distributions || []) as LeadTimeDistribution[],
+        priceTrends: (data?.price_trends || []) as PriceTrend[],
+        singleSourceRisks: (data?.single_source_risks || []) as SingleSourceRisk[],
+      };
+    },
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useDemandAnalytics() {
+  return useQuery({
+    queryKey: ["ml-demand-analytics"],
+    queryFn: async (): Promise<DemandAnalytics[]> => {
+      const data = await fetchMLPrediction("demand/analytics");
+      return data?.forecasts || [];
+    },
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useMRPNetting() {
+  return useQuery({
+    queryKey: ["ml-mrp-netting"],
+    queryFn: async (): Promise<MRPNettingResult[]> => {
+      const data = await fetchMLPrediction("mrp-netting");
+      return data?.products || [];
+    },
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useReorderRules(serviceLevel: number = 0.95) {
+  return useQuery({
+    queryKey: ["ml-reorder-rules", serviceLevel],
+    queryFn: async (): Promise<ReorderRule[]> => {
+      const data = await fetchMLPrediction("reorder-rules", { service_level: serviceLevel });
+      return data?.rules || [];
     },
     staleTime: 10 * 60 * 1000,
     retry: 1,

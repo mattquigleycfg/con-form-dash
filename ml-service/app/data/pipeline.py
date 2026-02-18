@@ -108,6 +108,59 @@ def fetch_vendor_metrics() -> pd.DataFrame:
     return pd.DataFrame(response.data)
 
 
+def fetch_supplier_product_metrics() -> pd.DataFrame:
+    """Fetch per-vendor-per-product delivery and pricing metrics."""
+    client = get_supabase_client()
+    response = client.table("supplier_product_metrics").select("*").execute()
+    if not response.data:
+        return pd.DataFrame()
+    return pd.DataFrame(response.data)
+
+
+def fetch_inventory_snapshot() -> pd.DataFrame:
+    """Fetch current stock levels per product per warehouse."""
+    client = get_supabase_client()
+    response = client.table("inventory_snapshot").select("*").execute()
+    if not response.data:
+        return pd.DataFrame()
+    return pd.DataFrame(response.data)
+
+
+def fetch_reorder_rules() -> pd.DataFrame:
+    """Fetch reorder rules (Odoo + calculated)."""
+    client = get_supabase_client()
+    response = client.table("reorder_rules").select("*").execute()
+    if not response.data:
+        return pd.DataFrame()
+    return pd.DataFrame(response.data)
+
+
+def upsert_reorder_rules(rules: list[dict]) -> None:
+    """Store calculated reorder rules."""
+    if not rules:
+        return
+    try:
+        client = get_supabase_client()
+        client.table("reorder_rules").upsert(
+            rules, on_conflict="product_id,warehouse_name"
+        ).execute()
+    except Exception as e:
+        logger.warning(f"Failed to upsert reorder rules: {e}")
+
+
+def upsert_mrp_netting(rows: list[dict]) -> None:
+    """Store MRP netting results."""
+    if not rows:
+        return
+    try:
+        client = get_supabase_client()
+        client.table("mrp_netting_results").upsert(
+            rows, on_conflict="product_id,week_start"
+        ).execute()
+    except Exception as e:
+        logger.warning(f"Failed to upsert MRP netting: {e}")
+
+
 def fetch_ml_predictions(prediction_type: Optional[str] = None) -> pd.DataFrame:
     """Fetch cached ML predictions."""
     client = get_supabase_client()

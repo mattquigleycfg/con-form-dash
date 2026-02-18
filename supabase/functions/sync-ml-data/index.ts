@@ -17,7 +17,15 @@ async function queryOdoo(model: string, method: string, args: any[]): Promise<an
     },
     body: JSON.stringify({ model, method, args }),
   });
-  return response.json();
+
+  const data = await response.json();
+
+  if (!response.ok || (data && typeof data === 'object' && 'error' in data)) {
+    const msg = data?.error || `Odoo query failed: HTTP ${response.status}`;
+    throw new Error(`${model}.${method}: ${msg}`);
+  }
+
+  return data;
 }
 
 Deno.serve(async (req) => {
@@ -247,6 +255,289 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.error('Demand sync error:', e);
         results.demand = { error: String(e) };
+      }
+    }
+
+    // ── Sync Supplier Product Metrics (per-vendor-per-product) ───────────
+    if (sync_type === 'all' || sync_type === 'supplier_product_metrics') {
+      console.log('Syncing supplier product metrics...');
+      try {
+        const allLines = await queryOdoo('purchase.order.line', 'search_read', [
+          [['state', 'in', ['purchase', 'done']]],
+          ['order_id', 'partner_id', 'product_id', 'product_qty', 'price_unit',
+           'price_subtotal', 'date_planned', 'date_order'],
+        ]);
+
+        // Fetch stock.move for actual receipt dates (more accurate than stock.picking)
+        let stockMoves: any[] = [];
+        try {
+          stockMoves = await queryOdoo('stock.move', 'search_read', [
+            [['state', '=', 'done'], ['picking_code', '=', 'incoming']],
+            ['product_id', 'origin', 'date', 'product_uom_qty'],
+          ]);
+          if (!Array.isArray(stockMoves)) stockMoves = [];
+        } catch (e) {
+          console.warn('stock.move query failed (may not have access):', e);
+        }
+
+        // Index stock moves by origin for lookup
+        const movesByOrigin = new Map<string, any[]>();
+        for (const mv of stockMoves) {
+          if (mv.origin) {
+            if (!movesByOrigin.has(mv.origin)) movesByOrigin.set(mv.origin, []);
+            movesByOrigin.get(mv.origin)!.push(mv);
+          }
+        }
+
+        if (Array.isArray(allLines) && allLines.length > 0) {
+          // Group by vendor+product
+          const vpMap = new Map<string, any>();
+
+          for (const line of allLines) {
+            const vendorName = Array.isArray(line.partner_id) ? line.partner_id[1] : String(line.partner_id || '');
+            const productId = Array.isArray(line.product_id) ? String(line.product_id[0]) : String(line.product_id || '');
+            const productName = Array.isArray(line.product_id) ? line.product_id[1] : '';
+            if (!vendorName || !productId) continue;
+
+            const key = `${vendorName}||${productId}`;
+            if (!vpMap.has(key)) {
+              vpMap.set(key, {
+                vendor_name: vendorName,
+                product_id: productId,
+                product_name: productName,
+                lead_times: [],
+                delays: [],
+                prices: [] as { date: string; price: number }[],
+                on_time_count: 0,
+                total_orders: 0,
+                total_qty: 0,
+                total_spend: 0,
+                last_order_date: null as string | null,
+              });
+            }
+
+            const vp = vpMap.get(key)!;
+            vp.total_orders++;
+            vp.total_qty += line.product_qty || 0;
+            vp.total_spend += line.price_subtotal || 0;
+
+            const orderDate = (line.date_order || '').split(' ')[0] || null;
+            const plannedDate = (line.date_planned || '').split(' ')[0] || null;
+
+            if (line.price_unit && orderDate) {
+              vp.prices.push({ date: orderDate, price: line.price_unit });
+            }
+
+            if (orderDate && (!vp.last_order_date || orderDate > vp.last_order_date)) {
+              vp.last_order_date = orderDate;
+            }
+
+            // Try to find actual receipt date from stock.move
+            const poName = Array.isArray(line.order_id) ? line.order_id[1] : '';
+            const moves = movesByOrigin.get(poName) || [];
+            const matchingMove = moves.find((m: any) => {
+              const moveProductId = Array.isArray(m.product_id) ? String(m.product_id[0]) : String(m.product_id);
+              return moveProductId === productId;
+            });
+
+            const actualDate = matchingMove?.date?.split(' ')[0] || null;
+
+            if (orderDate && actualDate) {
+              const lt = Math.round((new Date(actualDate).getTime() - new Date(orderDate).getTime()) / (1000 * 60 * 60 * 24));
+              if (lt > 0) vp.lead_times.push(lt);
+            }
+
+            if (plannedDate && actualDate) {
+              const isOnTime = new Date(actualDate) <= new Date(plannedDate);
+              if (isOnTime) vp.on_time_count++;
+              const delay = Math.max(0, (new Date(actualDate).getTime() - new Date(plannedDate).getTime()) / (1000 * 60 * 60 * 24));
+              vp.delays.push(delay);
+            }
+          }
+
+          // Calculate metrics and upsert
+          const upsertBatch: any[] = [];
+          for (const [, stats] of vpMap.entries()) {
+            const avgLT = stats.lead_times.length > 0
+              ? stats.lead_times.reduce((a: number, b: number) => a + b, 0) / stats.lead_times.length
+              : 0;
+
+            const ltStddev = stats.lead_times.length > 1
+              ? Math.sqrt(stats.lead_times.reduce((sum: number, lt: number) => sum + Math.pow(lt - avgLT, 2), 0) / (stats.lead_times.length - 1))
+              : 0;
+
+            const onTimeRate = stats.total_orders > 0
+              ? stats.on_time_count / stats.total_orders
+              : 0;
+
+            const avgDelay = stats.delays.length > 0
+              ? stats.delays.reduce((a: number, b: number) => a + b, 0) / stats.delays.length
+              : 0;
+
+            const avgPrice = stats.prices.length > 0
+              ? stats.prices.reduce((s: number, p: any) => s + p.price, 0) / stats.prices.length
+              : 0;
+
+            // Price trend: compare last 3 months vs prior 3 months
+            let priceTrend = 0;
+            if (stats.prices.length >= 2) {
+              const sorted = [...stats.prices].sort((a: any, b: any) => a.date.localeCompare(b.date));
+              const mid = Math.floor(sorted.length / 2);
+              const oldAvg = sorted.slice(0, mid).reduce((s: number, p: any) => s + p.price, 0) / mid;
+              const newAvg = sorted.slice(mid).reduce((s: number, p: any) => s + p.price, 0) / (sorted.length - mid);
+              if (oldAvg > 0) priceTrend = ((newAvg - oldAvg) / oldAvg) * 100;
+            }
+
+            upsertBatch.push({
+              vendor_name: stats.vendor_name,
+              product_id: stats.product_id,
+              product_name: stats.product_name,
+              avg_lead_time: Math.round(avgLT * 10) / 10,
+              lead_time_stddev: Math.round(ltStddev * 10) / 10,
+              on_time_rate: Math.round(onTimeRate * 1000) / 1000,
+              avg_delay_days: Math.round(avgDelay * 10) / 10,
+              avg_unit_price: Math.round(avgPrice * 100) / 100,
+              price_trend_pct: Math.round(priceTrend * 10) / 10,
+              total_orders: stats.total_orders,
+              total_qty: stats.total_qty,
+              total_spend: Math.round(stats.total_spend * 100) / 100,
+              last_order_date: stats.last_order_date,
+              updated_at: new Date().toISOString(),
+            });
+          }
+
+          let synced = 0;
+          for (let i = 0; i < upsertBatch.length; i += 200) {
+            const chunk = upsertBatch.slice(i, i + 200);
+            const { error } = await supabase
+              .from('supplier_product_metrics')
+              .upsert(chunk, { onConflict: 'vendor_name,product_id' });
+            if (!error) synced += chunk.length;
+            else console.error('Supplier product metrics upsert error:', error);
+          }
+
+          results.supplier_product_metrics = { synced, total: vpMap.size };
+          console.log(`Supplier product metrics: synced ${synced}/${vpMap.size}`);
+        } else {
+          results.supplier_product_metrics = { synced: 0, total: 0 };
+        }
+      } catch (e) {
+        console.error('Supplier product metrics sync error:', e);
+        results.supplier_product_metrics = { error: String(e) };
+      }
+    }
+
+    // ── Sync Inventory Snapshot (stock.quant) ─────────────────────────────
+    if (sync_type === 'all' || sync_type === 'inventory') {
+      console.log('Syncing inventory snapshot...');
+      try {
+        const quants = await queryOdoo('stock.quant', 'search_read', [
+          [['location_id.usage', '=', 'internal']],
+          ['product_id', 'location_id', 'quantity', 'reserved_quantity'],
+        ]);
+
+        if (Array.isArray(quants) && quants.length > 0) {
+          // Aggregate by product + location
+          const invMap = new Map<string, any>();
+          for (const q of quants) {
+            const productId = Array.isArray(q.product_id) ? String(q.product_id[0]) : String(q.product_id);
+            const productName = Array.isArray(q.product_id) ? q.product_id[1] : '';
+            const locName = Array.isArray(q.location_id) ? q.location_id[1] : String(q.location_id);
+            const warehouse = locName.split('/')[0] || locName;
+            const key = `${productId}||${warehouse}`;
+
+            if (!invMap.has(key)) {
+              invMap.set(key, {
+                product_id: productId,
+                product_name: productName,
+                warehouse_name: warehouse,
+                qty_on_hand: 0,
+                qty_reserved: 0,
+              });
+            }
+            const inv = invMap.get(key)!;
+            inv.qty_on_hand += q.quantity || 0;
+            inv.qty_reserved += q.reserved_quantity || 0;
+          }
+
+          const upsertBatch: any[] = [];
+          for (const [, inv] of invMap.entries()) {
+            upsertBatch.push({
+              ...inv,
+              qty_available: inv.qty_on_hand - inv.qty_reserved,
+              snapshot_at: new Date().toISOString(),
+            });
+          }
+
+          let synced = 0;
+          for (let i = 0; i < upsertBatch.length; i += 200) {
+            const chunk = upsertBatch.slice(i, i + 200);
+            const { error } = await supabase
+              .from('inventory_snapshot')
+              .upsert(chunk, { onConflict: 'product_id,warehouse_name' });
+            if (!error) synced += chunk.length;
+            else console.error('Inventory snapshot upsert error:', error);
+          }
+
+          results.inventory = { synced, total: invMap.size };
+          console.log(`Inventory: synced ${synced}/${invMap.size} product-warehouse combos`);
+        } else {
+          results.inventory = { synced: 0, total: 0 };
+        }
+      } catch (e) {
+        console.error('Inventory sync error:', e);
+        results.inventory = { error: String(e) };
+      }
+    }
+
+    // ── Sync Odoo Reorder Rules (stock.warehouse.orderpoint) ──────────────
+    if (sync_type === 'all' || sync_type === 'orderpoints') {
+      console.log('Syncing Odoo reorder rules...');
+      try {
+        const orderpoints = await queryOdoo('stock.warehouse.orderpoint', 'search_read', [
+          [['active', '=', true]],
+          ['id', 'product_id', 'warehouse_id', 'product_min_qty', 'product_max_qty',
+           'qty_multiple', 'lead_days_date'],
+        ]);
+
+        if (Array.isArray(orderpoints) && orderpoints.length > 0) {
+          const upsertBatch: any[] = [];
+          for (const op of orderpoints) {
+            const productId = Array.isArray(op.product_id) ? String(op.product_id[0]) : String(op.product_id);
+            const productName = Array.isArray(op.product_id) ? op.product_id[1] : '';
+            const warehouseName = Array.isArray(op.warehouse_id) ? op.warehouse_id[1] : String(op.warehouse_id || '');
+
+            upsertBatch.push({
+              product_id: productId,
+              product_name: productName,
+              warehouse_name: warehouseName,
+              odoo_orderpoint_id: op.id,
+              odoo_min_qty: op.product_min_qty || 0,
+              odoo_max_qty: op.product_max_qty || 0,
+              odoo_qty_multiple: op.qty_multiple || 1,
+              odoo_lead_days: op.lead_days_date || 0,
+              updated_at: new Date().toISOString(),
+            });
+          }
+
+          let synced = 0;
+          for (let i = 0; i < upsertBatch.length; i += 200) {
+            const chunk = upsertBatch.slice(i, i + 200);
+            const { error } = await supabase
+              .from('reorder_rules')
+              .upsert(chunk, { onConflict: 'product_id,warehouse_name' });
+            if (!error) synced += chunk.length;
+            else console.error('Reorder rules upsert error:', error);
+          }
+
+          results.orderpoints = { synced, total: orderpoints.length };
+          console.log(`Reorder rules: synced ${synced}/${orderpoints.length}`);
+        } else {
+          results.orderpoints = { synced: 0, total: 0 };
+        }
+      } catch (e) {
+        console.error('Reorder rules sync error:', e);
+        results.orderpoints = { error: String(e) };
       }
     }
 

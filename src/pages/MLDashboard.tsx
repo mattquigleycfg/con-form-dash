@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { SafeSection } from "@/components/SafeSection";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, ShieldAlert, Trash2, Target, RefreshCw, CheckCircle2, XCircle, Download } from "lucide-react";
+import { AlertTriangle, ShieldAlert, Trash2, Target, RefreshCw, CheckCircle2, XCircle, Download, FileDown } from "lucide-react";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { formatCurrency } from "@/lib/utils";
 import { useJobs, type Job } from "@/hooks/useJobs";
@@ -18,6 +18,10 @@ import {
   useMLInsights,
   useCustomerScoring,
   useSupplierScoring,
+  useSupplierAnalytics,
+  useDemandAnalytics,
+  useMRPNetting,
+  useReorderRules,
   useModelHealth,
   useMLDataSync,
   type MLSyncResult,
@@ -29,6 +33,16 @@ import {
   CustomerScoringTable,
   SupplierScoringTable,
   ModelHealthPanel,
+  SupplierDetailPanel,
+  LeadTimeDistributionChart,
+  PriceTrendChart,
+  DemandForecastChart,
+  DemandProductTable,
+  MRPNettingTable,
+  ReorderAlertsList,
+  ReorderRuleComparison,
+  SupplierComparisonPanel,
+  ServiceLevelSlider,
 } from "@/components/ml";
 
 function RiskKPICard({
@@ -77,19 +91,35 @@ export default function MLDashboard() {
   const { data: insights, isLoading: insightsLoading } = useMLInsights();
   const { data: customers = [], isLoading: customersLoading } = useCustomerScoring();
   const { data: suppliers = [], isLoading: suppliersLoading, refetch: refetchSuppliers } = useSupplierScoring();
+  const { data: supplierAnalytics, isLoading: supplierAnalyticsLoading } = useSupplierAnalytics();
+  const { data: demandForecasts = [], isLoading: demandLoading } = useDemandAnalytics();
+  const { data: mrpResults = [], isLoading: mrpLoading } = useMRPNetting();
+  const [serviceLevel, setServiceLevel] = useState(0.95);
+  const { data: reorderRules = [], isLoading: reorderLoading } = useReorderRules(serviceLevel);
   const { data: models = [], isLoading: modelsLoading } = useModelHealth();
   const { jobs: jobsList } = useJobs();
   const jobs = jobsList ?? [];
 
   const dataSync = useMLDataSync();
   const [syncResult, setSyncResult] = useState<MLSyncResult | null>(null);
+  const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
+  const [selectedDemandProduct, setSelectedDemandProduct] = useState<string | null>(null);
+
+  const handleSyncAll = () => {
+    setSyncResult(null);
+    dataSync.mutate("all", {
+      onSuccess: (result) => {
+        setSyncResult(result);
+        refetchSuppliers();
+      },
+    });
+  };
 
   const handleSyncSuppliers = () => {
     setSyncResult(null);
     dataSync.mutate("po_delivery", {
       onSuccess: async (result) => {
         setSyncResult(result);
-        // After PO sync, aggregate vendor metrics
         dataSync.mutate("vendor_metrics", {
           onSuccess: (metricsResult) => {
             setSyncResult(prev => prev ? {
@@ -102,6 +132,35 @@ export default function MLDashboard() {
       },
     });
   };
+
+  const selectedDemandData = useMemo(
+    () => demandForecasts.find((d) => d.product_id === selectedDemandProduct),
+    [demandForecasts, selectedDemandProduct]
+  );
+
+  const reorderAlerts = useMemo(
+    () => reorderRules.filter((r) => r.urgency === "critical" || r.urgency === "warning"),
+    [reorderRules]
+  );
+
+  const exportReorderCSV = useCallback(() => {
+    if (!reorderRules.length) return;
+    const headers = ["Product", "Warehouse", "Model", "Service Level", "On Hand", "Safety Stock", "Reorder Point", "Order Qty", "Max Qty", "Odoo Min", "Odoo Max", "Min Delta", "Max Delta", "Urgency", "Discrepant"];
+    const rows = reorderRules.map((r) => [
+      r.product_name, r.warehouse_name, r.reorder_model, r.service_level,
+      r.on_hand, r.safety_stock, r.reorder_point, r.order_quantity, r.max_quantity,
+      r.odoo_min_qty, r.odoo_max_qty, r.min_qty_delta, r.max_qty_delta,
+      r.urgency, r.is_discrepant ? "Yes" : "No",
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reorder-rules-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [reorderRules]);
 
   // Multi-key lookup: by Supabase UUID, sale_order_name, and odoo_sale_order_id
   const jobLookup = useMemo(() => {
@@ -266,11 +325,14 @@ export default function MLDashboard() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="risk" className="space-y-4">
-          <TabsList>
+          <TabsList className="flex-wrap h-auto">
             <TabsTrigger value="risk" className="text-xs">Risk Analysis</TabsTrigger>
             <TabsTrigger value="predictions" className="text-xs">Predictions</TabsTrigger>
             <TabsTrigger value="customers" className="text-xs">Customers</TabsTrigger>
             <TabsTrigger value="suppliers" className="text-xs">Suppliers</TabsTrigger>
+            <TabsTrigger value="demand" className="text-xs">Demand</TabsTrigger>
+            <TabsTrigger value="mrp" className="text-xs">MRP</TabsTrigger>
+            <TabsTrigger value="reorder" className="text-xs">Reorder</TabsTrigger>
             <TabsTrigger value="models" className="text-xs">
               <ActivityIcon size={12} className="p-0 mr-1 inline-flex" />
               Model Health
@@ -320,56 +382,57 @@ export default function MLDashboard() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-medium">Odoo PO Data Sync</h3>
+                    <h3 className="text-sm font-medium">Odoo Data Sync</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Sync purchase order delivery history from Odoo to generate supplier scores
+                      Sync purchase orders, inventory, and reorder rules from Odoo
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={handleSyncSuppliers}
-                    disabled={dataSync.isPending}
-                  >
-                    {dataSync.isPending ? (
-                      <>
-                        <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                        Syncing...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-3.5 w-3.5 mr-1.5" />
-                        Sync from Odoo
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSyncSuppliers}
+                      disabled={dataSync.isPending}
+                    >
+                      {dataSync.isPending ? (
+                        <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Syncing...</>
+                      ) : (
+                        <><Download className="h-3.5 w-3.5 mr-1.5" />Sync Suppliers</>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSyncAll}
+                      disabled={dataSync.isPending}
+                    >
+                      {dataSync.isPending ? (
+                        <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Syncing...</>
+                      ) : (
+                        <><Download className="h-3.5 w-3.5 mr-1.5" />Sync All</>
+                      )}
+                    </Button>
+                  </div>
                 </div>
 
-                {/* Sync Result Feedback */}
                 {syncResult && (
                   <div className="mt-3 pt-3 border-t space-y-1.5">
-                    {syncResult.results.po_delivery && !syncResult.results.po_delivery.error && (
-                      <div className="flex items-center gap-2 text-xs">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                        <span>
-                          Synced <strong>{syncResult.results.po_delivery.synced}</strong> of{" "}
-                          {syncResult.results.po_delivery.total} purchase orders
-                        </span>
-                      </div>
-                    )}
-                    {syncResult.results.vendor_metrics && !syncResult.results.vendor_metrics.error && (
-                      <div className="flex items-center gap-2 text-xs">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                        <span>
-                          Aggregated metrics for <strong>{syncResult.results.vendor_metrics.vendors}</strong> vendors
-                        </span>
-                      </div>
-                    )}
-                    {syncResult.results.po_delivery?.error && (
-                      <div className="flex items-center gap-2 text-xs text-destructive">
-                        <XCircle className="h-3.5 w-3.5 shrink-0" />
-                        <span>PO sync error: {syncResult.results.po_delivery.error}</span>
-                      </div>
-                    )}
+                    {Object.entries(syncResult.results).map(([key, val]) => {
+                      if (!val) return null;
+                      if ('error' in val && val.error) {
+                        return (
+                          <div key={key} className="flex items-center gap-2 text-xs text-destructive">
+                            <XCircle className="h-3.5 w-3.5 shrink-0" />
+                            <span>{key}: {val.error}</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={key} className="flex items-center gap-2 text-xs">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                          <span>{key}: synced <strong>{val.synced}</strong>{val.total != null ? ` of ${val.total}` : ''}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -383,6 +446,11 @@ export default function MLDashboard() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Supplier Detail Panel (drill-down) */}
+            {selectedVendor && (
+              <SupplierDetailPanel vendorName={selectedVendor} onClose={() => setSelectedVendor(null)} />
+            )}
 
             {/* Supplier Table or Empty State */}
             {suppliersLoading ? (
@@ -398,7 +466,131 @@ export default function MLDashboard() {
                 </CardContent>
               </Card>
             ) : (
-              <SupplierScoringTable data={suppliers} />
+              <SupplierScoringTable data={suppliers} onRowClick={(vendor) => setSelectedVendor(vendor)} />
+            )}
+
+            {/* Supplier Analytics: Lead Time Distribution + Price Trends */}
+            {supplierAnalyticsLoading ? (
+              <Skeleton className="h-[300px]" />
+            ) : supplierAnalytics && (
+              <>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <SafeSection name="Lead Time Distribution">
+                    <LeadTimeDistributionChart data={supplierAnalytics.leadTimeDistributions} />
+                  </SafeSection>
+                  <SafeSection name="Price Trends">
+                    <PriceTrendChart data={supplierAnalytics.priceTrends} />
+                  </SafeSection>
+                </div>
+
+                {supplierAnalytics.singleSourceRisks.length > 0 && (
+                  <SafeSection name="Supplier Comparison">
+                    <SupplierComparisonPanel singleSourceRisks={supplierAnalytics.singleSourceRisks} />
+                  </SafeSection>
+                )}
+              </>
+            )}
+          </TabsContent>
+
+          {/* Demand Tab */}
+          <TabsContent value="demand" className="space-y-4">
+            {demandLoading ? (
+              <Skeleton className="h-[400px]" />
+            ) : demandForecasts.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                  <RocketIcon size={48} className="p-2 mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold">No Demand Forecast Data</h3>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-md">
+                    Sync sale order data from Odoo using the Suppliers tab "Sync All" button, then demand forecasts will be generated automatically.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {selectedDemandData && (
+                  <SafeSection name="Demand Forecast Chart">
+                    <DemandForecastChart data={selectedDemandData} />
+                  </SafeSection>
+                )}
+                <SafeSection name="Demand Product Table">
+                  <DemandProductTable
+                    data={demandForecasts}
+                    onSelectProduct={(pid) => setSelectedDemandProduct(pid)}
+                  />
+                </SafeSection>
+              </>
+            )}
+          </TabsContent>
+
+          {/* MRP Tab */}
+          <TabsContent value="mrp" className="space-y-4">
+            {mrpLoading ? (
+              <Skeleton className="h-[400px]" />
+            ) : mrpResults.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                  <RocketIcon size={48} className="p-2 mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold">No MRP Netting Data</h3>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-md">
+                    MRP netting requires inventory and demand data. Sync data from Odoo first, then MRP calculations will run automatically.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <SafeSection name="MRP Netting">
+                <MRPNettingTable data={mrpResults} />
+              </SafeSection>
+            )}
+          </TabsContent>
+
+          {/* Reorder Tab */}
+          <TabsContent value="reorder" className="space-y-4">
+            <div className="grid gap-4 lg:grid-cols-4">
+              <div className="lg:col-span-1">
+                <ServiceLevelSlider value={serviceLevel} onChange={setServiceLevel} />
+              </div>
+              <div className="lg:col-span-3">
+                {reorderLoading ? (
+                  <Skeleton className="h-[200px]" />
+                ) : reorderAlerts.length > 0 ? (
+                  <SafeSection name="Reorder Alerts">
+                    <ReorderAlertsList data={reorderAlerts} />
+                  </SafeSection>
+                ) : (
+                  <Card>
+                    <CardContent className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
+                      No urgent reorder alerts at {(serviceLevel * 100).toFixed(0)}% service level
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+
+            {reorderLoading ? (
+              <Skeleton className="h-[300px]" />
+            ) : reorderRules.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                  <RocketIcon size={48} className="p-2 mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold">No Reorder Rule Data</h3>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-md">
+                    Reorder rule calculations need inventory, demand, and supplier data. Sync all data from Odoo first.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" onClick={exportReorderCSV}>
+                    <FileDown className="h-3.5 w-3.5 mr-1.5" />
+                    Export CSV
+                  </Button>
+                </div>
+                <SafeSection name="Reorder Rule Comparison">
+                  <ReorderRuleComparison data={reorderRules} />
+                </SafeSection>
+              </>
             )}
           </TabsContent>
 
