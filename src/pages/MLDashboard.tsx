@@ -105,32 +105,36 @@ export default function MLDashboard() {
   const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
   const [selectedDemandProduct, setSelectedDemandProduct] = useState<string | null>(null);
 
-  const handleSyncAll = () => {
-    setSyncResult(null);
-    dataSync.mutate("all", {
+  const runSyncChain = (types: string[], idx = 0, accum: MLSyncResult | null = null) => {
+    if (idx >= types.length) {
+      refetchSuppliers();
+      return;
+    }
+    dataSync.mutate(types[idx], {
       onSuccess: (result) => {
-        setSyncResult(result);
-        refetchSuppliers();
+        const merged: MLSyncResult = accum
+          ? { ...accum, results: { ...accum.results, ...result.results } }
+          : result;
+        setSyncResult(merged);
+        runSyncChain(types, idx + 1, merged);
+      },
+      onError: () => {
+        runSyncChain(types, idx + 1, accum);
       },
     });
   };
 
+  const handleSyncAll = () => {
+    setSyncResult(null);
+    runSyncChain([
+      "po_delivery", "supplier_product_metrics", "production", "demand",
+      "inventory", "orderpoints", "vendor_metrics",
+    ]);
+  };
+
   const handleSyncSuppliers = () => {
     setSyncResult(null);
-    dataSync.mutate("po_delivery", {
-      onSuccess: async (result) => {
-        setSyncResult(result);
-        dataSync.mutate("vendor_metrics", {
-          onSuccess: (metricsResult) => {
-            setSyncResult(prev => prev ? {
-              ...prev,
-              results: { ...prev.results, vendor_metrics: metricsResult.results.vendor_metrics }
-            } : metricsResult);
-            refetchSuppliers();
-          },
-        });
-      },
-    });
+    runSyncChain(["po_delivery", "supplier_product_metrics", "vendor_metrics"]);
   };
 
   const selectedDemandData = useMemo(
