@@ -226,6 +226,35 @@ export function useMLTraining() {
   });
 }
 
+export interface MLSyncResult {
+  success: boolean;
+  results: {
+    po_delivery?: { synced: number; total: number; error?: string };
+    production?: { synced: number; total: number; error?: string };
+    demand?: { synced: number; sale_orders: number; error?: string };
+    vendor_metrics?: { synced: number; vendors: number; error?: string };
+  };
+  error?: string;
+}
+
+export function useMLDataSync() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (syncType: string = "all"): Promise<MLSyncResult> => {
+      const { data, error } = await supabase.functions.invoke("sync-ml-data", {
+        body: { sync_type: syncType },
+      });
+      if (error) throw error;
+      return data as MLSyncResult;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ml-supplier-scoring"] });
+      queryClient.invalidateQueries({ queryKey: ["ml-model-health"] });
+    },
+  });
+}
+
 export function useCachedMLPredictions(jobId: string) {
   return useQuery({
     queryKey: ["ml-cached-predictions", jobId],

@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { SafeSection } from "@/components/SafeSection";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, ShieldAlert, Trash2, Target } from "lucide-react";
+import { AlertTriangle, ShieldAlert, Trash2, Target, RefreshCw, CheckCircle2, XCircle, Download } from "lucide-react";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { formatCurrency } from "@/lib/utils";
 import { useJobs, type Job } from "@/hooks/useJobs";
@@ -18,6 +19,8 @@ import {
   useCustomerScoring,
   useSupplierScoring,
   useModelHealth,
+  useMLDataSync,
+  type MLSyncResult,
 } from "@/hooks/useMLPredictions";
 import {
   RiskHeatmapChart,
@@ -73,10 +76,32 @@ function RiskKPICard({
 export default function MLDashboard() {
   const { data: insights, isLoading: insightsLoading } = useMLInsights();
   const { data: customers = [], isLoading: customersLoading } = useCustomerScoring();
-  const { data: suppliers = [], isLoading: suppliersLoading } = useSupplierScoring();
+  const { data: suppliers = [], isLoading: suppliersLoading, refetch: refetchSuppliers } = useSupplierScoring();
   const { data: models = [], isLoading: modelsLoading } = useModelHealth();
   const { jobs: jobsList } = useJobs();
   const jobs = jobsList ?? [];
+
+  const dataSync = useMLDataSync();
+  const [syncResult, setSyncResult] = useState<MLSyncResult | null>(null);
+
+  const handleSyncSuppliers = () => {
+    setSyncResult(null);
+    dataSync.mutate("po_delivery", {
+      onSuccess: async (result) => {
+        setSyncResult(result);
+        // After PO sync, aggregate vendor metrics
+        dataSync.mutate("vendor_metrics", {
+          onSuccess: (metricsResult) => {
+            setSyncResult(prev => prev ? {
+              ...prev,
+              results: { ...prev.results, vendor_metrics: metricsResult.results.vendor_metrics }
+            } : metricsResult);
+            refetchSuppliers();
+          },
+        });
+      },
+    });
+  };
 
   // Multi-key lookup: by Supabase UUID, sale_order_name, and odoo_sale_order_id
   const jobLookup = useMemo(() => {
@@ -290,15 +315,85 @@ export default function MLDashboard() {
 
           {/* Suppliers Tab */}
           <TabsContent value="suppliers" className="space-y-4">
+            {/* Sync Controls */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium">Odoo PO Data Sync</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Sync purchase order delivery history from Odoo to generate supplier scores
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleSyncSuppliers}
+                    disabled={dataSync.isPending}
+                  >
+                    {dataSync.isPending ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-3.5 w-3.5 mr-1.5" />
+                        Sync from Odoo
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Sync Result Feedback */}
+                {syncResult && (
+                  <div className="mt-3 pt-3 border-t space-y-1.5">
+                    {syncResult.results.po_delivery && !syncResult.results.po_delivery.error && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                        <span>
+                          Synced <strong>{syncResult.results.po_delivery.synced}</strong> of{" "}
+                          {syncResult.results.po_delivery.total} purchase orders
+                        </span>
+                      </div>
+                    )}
+                    {syncResult.results.vendor_metrics && !syncResult.results.vendor_metrics.error && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                        <span>
+                          Aggregated metrics for <strong>{syncResult.results.vendor_metrics.vendors}</strong> vendors
+                        </span>
+                      </div>
+                    )}
+                    {syncResult.results.po_delivery?.error && (
+                      <div className="flex items-center gap-2 text-xs text-destructive">
+                        <XCircle className="h-3.5 w-3.5 shrink-0" />
+                        <span>PO sync error: {syncResult.results.po_delivery.error}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {dataSync.error && (
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="flex items-center gap-2 text-xs text-destructive">
+                      <XCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{String(dataSync.error)}</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Supplier Table or Empty State */}
             {suppliersLoading ? (
               <Skeleton className="h-[400px]" />
             ) : suppliers.length === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                   <RocketIcon size={48} className="p-2 mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold">No Supplier Data Yet</h3>
+                  <h3 className="text-lg font-semibold">No Supplier Scores Yet</h3>
                   <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                    Supplier scoring requires PO delivery history. Run the data sync from Odoo to populate vendor metrics.
+                    Click "Sync from Odoo" above to import PO delivery history, then the ML model will score your vendors based on delivery performance, reliability, and volume.
                   </p>
                 </CardContent>
               </Card>

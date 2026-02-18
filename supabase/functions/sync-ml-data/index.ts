@@ -44,32 +44,56 @@ Deno.serve(async (req) => {
           ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'date_approve'],
         ]);
 
-        if (Array.isArray(purchaseOrders)) {
-          let synced = 0;
-          for (const po of purchaseOrders) {
-            // Fetch PO lines for planned delivery dates
-            const lines = await queryOdoo('purchase.order.line', 'search_read', [
-              [['order_id', '=', po.id]],
-              ['product_id', 'product_qty', 'date_planned', 'price_subtotal'],
-            ]);
+        if (Array.isArray(purchaseOrders) && purchaseOrders.length > 0) {
+          const poIds = purchaseOrders.map((po: any) => po.id);
+          const poNames = purchaseOrders.map((po: any) => po.name);
 
-            const earliestPlanned = Array.isArray(lines) && lines.length > 0
+          // Batch-fetch all PO lines and pickings in two calls instead of N+1
+          const [allLines, allPickings] = await Promise.all([
+            queryOdoo('purchase.order.line', 'search_read', [
+              [['order_id', 'in', poIds]],
+              ['order_id', 'product_id', 'product_qty', 'date_planned', 'price_subtotal'],
+            ]),
+            queryOdoo('stock.picking', 'search_read', [
+              [['origin', 'in', poNames], ['state', '=', 'done']],
+              ['origin', 'date_done', 'scheduled_date'],
+            ]),
+          ]);
+
+          // Index lines by PO id
+          const linesByPO = new Map<number, any[]>();
+          if (Array.isArray(allLines)) {
+            for (const line of allLines) {
+              const poId = Array.isArray(line.order_id) ? line.order_id[0] : line.order_id;
+              if (!linesByPO.has(poId)) linesByPO.set(poId, []);
+              linesByPO.get(poId)!.push(line);
+            }
+          }
+
+          // Index pickings by origin PO name (first match wins)
+          const pickingByOrigin = new Map<string, any>();
+          if (Array.isArray(allPickings)) {
+            for (const p of allPickings) {
+              if (p.origin && !pickingByOrigin.has(p.origin)) {
+                pickingByOrigin.set(p.origin, p);
+              }
+            }
+          }
+
+          let synced = 0;
+          const upsertBatch: any[] = [];
+
+          for (const po of purchaseOrders) {
+            const lines = linesByPO.get(po.id) || [];
+
+            const earliestPlanned = lines.length > 0
               ? lines.reduce((min: string, l: any) => l.date_planned && l.date_planned < min ? l.date_planned : min, lines[0]?.date_planned || '')
               : null;
 
-            const totalQty = Array.isArray(lines)
-              ? lines.reduce((sum: number, l: any) => sum + (l.product_qty || 0), 0)
-              : 0;
+            const totalQty = lines.reduce((sum: number, l: any) => sum + (l.product_qty || 0), 0);
 
-            // Fetch stock pickings to find actual delivery date
-            const pickings = await queryOdoo('stock.picking', 'search_read', [
-              [['origin', '=', po.name], ['state', '=', 'done']],
-              ['date_done', 'scheduled_date'],
-            ]);
-
-            const actualDate = Array.isArray(pickings) && pickings.length > 0
-              ? pickings[0].date_done?.split(' ')[0]
-              : null;
+            const picking = pickingByOrigin.get(po.name);
+            const actualDate = picking?.date_done?.split(' ')[0] || null;
 
             const orderDate = po.date_order?.split(' ')[0] || null;
             const plannedDate = earliestPlanned?.split(' ')[0] || null;
@@ -87,14 +111,13 @@ Deno.serve(async (req) => {
               isOnTime = new Date(actualDate) <= new Date(plannedDate);
             }
 
-            // Get product category from first line
             let productCategory = 'unknown';
-            if (Array.isArray(lines) && lines.length > 0 && lines[0].product_id) {
+            if (lines.length > 0 && lines[0].product_id) {
               const productName = Array.isArray(lines[0].product_id) ? lines[0].product_id[1] : '';
               productCategory = productName.split(' ')[0] || 'unknown';
             }
 
-            const { error } = await supabase.from('po_delivery_history').upsert({
+            upsertBatch.push({
               odoo_po_id: po.id,
               po_name: po.name,
               vendor_name: Array.isArray(po.partner_id) ? po.partner_id[1] : String(po.partner_id),
@@ -106,12 +129,23 @@ Deno.serve(async (req) => {
               actual_date: actualDate,
               lead_time_days: leadTimeDays,
               is_on_time: isOnTime,
-            }, { onConflict: 'odoo_po_id' });
-
-            if (!error) synced++;
+            });
           }
+
+          // Upsert in batches of 200
+          for (let i = 0; i < upsertBatch.length; i += 200) {
+            const chunk = upsertBatch.slice(i, i + 200);
+            const { error, count } = await supabase
+              .from('po_delivery_history')
+              .upsert(chunk, { onConflict: 'odoo_po_id', count: 'exact' });
+            if (!error) synced += chunk.length;
+            else console.error('Upsert batch error:', error);
+          }
+
           results.po_delivery = { synced, total: purchaseOrders.length };
           console.log(`PO delivery: synced ${synced}/${purchaseOrders.length}`);
+        } else {
+          results.po_delivery = { synced: 0, total: 0 };
         }
       } catch (e) {
         console.error('PO delivery sync error:', e);
