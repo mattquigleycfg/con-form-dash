@@ -68,6 +68,8 @@ export function SupplierDetailPanel({ vendorName, onClose }: SupplierDetailPanel
     return n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(2)}`;
   };
 
+  const products = Array.isArray(data.products) ? data.products : [];
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -78,7 +80,7 @@ export function SupplierDetailPanel({ vendorName, onClose }: SupplierDetailPanel
           </Button>
         </div>
         <CardDescription className="text-xs">
-          Detailed breakdown across {data.product_count} products
+          Detailed breakdown across {data.product_count ?? 0} products
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -95,7 +97,7 @@ export function SupplierDetailPanel({ vendorName, onClose }: SupplierDetailPanel
               <Package className="h-3.5 w-3.5" />
               <span className="text-[11px] font-medium">Products</span>
             </div>
-            <p className="text-lg font-semibold">{data.product_count}</p>
+            <p className="text-lg font-semibold">{data.product_count ?? 0}</p>
           </div>
           <div className="rounded-md border p-3 space-y-1">
             <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -106,7 +108,7 @@ export function SupplierDetailPanel({ vendorName, onClose }: SupplierDetailPanel
           </div>
         </div>
 
-        {data.products.length === 0 ? (
+        {products.length === 0 ? (
           <div className="flex items-center justify-center h-[120px] text-muted-foreground text-sm">
             No product data
           </div>
@@ -126,7 +128,7 @@ export function SupplierDetailPanel({ vendorName, onClose }: SupplierDetailPanel
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.products.map((p) => (
+                {products.map((p) => (
                   <TableRow key={p.product_id}>
                     <TableCell className="text-xs font-medium max-w-[160px] truncate">
                       {p.product_name}
