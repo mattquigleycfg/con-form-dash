@@ -58,8 +58,15 @@ export function SupplierDetailPanel({ vendorName, onClose }: SupplierDetailPanel
     );
   }
 
-  const formatCurrency = (val: number) =>
-    val >= 1000 ? `$${(val / 1000).toFixed(1)}k` : `$${val.toFixed(2)}`;
+  const safe = (v: unknown, fallback = 0): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const formatCurrency = (val: unknown) => {
+    const n = safe(val);
+    return n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(2)}`;
+  };
 
   return (
     <Card>
@@ -95,7 +102,7 @@ export function SupplierDetailPanel({ vendorName, onClose }: SupplierDetailPanel
               <Clock className="h-3.5 w-3.5" />
               <span className="text-[11px] font-medium">Avg On-Time</span>
             </div>
-            <p className="text-lg font-semibold">{Math.round(data.avg_on_time_rate * 100)}%</p>
+            <p className="text-lg font-semibold">{Math.round(safe(data.avg_on_time_rate) * 100)}%</p>
           </div>
         </div>
 
@@ -124,21 +131,21 @@ export function SupplierDetailPanel({ vendorName, onClose }: SupplierDetailPanel
                     <TableCell className="text-xs font-medium max-w-[160px] truncate">
                       {p.product_name}
                     </TableCell>
-                    <TableCell className="text-xs">{p.avg_lead_time.toFixed(1)}d</TableCell>
-                    <TableCell className="text-xs">{p.lead_time_stddev.toFixed(1)}d</TableCell>
-                    <TableCell className="text-xs">{Math.round(p.on_time_rate * 100)}%</TableCell>
-                    <TableCell className="text-xs">${p.avg_unit_price.toFixed(2)}</TableCell>
+                    <TableCell className="text-xs">{safe(p.avg_lead_time).toFixed(1)}d</TableCell>
+                    <TableCell className="text-xs">{safe(p.lead_time_stddev).toFixed(1)}d</TableCell>
+                    <TableCell className="text-xs">{Math.round(safe(p.on_time_rate) * 100)}%</TableCell>
+                    <TableCell className="text-xs">${safe(p.avg_unit_price).toFixed(2)}</TableCell>
                     <TableCell className="text-xs">
-                      <span className={`inline-flex items-center gap-0.5 ${p.price_trend_pct >= 0 ? "text-red-500" : "text-emerald-600"}`}>
-                        {p.price_trend_pct >= 0 ? (
+                      <span className={`inline-flex items-center gap-0.5 ${safe(p.price_trend_pct) >= 0 ? "text-red-500" : "text-emerald-600"}`}>
+                        {safe(p.price_trend_pct) >= 0 ? (
                           <TrendingUp className="h-3 w-3" />
                         ) : (
                           <TrendingDown className="h-3 w-3" />
                         )}
-                        {Math.abs(p.price_trend_pct).toFixed(1)}%
+                        {Math.abs(safe(p.price_trend_pct)).toFixed(1)}%
                       </span>
                     </TableCell>
-                    <TableCell className="text-xs">{p.total_orders}</TableCell>
+                    <TableCell className="text-xs">{p.total_orders ?? 0}</TableCell>
                     <TableCell className="text-xs">{formatCurrency(p.total_spend)}</TableCell>
                   </TableRow>
                 ))}

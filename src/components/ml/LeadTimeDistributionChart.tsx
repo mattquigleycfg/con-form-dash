@@ -47,7 +47,7 @@ export function LeadTimeDistributionChart({ data }: LeadTimeDistributionChartPro
         </div>
         {activeDistribution && (
           <p className="text-xs text-muted-foreground">
-            Mean {activeDistribution.mean.toFixed(1)}d · Median {activeDistribution.median.toFixed(1)}d · P90 {activeDistribution.p90.toFixed(1)}d · {activeDistribution.sample_count} orders
+            Mean {(activeDistribution.mean ?? 0).toFixed(1)}d · Median {(activeDistribution.median ?? 0).toFixed(1)}d · P90 {(activeDistribution.p90 ?? 0).toFixed(1)}d · {activeDistribution.sample_count ?? 0} orders
           </p>
         )}
       </CardHeader>

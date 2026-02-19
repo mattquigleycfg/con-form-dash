@@ -72,7 +72,7 @@ export function PriceTrendChart({ data }: PriceTrendChartProps) {
         </div>
         {activeTrend && (
           <p className="text-xs text-muted-foreground">
-            Avg ${activeTrend.overall_avg.toFixed(2)} · {activeTrend.months_of_data} months of data
+            Avg ${(activeTrend.overall_avg ?? 0).toFixed(2)} · {activeTrend.months_of_data ?? 0} months of data
           </p>
         )}
       </CardHeader>

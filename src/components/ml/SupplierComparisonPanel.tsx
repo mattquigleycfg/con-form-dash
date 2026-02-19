@@ -79,7 +79,7 @@ export function SupplierComparisonPanel({ singleSourceRisks }: SupplierCompariso
                     <TableRow key={r.product_id}>
                       <TableCell className="text-xs font-medium max-w-[200px] truncate">{r.product_name}</TableCell>
                       <TableCell className="text-xs max-w-[180px] truncate">{r.sole_vendor}</TableCell>
-                      <TableCell className="text-xs text-right">${r.total_spend.toLocaleString()}</TableCell>
+                      <TableCell className="text-xs text-right">${(r.total_spend ?? 0).toLocaleString()}</TableCell>
                       <TableCell>
                         <Badge variant={r.risk_level === "high" ? "destructive" : "default"} className="text-[10px]">
                           {r.risk_level}
