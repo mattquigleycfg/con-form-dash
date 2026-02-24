@@ -193,26 +193,35 @@ class InstallationAnalyser:
 
     def _detect_analytic_field(self) -> str:
         """Check whether the Odoo instance uses analytic_distribution (17+)
-        or analytic_account_id (16)."""
+        or analytic_account_id (16).  We sample a few records and pick the
+        field that actually carries data -- the other one may exist but be
+        empty on Odoo 16 Enterprise."""
         if self._analytic_field:
             return self._analytic_field
-        try:
-            test = self.odoo.models.execute_kw(
-                self.odoo.db,
-                self.odoo.uid,
-                self.odoo.password,
-                "sale.order.line",
-                "search_read",
-                [[]],
-                {"fields": ["analytic_distribution"], "limit": 1},
-            )
-            if test and "analytic_distribution" in test[0]:
-                self._analytic_field = "analytic_distribution"
-            else:
-                self._analytic_field = "analytic_account_id"
-        except Exception:
-            self._analytic_field = "analytic_account_id"
-        logger.info("Using analytic field: %s", self._analytic_field)
+
+        for candidate in ("analytic_account_id", "analytic_distribution"):
+            try:
+                rows = self.odoo.models.execute_kw(
+                    self.odoo.db,
+                    self.odoo.uid,
+                    self.odoo.password,
+                    "sale.order.line",
+                    "search_read",
+                    [[]],
+                    {"fields": [candidate], "limit": 20},
+                )
+                has_data = any(
+                    bool(r.get(candidate)) for r in (rows or [])
+                )
+                if has_data:
+                    self._analytic_field = candidate
+                    logger.info("Using analytic field: %s (has data)", candidate)
+                    return self._analytic_field
+            except Exception:
+                continue
+
+        self._analytic_field = "analytic_account_id"
+        logger.info("Using analytic field: %s (fallback)", self._analytic_field)
         return self._analytic_field
 
     # ── Data fetching ────────────────────────────────────────────────────
@@ -375,6 +384,17 @@ class InstallationAnalyser:
             aid = extract_analytic_id(ln, af)
             if aid:
                 po_by_analytic[aid].append(ln)
+
+        so_with_analytic = sum(1 for ln in so_lines if extract_analytic_id(ln, af))
+        po_with_analytic = sum(1 for ln in po_lines if extract_analytic_id(ln, af))
+        common = set(so_by_analytic.keys()) & set(po_by_analytic.keys())
+        logger.info(
+            "Analytic matching: %d/%d SO lines have IDs, %d/%d PO lines have IDs, "
+            "%d common analytic accounts",
+            so_with_analytic, len(so_lines),
+            po_with_analytic, len(po_lines),
+            len(common),
+        )
 
         # Index PO lines by vendor for vendor analysis
         vendor_stats: dict[str, dict] = defaultdict(lambda: {
