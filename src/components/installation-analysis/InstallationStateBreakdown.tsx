@@ -15,9 +15,10 @@ interface Props {
 }
 
 export function InstallationStateBreakdown({ byProductType }: Props) {
+  const safe = byProductType || {};
   const allStates = new Set<string>();
-  Object.values(byProductType).forEach((pt) => {
-    Object.keys(pt.by_state).forEach((s) => allStates.add(s));
+  Object.values(safe).forEach((pt) => {
+    Object.keys(pt.by_state || {}).forEach((s) => allStates.add(s));
   });
   const states = Array.from(allStates).sort();
 
@@ -39,7 +40,7 @@ export function InstallationStateBreakdown({ byProductType }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {Object.entries(byProductType).flatMap(([type, stats]) =>
+            {Object.entries(safe).flatMap(([type, stats]) =>
               states
                 .filter((s) => stats.by_state[s])
                 .map((state) => {

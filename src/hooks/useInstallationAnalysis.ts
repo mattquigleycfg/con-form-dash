@@ -94,6 +94,14 @@ async function fetchInstallationAnalysis(
     return null;
   }
 
+  if (!data || data.source === "error" || data.error || !data.per_m2_rates) {
+    console.warn(
+      "Installation analysis returned invalid data:",
+      data?.error || data?.ml_service_error || "missing expected fields"
+    );
+    return null;
+  }
+
   return data as InstallationAnalysisData;
 }
 

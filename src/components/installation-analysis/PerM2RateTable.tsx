@@ -44,7 +44,7 @@ export function PerM2RateTable({ perM2Rates, byProductType }: Props) {
   const [bracket, setBracket] = useState("all");
 
   const entries = useMemo(() => {
-    const rows = Object.entries(perM2Rates)
+    const rows = Object.entries(perM2Rates || {})
       .map(([m2, data]) => ({ m2: parseInt(m2, 10), ...data }))
       .sort((a, b) => a.m2 - b.m2);
 
@@ -61,7 +61,7 @@ export function PerM2RateTable({ perM2Rates, byProductType }: Props) {
   }));
 
   const bracketSummaries = useMemo(() => {
-    const allRows = Object.entries(perM2Rates).map(([m2, data]) => ({
+    const allRows = Object.entries(perM2Rates || {}).map(([m2, data]) => ({
       m2: parseInt(m2, 10),
       ...data,
     }));
@@ -204,7 +204,7 @@ export function PerM2RateTable({ perM2Rates, byProductType }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {Object.entries(byProductType).map(([type, stats]) => (
+              {Object.entries(byProductType || {}).map(([type, stats]) => (
                 <TableRow key={type}>
                   <TableCell>
                     <Badge variant="outline">{type}</Badge>
