@@ -193,14 +193,31 @@ class InstallationAnalyser:
 
     def _detect_analytic_field(self) -> str:
         """Check whether the Odoo instance uses analytic_distribution (17+)
-        or analytic_account_id (16).  We sample a few records and pick the
-        field that actually carries data -- the other one may exist but be
-        empty on Odoo 16 Enterprise."""
+        or analytic_account_id (16).  We probe both fields and use whichever
+        exists without erroring -- then prefer the one with data."""
         if self._analytic_field:
             return self._analytic_field
 
+        valid_fields: list[str] = []
         for candidate in ("analytic_account_id", "analytic_distribution"):
             try:
+                self.odoo.models.execute_kw(
+                    self.odoo.db,
+                    self.odoo.uid,
+                    self.odoo.password,
+                    "sale.order.line",
+                    "search_read",
+                    [[]],
+                    {"fields": [candidate], "limit": 1},
+                )
+                valid_fields.append(candidate)
+            except Exception:
+                logger.info("Field %s not available on sale.order.line", candidate)
+
+        if len(valid_fields) == 1:
+            self._analytic_field = valid_fields[0]
+        elif len(valid_fields) > 1:
+            for vf in valid_fields:
                 rows = self.odoo.models.execute_kw(
                     self.odoo.db,
                     self.odoo.uid,
@@ -208,23 +225,147 @@ class InstallationAnalyser:
                     "sale.order.line",
                     "search_read",
                     [[]],
-                    {"fields": [candidate], "limit": 20},
+                    {"fields": [vf], "limit": 50},
                 )
-                has_data = any(
-                    bool(r.get(candidate)) for r in (rows or [])
-                )
-                if has_data:
-                    self._analytic_field = candidate
-                    logger.info("Using analytic field: %s (has data)", candidate)
-                    return self._analytic_field
-            except Exception:
-                continue
+                if any(bool(r.get(vf)) for r in (rows or [])):
+                    self._analytic_field = vf
+                    break
+            if not self._analytic_field:
+                self._analytic_field = valid_fields[0]
+        else:
+            self._analytic_field = "analytic_distribution"
 
-        self._analytic_field = "analytic_account_id"
-        logger.info("Using analytic field: %s (fallback)", self._analytic_field)
+        logger.info("Using analytic field: %s", self._analytic_field)
         return self._analytic_field
 
     # ── Data fetching ────────────────────────────────────────────────────
+
+    def _discover_installation_product_ids(self) -> list[int]:
+        """Find all product.product IDs that are genuine INSTALLATION
+        products.  Two-pronged search:
+        1. product.template where stripped name == 'INSTALLATION' → variants
+        2. product.product where stripped name == 'INSTALLATION' (catches
+           products on separate templates like the INSTALLATION buffer)
+        Excludes products like '[INS+FRE] EASYMECH MR PLATFORM'."""
+        if hasattr(self, "_install_product_ids"):
+            return self._install_product_ids
+
+        all_ids: set[int] = set()
+
+        # Prong 1: via templates (include archived with active_test=False)
+        ctx = {"active_test": False}
+        templates = self.odoo.models.execute_kw(
+            self.odoo.db, self.odoo.uid, self.odoo.password,
+            "product.template", "search_read",
+            [[["name", "ilike", "INSTALLATION"]]],
+            {"fields": ["id", "name"], "limit": 200, "context": ctx},
+        )
+        tmpl_ids = [
+            t["id"] for t in templates
+            if t.get("name", "").strip().upper() == "INSTALLATION"
+        ]
+        if tmpl_ids:
+            variants = self.odoo.models.execute_kw(
+                self.odoo.db, self.odoo.uid, self.odoo.password,
+                "product.product", "search_read",
+                [[["product_tmpl_id", "in", tmpl_ids]]],
+                {"fields": ["id", "name", "default_code"], "limit": 500,
+                 "context": ctx},
+            )
+            for v in variants:
+                all_ids.add(v["id"])
+            logger.info(
+                "INSTALLATION templates %s → %d variants",
+                [(t["id"], repr(t["name"])) for t in templates if t["id"] in tmpl_ids],
+                len(variants),
+            )
+
+        # Prong 2: direct product search including archived
+        products = self.odoo.models.execute_kw(
+            self.odoo.db, self.odoo.uid, self.odoo.password,
+            "product.product", "search_read",
+            [[["name", "ilike", "INSTALLATION"]]],
+            {"fields": ["id", "name", "default_code"], "limit": 500,
+             "context": ctx},
+        )
+        for p in products:
+            pname = (p.get("name") or "").strip().upper()
+            if pname == "INSTALLATION":
+                all_ids.add(p["id"])
+
+        self._install_product_ids = sorted(all_ids)
+        logger.info(
+            "INSTALLATION product IDs (total %d): %s",
+            len(self._install_product_ids),
+            self._install_product_ids,
+        )
+
+        if not self._install_product_ids:
+            logger.warning("No INSTALLATION products found")
+
+        return self._install_product_ids
+
+    def _fetch_installation_variant_prices(self) -> dict[str, float]:
+        """Build state → lst_price map from INSTALLATION product variants.
+        Used for lump-sum fallback: when an SO line has qty=1 and
+        price_unit > $750, the real man-days are inferred by dividing
+        the unit price by the per-day rate for that state."""
+        if hasattr(self, "_variant_price_by_state"):
+            return self._variant_price_by_state
+
+        product_ids = self._discover_installation_product_ids()
+        if not product_ids:
+            self._variant_price_by_state: dict[str, float] = {}
+            self._variant_id_to_state: dict[int, str] = {}
+            return self._variant_price_by_state
+
+        ctx = {"active_test": False}
+        variants = self.odoo.models.execute_kw(
+            self.odoo.db, self.odoo.uid, self.odoo.password,
+            "product.product", "search_read",
+            [[["id", "in", product_ids]]],
+            {"fields": ["id", "lst_price", "product_template_attribute_value_ids"],
+             "context": ctx},
+        )
+
+        all_attr_val_ids: set[int] = set()
+        for v in variants:
+            for av_id in (v.get("product_template_attribute_value_ids") or []):
+                all_attr_val_ids.add(av_id)
+
+        attr_val_names: dict[int, str] = {}
+        if all_attr_val_ids:
+            attr_vals = self.odoo.models.execute_kw(
+                self.odoo.db, self.odoo.uid, self.odoo.password,
+                "product.template.attribute.value", "search_read",
+                [[["id", "in", list(all_attr_val_ids)]]],
+                {"fields": ["id", "name"]},
+            )
+            for av in attr_vals:
+                attr_val_names[av["id"]] = av.get("name", "")
+
+        valid_states = {"NSW", "VIC", "QLD", "WA", "SA", "TAS", "NT", "ACT"}
+        state_price: dict[str, float] = {}
+        variant_id_to_state: dict[int, str] = {}
+        for v in variants:
+            price = v.get("lst_price", 0) or 0
+            if price <= 0:
+                continue
+            for av_id in (v.get("product_template_attribute_value_ids") or []):
+                av_name = attr_val_names.get(av_id, "").strip().upper()
+                if av_name in valid_states:
+                    state_price[av_name] = price
+                    variant_id_to_state[v["id"]] = av_name
+                    break
+
+        logger.info(
+            "INSTALLATION variant prices by state: %s",
+            {s: f"${p:,.2f}" for s, p in sorted(state_price.items())},
+        )
+
+        self._variant_price_by_state = state_price
+        self._variant_id_to_state = variant_id_to_state
+        return self._variant_price_by_state
 
     def _fetch_so_install_lines(self) -> list[dict]:
         af = self._detect_analytic_field()
@@ -237,13 +378,21 @@ class InstallationAnalyser:
             "name",
             af,
         ]
-        domain = [
-            "|",
-            ["product_id.default_code", "=", "INS001"],
-            ["product_id.name", "ilike", "INSTALLATION"],
-            ["order_id.state", "in", ["sale", "done"]],
-            ["product_uom_qty", ">", 0],
-        ]
+        product_ids = self._discover_installation_product_ids()
+        if product_ids:
+            domain = [
+                ["product_id", "in", product_ids],
+                ["order_id.state", "in", ["sale", "done"]],
+                ["product_uom_qty", ">", 0],
+            ]
+        else:
+            domain = [
+                "|",
+                ["product_id.default_code", "=", "INS001"],
+                ["product_id.name", "=", "INSTALLATION"],
+                ["order_id.state", "in", ["sale", "done"]],
+                ["product_uom_qty", ">", 0],
+            ]
         lines = self.odoo.search_read("sale.order.line", domain, fields)
         logger.info("Fetched %d SO installation lines", len(lines))
         return lines
@@ -260,36 +409,102 @@ class InstallationAnalyser:
             "partner_id",
             af,
         ]
-        domain = [
-            "|",
-            ["product_id.default_code", "=", "INS001"],
-            ["product_id.name", "ilike", "INSTALLATION"],
-            ["order_id.state", "in", ["purchase", "done"]],
-            ["product_qty", ">", 0],
-        ]
+        product_ids = self._discover_installation_product_ids()
+        if product_ids:
+            domain = [
+                ["product_id", "in", product_ids],
+                ["order_id.state", "in", ["purchase", "done"]],
+                ["product_qty", ">", 0],
+            ]
+        else:
+            domain = [
+                "|",
+                ["product_id.default_code", "=", "INS001"],
+                ["product_id.name", "=", "INSTALLATION"],
+                ["order_id.state", "in", ["purchase", "done"]],
+                ["product_qty", ">", 0],
+            ]
         lines = self.odoo.search_read("purchase.order.line", domain, fields)
         logger.info("Fetched %d PO installation lines", len(lines))
         return lines
 
     def _fetch_so_headers(self, order_ids: list[int]) -> dict[int, dict]:
-        """Fetch SO headers for classification (x_sale_order_type) and customer."""
+        """Fetch SO headers for classification, customer, analytic account,
+        and project_name (custom field used as matching fallback)."""
         if not order_ids:
             return {}
-        fields = ["id", "name", "partner_id", "x_sale_order_type"]
+        base_fields = ["id", "name", "partner_id"]
+        optional = ["x_sale_order_type", "analytic_account_id", "project_name"]
+        fields = base_fields + optional
+        for attempt in range(len(optional) + 1):
+            try:
+                records = self.odoo.search_read(
+                    "sale.order",
+                    [["id", "in", order_ids]],
+                    fields,
+                )
+                return {r["id"]: r for r in records}
+            except Exception as exc:
+                err_msg = str(exc)
+                removed = None
+                for of in list(optional):
+                    if of in err_msg:
+                        optional.remove(of)
+                        removed = of
+                        break
+                if removed:
+                    fields = base_fields + optional
+                    logger.info("Field %s not on sale.order, retrying", removed)
+                else:
+                    raise
+        records = self.odoo.search_read(
+            "sale.order", [["id", "in", order_ids]], base_fields
+        )
+        return {r["id"]: r for r in records}
+
+    def _fetch_po_headers(self, po_order_ids: list[int]) -> dict[int, dict]:
+        """Fetch PO headers for project_id (custom field linking to
+        project.project, which has its own analytic_account_id)."""
+        if not po_order_ids:
+            return {}
+        base_fields = ["id", "name"]
+        optional = ["project_id"]
+        fields = base_fields + optional
         try:
             records = self.odoo.search_read(
-                "sale.order",
-                [["id", "in", order_ids]],
+                "purchase.order",
+                [["id", "in", po_order_ids]],
                 fields,
             )
         except Exception:
-            fields = ["id", "name", "partner_id"]
-            records = self.odoo.search_read(
-                "sale.order",
-                [["id", "in", order_ids]],
-                fields,
-            )
+            logger.info("Field project_id not on purchase.order")
+            return {}
         return {r["id"]: r for r in records}
+
+    def _resolve_project_analytic_accounts(
+        self, project_ids: list[int],
+    ) -> dict[int, int]:
+        """Given project.project IDs, return mapping of
+        project_id -> analytic_account_id."""
+        if not project_ids:
+            return {}
+        try:
+            records = self.odoo.search_read(
+                "project.project",
+                [["id", "in", project_ids]],
+                ["id", "analytic_account_id"],
+            )
+            result = {}
+            for r in records:
+                aa = r.get("analytic_account_id")
+                if isinstance(aa, (list, tuple)):
+                    result[r["id"]] = int(aa[0])
+                elif isinstance(aa, (int, float)) and aa:
+                    result[r["id"]] = int(aa)
+            return result
+        except Exception as exc:
+            logger.warning("Could not resolve project analytic accounts: %s", exc)
+            return {}
 
     def _fetch_sibling_lines(self, order_ids: list[int]) -> dict[int, list[dict]]:
         """Fetch all SO lines for given orders (for regex classification + dims)."""
@@ -364,6 +579,41 @@ class InstallationAnalyser:
         so_lines = self._fetch_so_install_lines()
         po_lines = self._fetch_po_install_lines()
 
+        # ── Variant prices for lump-sum detection (SO + PO) ──────────────
+        variant_prices = self._fetch_installation_variant_prices()
+
+        # ── PO lump-sum adjustment ────────────────────────────────────────
+        # Same logic as SO: when product_qty=1 and price_unit > $750 the PO
+        # was raised as a lump sum.  Infer real days from state rate.
+        po_lump_sum_count = 0
+        for po_ln in po_lines:
+            po_qty = po_ln.get("product_qty", 0) or 0
+            po_rate = po_ln.get("price_unit", 0) or 0
+            if po_qty == 1 and po_rate > 750 and variant_prices:
+                po_state = extract_state(po_ln.get("name", "") or "")
+                if not po_state and hasattr(self, "_variant_id_to_state"):
+                    pid = po_ln.get("product_id")
+                    if isinstance(pid, (list, tuple)):
+                        pid = pid[0]
+                    if isinstance(pid, int):
+                        po_state = self._variant_id_to_state.get(pid)
+                if po_state:
+                    state_rate = variant_prices.get(po_state, 0)
+                    if state_rate > 0:
+                        inferred = po_rate / state_rate
+                        po_oid = po_ln["order_id"]
+                        if isinstance(po_oid, (list, tuple)):
+                            po_oid = po_oid[1]
+                        logger.info(
+                            "PO lump-sum detected (%s): $%.2f / $%.2f (%s) "
+                            "→ %.1f inferred days",
+                            po_oid, po_rate, state_rate, po_state, inferred,
+                        )
+                        po_ln["product_qty"] = round(inferred, 2)
+                        po_lump_sum_count += 1
+        if po_lump_sum_count:
+            logger.info("Adjusted %d PO lump-sum lines", po_lump_sum_count)
+
         so_order_ids = list({
             (ln["order_id"][0] if isinstance(ln["order_id"], (list, tuple)) else ln["order_id"])
             for ln in so_lines
@@ -371,29 +621,81 @@ class InstallationAnalyser:
         so_headers = self._fetch_so_headers(so_order_ids)
         siblings = self._fetch_sibling_lines(so_order_ids)
 
-        # Index SO install lines by analytic account
-        so_by_analytic: dict[int, list[dict]] = defaultdict(list)
-        for ln in so_lines:
-            aid = extract_analytic_id(ln, af)
-            if aid:
-                so_by_analytic[aid].append(ln)
+        # Collect unique PO order IDs for header fetch
+        po_order_ids = list({
+            (ln["order_id"][0] if isinstance(ln["order_id"], (list, tuple)) else ln["order_id"])
+            for ln in po_lines
+        })
+        po_headers = self._fetch_po_headers(po_order_ids)
 
-        # Index PO install lines by analytic account
+        # Resolve PO project_id → analytic_account_id via project.project
+        project_ids = []
+        for ph in po_headers.values():
+            pid = ph.get("project_id")
+            if isinstance(pid, (list, tuple)):
+                project_ids.append(int(pid[0]))
+            elif isinstance(pid, (int, float)) and pid:
+                project_ids.append(int(pid))
+        project_to_analytic = self._resolve_project_analytic_accounts(
+            list(set(project_ids))
+        )
+        logger.info(
+            "PO project resolution: %d POs have project_id, %d resolved to analytic accounts",
+            len(project_ids), len(project_to_analytic),
+        )
+
+        # ── Build PO analytic index (3 tiers) ────────────────────────────
+        # Tier 1: PO line analytic_distribution (direct)
+        # Tier 2: PO header project_id → project.project.analytic_account_id
         po_by_analytic: dict[int, list[dict]] = defaultdict(list)
         for ln in po_lines:
             aid = extract_analytic_id(ln, af)
+            if not aid:
+                po_oid = ln["order_id"][0] if isinstance(ln["order_id"], (list, tuple)) else ln["order_id"]
+                ph = po_headers.get(po_oid, {})
+                pid = ph.get("project_id")
+                if isinstance(pid, (list, tuple)):
+                    aid = project_to_analytic.get(int(pid[0]))
+                elif isinstance(pid, (int, float)) and pid:
+                    aid = project_to_analytic.get(int(pid))
             if aid:
                 po_by_analytic[aid].append(ln)
 
-        so_with_analytic = sum(1 for ln in so_lines if extract_analytic_id(ln, af))
-        po_with_analytic = sum(1 for ln in po_lines if extract_analytic_id(ln, af))
+        # ── Build SO analytic index ──────────────────────────────────────
+        # SO line analytic_distribution (usually empty in Odoo 16)
+        # → fallback to sale.order.analytic_account_id
+        so_by_analytic: dict[int, list[dict]] = defaultdict(list)
+        for ln in so_lines:
+            aid = extract_analytic_id(ln, af)
+            if not aid:
+                oid = ln["order_id"][0] if isinstance(ln["order_id"], (list, tuple)) else ln["order_id"]
+                hdr = so_headers.get(oid, {})
+                aid = extract_analytic_id(hdr, "analytic_account_id")
+            if aid:
+                so_by_analytic[aid].append(ln)
+
+        # ── Build project_name index for tertiary fallback ───────────────
+        # SO project_name (char) → PO project_id display name
+        po_project_name_to_lines: dict[str, list[dict]] = defaultdict(list)
+        for ln in po_lines:
+            po_oid = ln["order_id"][0] if isinstance(ln["order_id"], (list, tuple)) else ln["order_id"]
+            ph = po_headers.get(po_oid, {})
+            pid = ph.get("project_id")
+            if isinstance(pid, (list, tuple)) and len(pid) > 1:
+                pname = str(pid[1]).strip().upper()
+                if pname:
+                    po_project_name_to_lines[pname].append(ln)
+
+        so_with_analytic = len([ln for lns in so_by_analytic.values() for ln in lns])
+        po_with_analytic = len([ln for lns in po_by_analytic.values() for ln in lns])
         common = set(so_by_analytic.keys()) & set(po_by_analytic.keys())
         logger.info(
             "Analytic matching: %d/%d SO lines have IDs, %d/%d PO lines have IDs, "
-            "%d common analytic accounts",
+            "%d common analytic accounts, %d PO project names indexed",
             so_with_analytic, len(so_lines),
             po_with_analytic, len(po_lines),
             len(common),
+            len(po_project_name_to_lines),
         )
 
         # Index PO lines by vendor for vendor analysis
@@ -425,9 +727,93 @@ class InstallationAnalyser:
             if state:
                 v["states_worked"].add(state)
 
-        # Build matched SO-PO comparison rows
+        so_lump_sum_count = 0
+
+        # ── Group SO installation lines by order ─────────────────────────
+        # Each order should count as ONE platform entry, with total quoted
+        # days = sum of all installation line quantities on that order.
+        order_groups: dict[int, dict] = {}
+        for so_ln in so_lines:
+            oid = so_ln["order_id"][0] if isinstance(so_ln["order_id"], (list, tuple)) else so_ln["order_id"]
+            qty = so_ln.get("product_uom_qty", 0) or 0
+            rev = so_ln.get("price_subtotal", 0) or 0
+            rate = so_ln.get("price_unit", 0) or 0
+            if not rev and qty and rate:
+                rev = qty * rate
+
+            state = extract_state(so_ln.get("name", "") or "")
+            if not state and hasattr(self, "_variant_id_to_state"):
+                pid = so_ln.get("product_id")
+                if isinstance(pid, (list, tuple)):
+                    pid = pid[0]
+                if isinstance(pid, int):
+                    state = self._variant_id_to_state.get(pid)
+
+            line_aid = extract_analytic_id(so_ln, af)
+
+            # Lump-sum detection: qty=1 with high unit price means the
+            # total was quoted as a lump sum; infer real man-days from
+            # the INSTALLATION variant's per-day rate for this state
+            is_lump_sum = False
+            if qty == 1 and rate > 750 and variant_prices and state:
+                state_rate = variant_prices.get(state, 0)
+                if state_rate > 0:
+                    inferred_qty = rate / state_rate
+                    logger.info(
+                        "Lump-sum detected (order %s): $%.2f / $%.2f (%s) "
+                        "→ %.1f inferred days",
+                        oid, rate, state_rate, state, inferred_qty,
+                    )
+                    qty = round(inferred_qty, 2)
+                    is_lump_sum = True
+                    so_lump_sum_count += 1
+
+            if oid not in order_groups:
+                header = so_headers.get(oid, {})
+                sibs = siblings.get(oid, [])
+                customer = ""
+                if isinstance(header.get("partner_id"), (list, tuple)):
+                    customer = str(header["partner_id"][1])
+                hdr_aid = extract_analytic_id(header, "analytic_account_id")
+                proj_name = (header.get("project_name") or "").strip()
+                order_groups[oid] = {
+                    "header": header,
+                    "so_ref": header.get("name", ""),
+                    "customer": customer,
+                    "types": self._classify_order(header, sibs),
+                    "area_m2": self._extract_order_area(sibs),
+                    "total_qty": 0.0,
+                    "total_revenue": 0.0,
+                    "avg_rate": 0.0,
+                    "states": set(),
+                    "analytic_id": hdr_aid,
+                    "project_name": proj_name,
+                    "line_count": 0,
+                    "lump_sum_inferred": False,
+                }
+
+            grp = order_groups[oid]
+            grp["total_qty"] += qty
+            grp["total_revenue"] += rev
+            grp["line_count"] += 1
+            if is_lump_sum:
+                grp["lump_sum_inferred"] = True
+            if state:
+                grp["states"].add(state)
+            if line_aid and not grp["analytic_id"]:
+                grp["analytic_id"] = line_aid
+
+        for grp in order_groups.values():
+            if grp["total_qty"] > 0:
+                grp["avg_rate"] = grp["total_revenue"] / grp["total_qty"]
+
+        logger.info(
+            "Grouped %d SO install lines into %d orders (%d with lump-sum inference)",
+            len(so_lines), len(order_groups), so_lump_sum_count,
+        )
+
+        # ── Per-type, per-m2, and SO-PO matching (per order) ──────────
         so_po_rows: list[dict] = []
-        # Track per-type and per-m2 aggregation
         by_type: dict[str, dict] = defaultdict(lambda: {
             "order_ids": set(),
             "total_install_qty": 0.0,
@@ -447,20 +833,13 @@ class InstallationAnalyser:
             "total_area": 0.0,
         })
 
-        for so_ln in so_lines:
-            oid = so_ln["order_id"][0] if isinstance(so_ln["order_id"], (list, tuple)) else so_ln["order_id"]
-            header = so_headers.get(oid, {})
-            sibs = siblings.get(oid, [])
-            types = self._classify_order(header, sibs)
-            area_m2 = self._extract_order_area(sibs)
-            state = extract_state(so_ln.get("name", "") or "")
-            so_qty = so_ln.get("product_uom_qty", 0) or 0
-            so_rate = so_ln.get("price_unit", 0) or 0
-            so_rev = so_ln.get("price_subtotal", 0) or (so_qty * so_rate)
-            customer = ""
-            if isinstance(header.get("partner_id"), (list, tuple)):
-                customer = str(header["partner_id"][1])
-            so_ref = header.get("name", "")
+        for oid, grp in order_groups.items():
+            types = grp["types"]
+            area_m2 = grp["area_m2"]
+            so_qty = grp["total_qty"]
+            so_rev = grp["total_revenue"]
+            so_rate_avg = grp["avg_rate"]
+            primary_state = sorted(grp["states"])[0] if grp["states"] else None
 
             for t in types:
                 bt = by_type[t]
@@ -470,8 +849,8 @@ class InstallationAnalyser:
                 if area_m2:
                     bt["total_area_m2"] += area_m2
                     bt["area_count"] += 1
-                if state:
-                    bs = bt["by_state"][state]
+                if primary_state:
+                    bs = bt["by_state"][primary_state]
                     bs["order_ids"].add(oid)
                     bs["total_qty"] += so_qty
                     bs["total_revenue"] += so_rev
@@ -484,20 +863,28 @@ class InstallationAnalyser:
                 b["total_install_cost"] += so_rev
                 b["total_area"] += area_m2
 
-            # Try analytic match to PO
-            aid = extract_analytic_id(so_ln, af)
+            aid = grp["analytic_id"]
             matched_po_lines = po_by_analytic.get(aid, []) if aid else []
+
+            # Tertiary fallback: match by project_name → PO project_id name
+            match_method = "analytic" if matched_po_lines else None
+            if not matched_po_lines and grp["project_name"]:
+                pn_upper = grp["project_name"].upper()
+                matched_po_lines = po_project_name_to_lines.get(pn_upper, [])
+                if matched_po_lines:
+                    match_method = "project_name"
+
             if matched_po_lines:
                 po_qty_total = sum((p.get("product_qty", 0) or 0) for p in matched_po_lines)
                 po_cost_total = sum((p.get("price_subtotal", 0) or 0) for p in matched_po_lines)
                 po_rate_avg = po_cost_total / po_qty_total if po_qty_total else 0
                 po_refs = []
-                vendors = []
+                vendors_list = []
                 for p in matched_po_lines:
                     if isinstance(p.get("order_id"), (list, tuple)):
                         po_refs.append(str(p["order_id"][1]))
                     if isinstance(p.get("partner_id"), (list, tuple)):
-                        vendors.append(str(p["partner_id"][1]))
+                        vendors_list.append(str(p["partner_id"][1]))
 
                 overquote_ratio = so_qty / po_qty_total if po_qty_total > 0 else None
                 margin = so_rev - po_cost_total
@@ -505,16 +892,16 @@ class InstallationAnalyser:
 
                 so_po_rows.append({
                     "analytic_account_id": aid,
-                    "so_ref": so_ref,
-                    "customer": customer,
+                    "so_ref": grp["so_ref"],
+                    "customer": grp["customer"],
                     "product_types": types,
-                    "state": state,
+                    "state": primary_state,
                     "platform_area_m2": area_m2,
                     "so_qty": round(so_qty, 2),
-                    "so_rate": round(so_rate, 2),
+                    "so_rate": round(so_rate_avg, 2),
                     "so_revenue": round(so_rev, 2),
-                    "po_refs": list(set(po_refs)),
-                    "vendors": list(set(vendors)),
+                    "po_refs": sorted(set(po_refs)),
+                    "vendors": sorted(set(vendors_list)),
                     "po_qty": round(po_qty_total, 2),
                     "po_rate": round(po_rate_avg, 2),
                     "po_cost": round(po_cost_total, 2),
@@ -522,6 +909,8 @@ class InstallationAnalyser:
                     "overquote_days": round(so_qty - po_qty_total, 2) if po_qty_total else None,
                     "margin": round(margin, 2),
                     "margin_pct": round(margin_pct, 3) if margin_pct is not None else None,
+                    "match_method": match_method,
+                    "lump_sum_inferred": grp.get("lump_sum_inferred", False),
                 })
 
         # ── Assemble output ──────────────────────────────────────────────
@@ -577,7 +966,6 @@ class InstallationAnalyser:
             overquote_summary["total_overquoted_days"] = round(
                 sum(r.get("overquote_days", 0) or 0 for r in matched_rows), 2
             )
-            # By type
             type_ratios: dict[str, list[float]] = defaultdict(list)
             state_ratios: dict[str, list[float]] = defaultdict(list)
             for r in matched_rows:
@@ -622,7 +1010,13 @@ class InstallationAnalyser:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "total_so_install_lines": len(so_lines),
             "total_po_install_lines": len(po_lines),
+            "total_orders_analysed": len(order_groups),
             "total_matched_pairs": len(matched_rows),
+            "matched_by_analytic": sum(1 for r in so_po_rows if r.get("match_method") == "analytic"),
+            "matched_by_project_name": sum(1 for r in so_po_rows if r.get("match_method") == "project_name"),
+            "lump_sum_so_lines": so_lump_sum_count,
+            "lump_sum_po_lines": po_lump_sum_count,
+            "variant_prices_by_state": variant_prices,
             "analytic_field_used": af,
         }
 
