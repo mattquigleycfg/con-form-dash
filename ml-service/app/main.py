@@ -19,6 +19,7 @@ from app.training.scheduler import retrain_all, retrain_model, load_all_models
 from app.models import cost_predictor, anomaly, waste_scorer, overrun
 from app.models import lead_time, demand, customer_scoring, supplier_scoring
 from app.models import supplier_analytics, mrp_engine, reorder_engine
+from app.models import installation_analysis
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -374,3 +375,35 @@ async def predict_reorder_rules(request: ReorderRequest, api_key: str = Depends(
     else:
         results = reorder_engine.compare_all_reorder_rules(request.service_level)
         return {"rules": results}
+
+
+# ── Installation Analysis ────────────────────────────────────────────────────
+
+class InstallationAnalysisRequest(BaseModel):
+    force_refresh: bool = False
+
+
+@app.post("/analyze/installations")
+async def analyze_installations(
+    request: InstallationAnalysisRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """Analyse installation man-days: per-m2 rates, SO-PO comparison via
+    analytic accounts, vendor breakdown, and overquote metrics."""
+    try:
+        result = installation_analysis.analyze(force_refresh=request.force_refresh)
+        return result
+    except Exception as e:
+        logger.error("Installation analysis failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/analyze/installations/refresh")
+async def refresh_installation_analysis(api_key: str = Depends(verify_api_key)):
+    """Force a fresh fetch from Odoo (bypasses the 30-min cache)."""
+    try:
+        result = installation_analysis.analyze(force_refresh=True)
+        return result
+    except Exception as e:
+        logger.error("Installation analysis refresh failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

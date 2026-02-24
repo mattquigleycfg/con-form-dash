@@ -21,6 +21,7 @@ import JobCosting from "./pages/JobCosting";
 import JobCostingDetail from "./pages/JobCostingDetail";
 import JobCostingReports from "./pages/JobCostingReports";
 import MLDashboard from "./pages/MLDashboard";
+import InstallationAnalysis from "./pages/InstallationAnalysis";
 import NotFound from "./pages/NotFound";
 // KPI Pages
 import KPIOverview from "./pages/kpis";
@@ -69,6 +70,7 @@ const App = () => (
               <Route path="/job-costing" element={<ProtectedRoute><JobCosting /></ProtectedRoute>} />
               <Route path="/job-costing/reports" element={<ProtectedRoute><JobCostingReports /></ProtectedRoute>} />
               <Route path="/job-costing/:id" element={<ProtectedRoute><JobCostingDetail /></ProtectedRoute>} />
+              <Route path="/project/installations" element={<ProtectedRoute><InstallationAnalysis /></ProtectedRoute>} />
               <Route path="/ml-dashboard" element={<ProtectedRoute><MLDashboard /></ProtectedRoute>} />
               {/* KPI Routes */}
               <Route path="/kpis" element={<ProtectedRoute><KPIOverview /></ProtectedRoute>} />

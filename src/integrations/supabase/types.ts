@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      installation_day_tracking: {
+        Row: {
+          id: string
+          sale_order_ref: string
+          sale_order_id: number | null
+          customer_name: string | null
+          product_type: string
+          state: string | null
+          platform_area_m2: number | null
+          quoted_days: number
+          actual_days: number
+          po_days: number | null
+          variance: number | null
+          overquote_ratio: number | null
+          vendor: string | null
+          notes: string | null
+          tracked_by: string | null
+          user_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          sale_order_ref: string
+          sale_order_id?: number | null
+          customer_name?: string | null
+          product_type: string
+          state?: string | null
+          platform_area_m2?: number | null
+          quoted_days?: number
+          actual_days?: number
+          po_days?: number | null
+          vendor?: string | null
+          notes?: string | null
+          tracked_by?: string | null
+          user_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          sale_order_ref?: string
+          sale_order_id?: number | null
+          customer_name?: string | null
+          product_type?: string
+          state?: string | null
+          platform_area_m2?: number | null
+          quoted_days?: number
+          actual_days?: number
+          po_days?: number | null
+          vendor?: string | null
+          notes?: string | null
+          tracked_by?: string | null
+          user_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       job_bom_lines: {
         Row: {
           created_at: string

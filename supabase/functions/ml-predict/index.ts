@@ -28,6 +28,7 @@ interface MLRequest {
   granularity?: string;
   service_level?: number;
   reorder_model?: string;
+  force_refresh?: boolean;
 }
 
 async function callMLService(endpoint: string, body: any): Promise<any> {
@@ -162,6 +163,16 @@ Deno.serve(async (req) => {
 
       case 'insights':
         result = await callMLService('/insights', { job_id });
+        break;
+
+      case 'installation-analysis':
+        result = await callMLService('/analyze/installations', {
+          force_refresh: request.force_refresh || false,
+        });
+        break;
+
+      case 'installation-analysis-refresh':
+        result = await callMLService('/analyze/installations/refresh', {});
         break;
 
       case 'train':
