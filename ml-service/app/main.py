@@ -20,6 +20,7 @@ from app.models import cost_predictor, anomaly, waste_scorer, overrun
 from app.models import lead_time, demand, customer_scoring, supplier_scoring
 from app.models import supplier_analytics, mrp_engine, reorder_engine
 from app.models import installation_analysis
+from app.models import freight_analysis
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -406,4 +407,35 @@ async def refresh_installation_analysis(api_key: str = Depends(verify_api_key)):
         return result
     except Exception as e:
         logger.error("Installation analysis refresh failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Freight Analysis ─────────────────────────────────────────────────────────
+
+class FreightAnalysisRequest(BaseModel):
+    force_refresh: bool = False
+
+
+@app.post("/analyze/freight")
+async def analyze_freight(
+    request: FreightAnalysisRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """Analyse freight costs: SO vs PO gap analysis per project."""
+    try:
+        result = freight_analysis.analyze(force_refresh=request.force_refresh)
+        return result
+    except Exception as e:
+        logger.error("Freight analysis failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/analyze/freight/refresh")
+async def refresh_freight_analysis(api_key: str = Depends(verify_api_key)):
+    """Force a fresh freight analysis from Odoo."""
+    try:
+        result = freight_analysis.analyze(force_refresh=True)
+        return result
+    except Exception as e:
+        logger.error("Freight analysis refresh failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

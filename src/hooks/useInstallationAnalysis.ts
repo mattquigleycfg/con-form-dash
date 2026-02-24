@@ -45,6 +45,8 @@ export interface SoPoRow {
   overquote_days: number | null;
   margin: number;
   margin_pct: number | null;
+  match_method?: string;
+  lump_sum_inferred?: boolean;
 }
 
 export interface OverquoteSummary {
@@ -74,7 +76,13 @@ export interface InstallationAnalysisData {
   generated_at: string;
   total_so_install_lines: number;
   total_po_install_lines: number;
+  total_orders_analysed: number;
   total_matched_pairs: number;
+  matched_by_analytic: number;
+  matched_by_project_name: number;
+  lump_sum_so_lines: number;
+  lump_sum_po_lines: number;
+  variant_prices_by_state: Record<string, number>;
   analytic_field_used: string;
 }
 

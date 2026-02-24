@@ -18,15 +18,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Tooltip as RechartsTooltip,
   ScatterChart,
   Scatter,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Calculator } from "lucide-react";
 import type { SoPoRow } from "@/hooks/useInstallationAnalysis";
 
 interface Props {
@@ -113,7 +115,7 @@ export function SoPoComparisonTable({ rows }: Props) {
                   strokeDasharray="5 5"
                   label="1:1"
                 />
-                <Tooltip
+                <RechartsTooltip
                   formatter={(value: number, name: string) => [
                     value.toFixed(1),
                     name === "SO Qty (quoted)" ? "Quoted" : "Actual",
@@ -186,7 +188,23 @@ export function SoPoComparisonTable({ rows }: Props) {
               <TableBody>
                 {filtered.map((r, i) => (
                   <TableRow key={`${r.so_ref}-${i}`}>
-                    <TableCell className="font-mono text-xs">{r.so_ref}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <span className="flex items-center gap-1">
+                        {r.so_ref}
+                        {r.lump_sum_inferred && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Calculator className="h-3.5 w-3.5 text-amber-500" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Qty inferred from lump-sum price / state rate</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </span>
+                    </TableCell>
                     <TableCell className="max-w-[160px] truncate">{r.customer}</TableCell>
                     <TableCell>
                       {r.product_types.map((t) => (

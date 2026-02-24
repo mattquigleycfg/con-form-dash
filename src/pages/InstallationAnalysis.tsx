@@ -43,9 +43,12 @@ export default function InstallationAnalysis() {
           </div>
           <div className="flex items-center gap-3">
             {data && (
-              <div className="text-right text-xs text-muted-foreground">
+              <div className="text-right text-xs text-muted-foreground space-y-0.5">
                 <p>{data.total_so_install_lines} SO lines &middot; {data.total_po_install_lines} PO lines</p>
-                <p>{data.total_matched_pairs} matched via {data.analytic_field_used}</p>
+                <p>{data.total_matched_pairs} matched ({data.matched_by_analytic || 0} analytic, {data.matched_by_project_name || 0} project)</p>
+                {(data.lump_sum_so_lines > 0 || data.lump_sum_po_lines > 0) && (
+                  <p>Lump-sum inferred: {data.lump_sum_so_lines} SO &middot; {data.lump_sum_po_lines} PO</p>
+                )}
               </div>
             )}
             <Button
@@ -102,7 +105,10 @@ export default function InstallationAnalysis() {
                   perM2Rates={data.per_m2_rates}
                   byProductType={data.by_product_type}
                 />
-                <InstallationStateBreakdown byProductType={data.by_product_type} />
+                <InstallationStateBreakdown
+                  byProductType={data.by_product_type}
+                  variantPrices={data.variant_prices_by_state}
+                />
               </div>
             ) : (
               <EmptyState />
@@ -117,6 +123,8 @@ export default function InstallationAnalysis() {
                 <QuotedVsActualSummary
                   summary={data.overquote_summary}
                   byProductType={data.by_product_type}
+                  lumpSumSoLines={data.lump_sum_so_lines}
+                  lumpSumPoLines={data.lump_sum_po_lines}
                 />
                 <OverquoteChart rows={data.so_po_comparison} />
                 <SoPoComparisonTable rows={data.so_po_comparison} />

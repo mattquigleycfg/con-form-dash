@@ -15,6 +15,8 @@ import type { OverquoteSummary, ProductTypeStats } from "@/hooks/useInstallation
 interface Props {
   summary: OverquoteSummary;
   byProductType: Record<string, ProductTypeStats>;
+  lumpSumSoLines?: number;
+  lumpSumPoLines?: number;
 }
 
 function ratioColor(ratio: number | null): string {
@@ -32,7 +34,7 @@ function ratioLabel(ratio: number | null): string {
   return "Underquoted";
 }
 
-export function QuotedVsActualSummary({ summary, byProductType }: Props) {
+export function QuotedVsActualSummary({ summary, byProductType, lumpSumSoLines, lumpSumPoLines }: Props) {
   const byTypeChart = Object.entries(summary.avg_overquote_by_type || {}).map(
     ([type, ratio]) => ({ type, ratio: ratio ?? 0 })
   );
@@ -43,7 +45,7 @@ export function QuotedVsActualSummary({ summary, byProductType }: Props) {
   return (
     <div className="space-y-6">
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Matched SO-PO Pairs</p>
@@ -86,6 +88,19 @@ export function QuotedVsActualSummary({ summary, byProductType }: Props) {
             <p className="text-xs text-muted-foreground">days quoted above actual</p>
           </CardContent>
         </Card>
+        {(lumpSumSoLines || lumpSumPoLines) ? (
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Lump-Sum Inferred</p>
+              <p className="text-2xl font-bold text-amber-500">
+                {(lumpSumSoLines || 0) + (lumpSumPoLines || 0)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {lumpSumSoLines || 0} SO &middot; {lumpSumPoLines || 0} PO lines
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
 
       {/* Charts row */}

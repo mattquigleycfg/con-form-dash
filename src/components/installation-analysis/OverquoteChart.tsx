@@ -61,11 +61,14 @@ export function OverquoteChart({ rows }: Props) {
     }).filter((b) => b.count > 0);
   }, [matched]);
 
-  const scatterData = matched.map((r) => ({
-    soQty: r.so_qty,
-    poQty: r.po_qty,
-  }));
-  const maxVal = Math.max(...scatterData.map((d) => Math.max(d.soQty, d.poQty)), 10);
+  const scatterNormal = matched
+    .filter((r) => !r.lump_sum_inferred)
+    .map((r) => ({ soQty: r.so_qty, poQty: r.po_qty }));
+  const scatterInferred = matched
+    .filter((r) => r.lump_sum_inferred)
+    .map((r) => ({ soQty: r.so_qty, poQty: r.po_qty }));
+  const allScatter = [...scatterNormal, ...scatterInferred];
+  const maxVal = Math.max(...allScatter.map((d) => Math.max(d.soQty, d.poQty)), 10);
 
   if (matched.length === 0) {
     return (
@@ -120,8 +123,12 @@ export function OverquoteChart({ rows }: Props) {
                   stroke="hsl(var(--muted-foreground))"
                   strokeDasharray="5 5"
                 />
+                <Legend />
                 <Tooltip formatter={(v: number) => v.toFixed(1)} />
-                <Scatter data={scatterData} fill="hsl(var(--primary))" opacity={0.6} />
+                <Scatter name="Actual qty" data={scatterNormal} fill="hsl(var(--primary))" opacity={0.6} />
+                {scatterInferred.length > 0 && (
+                  <Scatter name="Inferred (lump-sum)" data={scatterInferred} fill="#f59e0b" opacity={0.8} />
+                )}
               </ScatterChart>
             </ResponsiveContainer>
             <p className="text-xs text-muted-foreground mt-1">
