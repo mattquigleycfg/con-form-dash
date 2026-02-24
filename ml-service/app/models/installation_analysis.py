@@ -231,7 +231,7 @@ class InstallationAnalyser:
         domain = [
             "|",
             ["product_id.default_code", "=", "INS001"],
-            ["product_template_id.name", "=", "INSTALLATION"],
+            ["product_id.name", "ilike", "INSTALLATION"],
             ["order_id.state", "in", ["sale", "done"]],
             ["product_uom_qty", ">", 0],
         ]
