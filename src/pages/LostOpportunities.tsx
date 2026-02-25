@@ -2,7 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import DashboardLayout from "@/components/DashboardLayout";
+import { DashboardLayout } from "@/components/DashboardLayout";
 import { useLostOpportunities } from "@/hooks/useLostOpportunities";
 import SummaryCards from "@/components/lost-opportunities/SummaryCards";
 import OrderTable from "@/components/lost-opportunities/OrderTable";
