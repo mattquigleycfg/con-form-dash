@@ -21,6 +21,7 @@ from app.models import lead_time, demand, customer_scoring, supplier_scoring
 from app.models import supplier_analytics, mrp_engine, reorder_engine
 from app.models import installation_analysis
 from app.models import freight_analysis
+from app.models import lost_opportunities
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -438,4 +439,35 @@ async def refresh_freight_analysis(api_key: str = Depends(verify_api_key)):
         return result
     except Exception as e:
         logger.error("Freight analysis refresh failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Lost Opportunities ───────────────────────────────────────────────────────
+
+class LostOpportunitiesRequest(BaseModel):
+    force_refresh: bool = False
+
+
+@app.post("/analyze/lost-opportunities")
+async def analyze_lost_opportunities(
+    request: LostOpportunitiesRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """Profitability analysis: labour, freight, product costs and GP per order."""
+    try:
+        result = lost_opportunities.analyze(force_refresh=request.force_refresh)
+        return result
+    except Exception as e:
+        logger.error("Lost opportunities analysis failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/analyze/lost-opportunities/refresh")
+async def refresh_lost_opportunities(api_key: str = Depends(verify_api_key)):
+    """Force a fresh lost-opportunities analysis."""
+    try:
+        result = lost_opportunities.analyze(force_refresh=True)
+        return result
+    except Exception as e:
+        logger.error("Lost opportunities refresh failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

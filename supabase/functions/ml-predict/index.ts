@@ -185,6 +185,16 @@ Deno.serve(async (req) => {
         result = await callMLService('/analyze/freight/refresh', {});
         break;
 
+      case 'lost-opportunities':
+        result = await callMLService('/analyze/lost-opportunities', {
+          force_refresh: request.force_refresh || false,
+        });
+        break;
+
+      case 'lost-opportunities-refresh':
+        result = await callMLService('/analyze/lost-opportunities/refresh', {});
+        break;
+
       case 'train':
         if (request.model_name) {
           result = await callMLService(`/train/${request.model_name}`, {});

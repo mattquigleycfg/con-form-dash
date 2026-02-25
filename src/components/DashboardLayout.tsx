@@ -1,5 +1,5 @@
 import { ReactNode, useState, useEffect } from "react";
-import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt, Briefcase, Gauge, Megaphone, Compass, HardHat, Factory, Palette, Wallet, UserCog, Globe, Brain, Hammer, Truck } from "lucide-react";
+import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt, Briefcase, Gauge, Megaphone, Compass, HardHat, Factory, Palette, Wallet, UserCog, Globe, Brain, Hammer, Truck, SearchX } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -39,6 +39,7 @@ const navigation: NavSection[] = [
       { name: "Pipeline", href: "/pipeline", icon: TrendingUp },
       { name: "Targets", href: "/targets", icon: Target },
       { name: "Team", href: "/team", icon: Users },
+      { name: "Lost Opportunities", href: "/sales/lost-opportunities", icon: SearchX },
     ],
   },
   {
