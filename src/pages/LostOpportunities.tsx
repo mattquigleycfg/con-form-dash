@@ -7,7 +7,6 @@ import { useLostOpportunities } from "@/hooks/useLostOpportunities";
 import SummaryCards from "@/components/lost-opportunities/SummaryCards";
 import OrderTable from "@/components/lost-opportunities/OrderTable";
 import ProfitCharts from "@/components/lost-opportunities/ProfitCharts";
-import TypeStateBreakdown from "@/components/lost-opportunities/TypeStateBreakdown";
 
 export default function LostOpportunities() {
   const { data, isLoading, error, refresh, isRefreshing } = useLostOpportunities();
@@ -15,13 +14,11 @@ export default function LostOpportunities() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Lost Opportunities</h1>
             <p className="text-sm text-muted-foreground">
-              Cost breakdown and GP analysis across matched SO→PO project orders.
-              Orders above 40% GP are flagged as potential over-estimates.
+              CRM opportunities marked as lost — reasons, pipeline stage, quote breakdown and overinflation flags.
             </p>
           </div>
           <Button
@@ -35,11 +32,10 @@ export default function LostOpportunities() {
           </Button>
         </div>
 
-        {/* Loading */}
         {isLoading && (
           <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              {Array.from({ length: 6 }).map((_, i) => (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              {Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-28 rounded-lg" />
               ))}
             </div>
@@ -47,12 +43,11 @@ export default function LostOpportunities() {
           </div>
         )}
 
-        {/* Error */}
         {!isLoading && (error || !data) && (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
             <AlertTriangle className="h-10 w-10 text-amber-500" />
             <p className="text-sm">
-              {error ? String(error) : "Lost opportunities data is not available. Click Refresh to load from Odoo."}
+              {error ? String(error) : "Lost opportunities data is not available. Click Refresh to load from Odoo CRM."}
             </p>
             <Button variant="outline" size="sm" onClick={() => refresh()} disabled={isRefreshing}>
               <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -61,37 +56,34 @@ export default function LostOpportunities() {
           </div>
         )}
 
-        {/* Data */}
         {data && (
           <>
             <SummaryCards summary={data.summary} />
 
-            <Tabs defaultValue="orders" className="space-y-4">
+            <Tabs defaultValue="table" className="space-y-4">
               <TabsList>
-                <TabsTrigger value="orders">Order Breakdown</TabsTrigger>
+                <TabsTrigger value="table">All Opportunities</TabsTrigger>
                 <TabsTrigger value="charts">Charts</TabsTrigger>
-                <TabsTrigger value="breakdown">Type / State</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="orders">
+              <TabsContent value="table">
                 <OrderTable
-                  orders={data.orders}
-                  gpThreshold={data.summary.gp_threshold}
+                  leads={data.leads}
+                  filterOptions={data.filter_options}
                 />
               </TabsContent>
 
               <TabsContent value="charts">
-                <ProfitCharts orders={data.orders} summary={data.summary} />
-              </TabsContent>
-
-              <TabsContent value="breakdown">
-                <TypeStateBreakdown summary={data.summary} />
+                <ProfitCharts
+                  byReason={data.by_reason}
+                  byStage={data.by_stage}
+                  bySalesperson={data.by_salesperson}
+                />
               </TabsContent>
             </Tabs>
 
             <p className="text-xs text-muted-foreground text-right">
-              Generated {new Date(data.generated_at).toLocaleString()} ·{" "}
-              Analytic field: {data.analytic_field_used}
+              Generated {new Date(data.generated_at).toLocaleString()}
             </p>
           </>
         )}

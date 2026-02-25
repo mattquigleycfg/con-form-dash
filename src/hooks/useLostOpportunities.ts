@@ -1,61 +1,69 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export interface LostOppOrder {
-  so_ref: string;
+export interface LostLead {
+  id: number;
+  name: string;
   customer: string;
-  product_types: string[];
-  state: string | null;
+  salesperson: string;
+  stage: string;
+  lost_reason: string;
   revenue: number;
-  cogs_labour: number;
-  cogs_freight: number;
-  cogs_product: number;
-  total_cogs: number;
-  gp: number;
-  gp_pct: number;
-  is_over_estimate: boolean;
-  excess_value: number;
-  match_method: string;
+  date_lost: string;
+  has_quote: boolean;
+  quote_total: number;
+  quote_labour: number;
+  quote_freight: number;
+  quote_product: number;
+  labour_qty: number;
+  margin_pct: number;
+  quote_state: string | null;
+  flags: string[];
 }
 
-export interface TypeBreakdown {
+export interface ReasonBreakdown {
+  reason: string;
   count: number;
-  revenue: number;
-  cogs: number;
-  gp: number;
-  labour: number;
-  freight: number;
-  product: number;
+  value: number;
 }
 
-export interface StateBreakdown {
+export interface StageBreakdown {
+  stage: string;
   count: number;
-  revenue: number;
-  cogs: number;
-  gp: number;
+  value: number;
+}
+
+export interface SalespersonBreakdown {
+  salesperson: string;
+  count: number;
+  value: number;
 }
 
 export interface LostOppSummary {
-  total_orders_analysed: number;
-  total_revenue: number;
-  total_cogs: number;
-  overall_gp: number;
-  orders_above_threshold: number;
-  pct_above_threshold: number;
-  total_excess_value: number;
-  total_labour_cost: number;
-  total_freight_cost: number;
-  total_product_cost: number;
+  total_lost: number;
+  total_value: number;
+  avg_deal_size: number;
+  with_quotes: number;
+  flagged_overinflated: number;
+  top_reason: string;
+  top_reason_count: number;
   gp_threshold: number;
-  by_product_type: Record<string, TypeBreakdown>;
-  by_state: Record<string, StateBreakdown>;
+}
+
+export interface FilterOptions {
+  salespersons: string[];
+  reasons: string[];
+  stages: string[];
 }
 
 export interface LostOpportunitiesData {
-  orders: LostOppOrder[];
+  leads: LostLead[];
   summary: LostOppSummary;
+  by_reason: ReasonBreakdown[];
+  by_stage: StageBreakdown[];
+  by_salesperson: SalespersonBreakdown[];
+  filter_options: FilterOptions;
   generated_at: string;
-  analytic_field_used: string;
 }
 
 async function fetchLostOpportunities(

@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, TrendingDown, AlertTriangle, Package, Truck, Wrench } from "lucide-react";
+import { XCircle, DollarSign, AlertTriangle, FileText, TrendingDown } from "lucide-react";
 import type { LostOppSummary } from "@/hooks/useLostOpportunities";
 
 interface Props {
@@ -10,84 +10,69 @@ const fmt = (v: number) =>
   "$" + v.toLocaleString("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 export default function SummaryCards({ summary }: Props) {
-  const overPct = (summary.pct_above_threshold * 100).toFixed(1);
-
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Orders Analysed</CardTitle>
-          <Package className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm font-medium">Lost Opportunities</CardTitle>
+          <XCircle className="h-4 w-4 text-red-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{summary.total_orders_analysed}</div>
+          <div className="text-2xl font-bold">{summary.total_lost}</div>
           <p className="text-xs text-muted-foreground">
-            matched SO→PO pairs
+            total archived leads
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Overall GP</CardTitle>
+          <CardTitle className="text-sm font-medium">Total Value Lost</CardTitle>
           <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{(summary.overall_gp * 100).toFixed(1)}%</div>
+          <div className="text-2xl font-bold">{fmt(summary.total_value)}</div>
           <p className="text-xs text-muted-foreground">
-            {fmt(summary.total_revenue)} rev / {fmt(summary.total_cogs)} COGS
+            avg {fmt(summary.avg_deal_size)} per deal
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Above {(summary.gp_threshold * 100).toFixed(0)}% GP</CardTitle>
+          <CardTitle className="text-sm font-medium">With Quotes</CardTitle>
+          <FileText className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{summary.with_quotes}</div>
+          <p className="text-xs text-muted-foreground">
+            had linked sale orders
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Overinflated Flags</CardTitle>
           <AlertTriangle className="h-4 w-4 text-amber-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-amber-600">{summary.orders_above_threshold}</div>
+          <div className="text-2xl font-bold text-amber-600">{summary.flagged_overinflated}</div>
           <p className="text-xs text-muted-foreground">
-            {overPct}% of orders · {fmt(summary.total_excess_value)} excess
+            high GP, labour, or freight
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Labour Cost</CardTitle>
-          <Wrench className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{fmt(summary.total_labour_cost)}</div>
-          <p className="text-xs text-muted-foreground">
-            PO installation lines
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Freight Cost</CardTitle>
-          <Truck className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{fmt(summary.total_freight_cost)}</div>
-          <p className="text-xs text-muted-foreground">
-            PO freight lines
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Product Cost</CardTitle>
+          <CardTitle className="text-sm font-medium">Top Lost Reason</CardTitle>
           <TrendingDown className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{fmt(summary.total_product_cost)}</div>
+          <div className="text-lg font-bold leading-tight truncate">{summary.top_reason || "—"}</div>
           <p className="text-xs text-muted-foreground">
-            materials & other PO lines
+            {summary.top_reason_count} occurrences
           </p>
         </CardContent>
       </Card>

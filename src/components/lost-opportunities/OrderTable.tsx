@@ -7,84 +7,92 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import type { LostOppOrder } from "@/hooks/useLostOpportunities";
+import type { LostLead, FilterOptions } from "@/hooks/useLostOpportunities";
 
 interface Props {
-  orders: LostOppOrder[];
-  gpThreshold: number;
+  leads: LostLead[];
+  filterOptions: FilterOptions;
 }
 
 const fmt = (v: number) =>
   "$" + Math.abs(v).toLocaleString("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
-function gpBadge(gp: number, threshold: number) {
-  if (gp < 0) return <Badge variant="destructive">{(gp * 100).toFixed(1)}%</Badge>;
-  if (gp > threshold) return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200">{(gp * 100).toFixed(1)}%</Badge>;
-  return <Badge variant="secondary">{(gp * 100).toFixed(1)}%</Badge>;
-}
+const FLAG_LABELS: Record<string, { label: string; color: string }> = {
+  high_gp: { label: "High GP", color: "bg-amber-100 text-amber-800" },
+  high_labour: { label: "High Labour", color: "bg-red-100 text-red-800" },
+  high_freight: { label: "High Freight", color: "bg-orange-100 text-orange-800" },
+};
 
-export default function OrderTable({ orders, gpThreshold }: Props) {
+export default function OrderTable({ leads, filterOptions }: Props) {
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [stateFilter, setStateFilter] = useState("all");
-  const [gpFilter, setGpFilter] = useState("all");
-
-  const types = useMemo(
-    () => [...new Set(orders.flatMap((o) => o.product_types))].sort(),
-    [orders],
-  );
-  const states = useMemo(
-    () => [...new Set(orders.map((o) => o.state).filter(Boolean))].sort() as string[],
-    [orders],
-  );
+  const [spFilter, setSpFilter] = useState("all");
+  const [reasonFilter, setReasonFilter] = useState("all");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [valueFilter, setValueFilter] = useState("all");
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return orders.filter((o) => {
-      if (q && !o.so_ref.toLowerCase().includes(q) && !o.customer.toLowerCase().includes(q)) return false;
-      if (typeFilter !== "all" && !o.product_types.includes(typeFilter)) return false;
-      if (stateFilter !== "all" && o.state !== stateFilter) return false;
-      if (gpFilter === "over" && !o.is_over_estimate) return false;
-      if (gpFilter === "under" && o.gp >= 0) return false;
-      if (gpFilter === "normal" && (o.is_over_estimate || o.gp < 0)) return false;
+    return leads.filter((l) => {
+      if (q && !l.name.toLowerCase().includes(q) && !l.customer.toLowerCase().includes(q)) return false;
+      if (spFilter !== "all" && l.salesperson !== spFilter) return false;
+      if (reasonFilter !== "all" && l.lost_reason !== reasonFilter) return false;
+      if (stageFilter !== "all" && l.stage !== stageFilter) return false;
+      if (valueFilter === "under50k" && l.revenue >= 50000) return false;
+      if (valueFilter === "50k-200k" && (l.revenue < 50000 || l.revenue >= 200000)) return false;
+      if (valueFilter === "200k-500k" && (l.revenue < 200000 || l.revenue >= 500000)) return false;
+      if (valueFilter === "over500k" && l.revenue < 500000) return false;
       return true;
     });
-  }, [orders, search, typeFilter, stateFilter, gpFilter]);
+  }, [leads, search, spFilter, reasonFilter, stageFilter, valueFilter]);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3">
         <Input
-          placeholder="Search SO or customer…"
+          placeholder="Search name or customer…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
         />
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Type" /></SelectTrigger>
+        <Select value={spFilter} onValueChange={setSpFilter}>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Salesperson" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {types.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+            <SelectItem value="all">All Salespersons</SelectItem>
+            {filterOptions.salespersons.map((sp) => (
+              <SelectItem key={sp} value={sp}>{sp}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
-        <Select value={stateFilter} onValueChange={setStateFilter}>
-          <SelectTrigger className="w-[120px]"><SelectValue placeholder="State" /></SelectTrigger>
+        <Select value={reasonFilter} onValueChange={setReasonFilter}>
+          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Lost Reason" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All States</SelectItem>
-            {states.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            <SelectItem value="all">All Reasons</SelectItem>
+            {filterOptions.reasons.map((r) => (
+              <SelectItem key={r} value={r}>{r}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
-        <Select value={gpFilter} onValueChange={setGpFilter}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="GP Filter" /></SelectTrigger>
+        <Select value={stageFilter} onValueChange={setStageFilter}>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Stage" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All GP</SelectItem>
-            <SelectItem value="over">Over {(gpThreshold * 100).toFixed(0)}%</SelectItem>
-            <SelectItem value="normal">0–{(gpThreshold * 100).toFixed(0)}%</SelectItem>
-            <SelectItem value="under">Negative GP</SelectItem>
+            <SelectItem value="all">All Stages</SelectItem>
+            {filterOptions.stages.map((s) => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={valueFilter} onValueChange={setValueFilter}>
+          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Value" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Values</SelectItem>
+            <SelectItem value="under50k">Under $50K</SelectItem>
+            <SelectItem value="50k-200k">$50K – $200K</SelectItem>
+            <SelectItem value="200k-500k">$200K – $500K</SelectItem>
+            <SelectItem value="over500k">Over $500K</SelectItem>
           </SelectContent>
         </Select>
         <span className="self-center text-sm text-muted-foreground">
-          {filtered.length} / {orders.length} orders
+          {filtered.length} / {leads.length}
         </span>
       </div>
 
@@ -92,49 +100,51 @@ export default function OrderTable({ orders, gpThreshold }: Props) {
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
-              <TableHead>SO Ref</TableHead>
+              <TableHead>Opportunity</TableHead>
               <TableHead>Customer</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>State</TableHead>
-              <TableHead className="text-right">Revenue</TableHead>
+              <TableHead>Salesperson</TableHead>
+              <TableHead>Stage</TableHead>
+              <TableHead>Lost Reason</TableHead>
+              <TableHead className="text-right">Value</TableHead>
+              <TableHead className="text-right">Quote</TableHead>
               <TableHead className="text-right">Labour</TableHead>
               <TableHead className="text-right">Freight</TableHead>
-              <TableHead className="text-right">Product</TableHead>
-              <TableHead className="text-right">COGS</TableHead>
-              <TableHead className="text-center">GP</TableHead>
-              <TableHead className="text-right">Excess</TableHead>
-              <TableHead>Match</TableHead>
+              <TableHead>Flags</TableHead>
+              <TableHead>Date</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={12} className="text-center text-muted-foreground">
-                  No orders match filters.
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                  No opportunities match filters.
                 </TableCell>
               </TableRow>
             )}
-            {filtered.map((o, idx) => (
-              <TableRow
-                key={`${o.so_ref}-${idx}`}
-                className={o.is_over_estimate ? "bg-amber-50/50" : o.gp < 0 ? "bg-red-50/40" : ""}
-              >
-                <TableCell className="font-mono text-xs whitespace-nowrap">{o.so_ref}</TableCell>
-                <TableCell className="max-w-[180px] truncate text-xs">{o.customer}</TableCell>
-                <TableCell className="text-xs">{o.product_types.join(", ")}</TableCell>
-                <TableCell className="text-xs">{o.state || "—"}</TableCell>
-                <TableCell className="text-right text-xs">{fmt(o.revenue)}</TableCell>
-                <TableCell className="text-right text-xs">{fmt(o.cogs_labour)}</TableCell>
-                <TableCell className="text-right text-xs">{fmt(o.cogs_freight)}</TableCell>
-                <TableCell className="text-right text-xs">{fmt(o.cogs_product)}</TableCell>
-                <TableCell className="text-right text-xs font-medium">{fmt(o.total_cogs)}</TableCell>
-                <TableCell className="text-center">{gpBadge(o.gp, gpThreshold)}</TableCell>
-                <TableCell className="text-right text-xs">
-                  {o.excess_value > 0 ? fmt(o.excess_value) : "—"}
-                </TableCell>
+            {filtered.map((l) => (
+              <TableRow key={l.id} className={l.flags.length > 0 ? "bg-amber-50/40" : ""}>
+                <TableCell className="text-xs font-medium max-w-[200px] truncate">{l.name}</TableCell>
+                <TableCell className="text-xs max-w-[160px] truncate">{l.customer}</TableCell>
+                <TableCell className="text-xs">{l.salesperson}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="text-[10px]">{o.match_method}</Badge>
+                  <Badge variant="outline" className="text-[10px] whitespace-nowrap">{l.stage}</Badge>
                 </TableCell>
+                <TableCell className="text-xs max-w-[160px] truncate">{l.lost_reason}</TableCell>
+                <TableCell className="text-right text-xs font-medium">{l.revenue > 0 ? fmt(l.revenue) : "—"}</TableCell>
+                <TableCell className="text-right text-xs">{l.has_quote ? fmt(l.quote_total) : "—"}</TableCell>
+                <TableCell className="text-right text-xs">{l.quote_labour > 0 ? fmt(l.quote_labour) : "—"}</TableCell>
+                <TableCell className="text-right text-xs">{l.quote_freight > 0 ? fmt(l.quote_freight) : "—"}</TableCell>
+                <TableCell>
+                  <div className="flex gap-1 flex-wrap">
+                    {l.flags.map((f) => {
+                      const fl = FLAG_LABELS[f];
+                      return fl ? (
+                        <Badge key={f} className={`${fl.color} text-[9px]`}>{fl.label}</Badge>
+                      ) : null;
+                    })}
+                  </div>
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{l.date_lost}</TableCell>
               </TableRow>
             ))}
           </TableBody>

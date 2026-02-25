@@ -2,255 +2,145 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, ScatterChart, Scatter, ReferenceLine,
-  Cell, PieChart, Pie,
+  ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
-import type { LostOppOrder, LostOppSummary } from "@/hooks/useLostOpportunities";
+import type {
+  ReasonBreakdown, StageBreakdown, SalespersonBreakdown,
+} from "@/hooks/useLostOpportunities";
 
 interface Props {
-  orders: LostOppOrder[];
-  summary: LostOppSummary;
+  byReason: ReasonBreakdown[];
+  byStage: StageBreakdown[];
+  bySalesperson: SalespersonBreakdown[];
 }
 
-const COLORS = {
-  revenue: "#3b82f6",
-  cogs: "#f97316",
-  labour: "#6366f1",
-  freight: "#f59e0b",
-  product: "#10b981",
-  excess: "#ef4444",
-};
-
-const PIE_COLORS = ["#6366f1", "#f59e0b", "#10b981"];
+const REASON_COLORS = [
+  "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6",
+  "#8b5cf6", "#ec4899", "#14b8a6", "#6366f1", "#f43f5e",
+  "#a855f7", "#06b6d4", "#84cc16", "#d946ef", "#0ea5e9",
+];
 
 const fmt = (v: number) =>
   "$" + Math.abs(v).toLocaleString("en-AU", { maximumFractionDigits: 0 });
 
-export default function ProfitCharts({ orders, summary }: Props) {
-  const typeData = useMemo(
-    () =>
-      Object.entries(summary.by_product_type).map(([type, d]) => ({
-        type,
-        revenue: d.revenue,
-        cogs: d.cogs,
-        gp_pct: +(d.gp * 100).toFixed(1),
-      })),
-    [summary],
+export default function ProfitCharts({ byReason, byStage, bySalesperson }: Props) {
+  const reasonPie = useMemo(
+    () => byReason.slice(0, 12).map((r) => ({ name: r.reason, value: r.count })),
+    [byReason],
   );
 
-  const stateData = useMemo(
-    () =>
-      Object.entries(summary.by_state).map(([state, d]) => ({
-        state,
-        revenue: d.revenue,
-        cogs: d.cogs,
-        gp_pct: +(d.gp * 100).toFixed(1),
-      })),
-    [summary],
+  const stageBar = useMemo(
+    () => byStage.map((s) => ({ stage: s.stage, count: s.count, value: s.value })),
+    [byStage],
   );
 
-  const gpDistribution = useMemo(() => {
-    const buckets: Record<string, number> = {
-      "< 0%": 0, "0–20%": 0, "20–30%": 0, "30–40%": 0,
-      "40–50%": 0, "50–60%": 0, "60–80%": 0, "> 80%": 0,
-    };
-    for (const o of orders) {
-      const g = o.gp * 100;
-      if (g < 0) buckets["< 0%"]++;
-      else if (g < 20) buckets["0–20%"]++;
-      else if (g < 30) buckets["20–30%"]++;
-      else if (g < 40) buckets["30–40%"]++;
-      else if (g < 50) buckets["40–50%"]++;
-      else if (g < 60) buckets["50–60%"]++;
-      else if (g < 80) buckets["60–80%"]++;
-      else buckets["> 80%"]++;
-    }
-    return Object.entries(buckets).map(([bucket, count]) => ({ bucket, count }));
-  }, [orders]);
-
-  const scatterData = useMemo(
-    () =>
-      orders.map((o) => ({
-        revenue: o.revenue,
-        cogs: o.total_cogs,
-        name: o.so_ref,
-        over: o.is_over_estimate,
-      })),
-    [orders],
+  const spBar = useMemo(
+    () => bySalesperson.slice(0, 15).map((sp) => ({
+      name: sp.salesperson.split(" ").slice(0, 2).join(" "),
+      count: sp.count,
+      value: sp.value,
+    })),
+    [bySalesperson],
   );
 
-  const costBreakdown = useMemo(
-    () => [
-      { name: "Labour", value: summary.total_labour_cost },
-      { name: "Freight", value: summary.total_freight_cost },
-      { name: "Product", value: summary.total_product_cost },
-    ],
-    [summary],
+  const reasonBar = useMemo(
+    () => byReason.map((r) => ({
+      reason: r.reason.length > 25 ? r.reason.slice(0, 22) + "…" : r.reason,
+      count: r.count,
+      value: r.value,
+    })),
+    [byReason],
   );
-
-  const maxAxis = useMemo(() => {
-    const m = Math.max(...orders.map((o) => Math.max(o.revenue, o.total_cogs)), 0);
-    return Math.ceil(m * 1.1);
-  }, [orders]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      {/* GP Distribution */}
-      <Card>
+      {/* Lost Reason - Bar */}
+      <Card className="lg:col-span-2">
         <CardHeader>
-          <CardTitle className="text-sm">GP Distribution</CardTitle>
+          <CardTitle className="text-sm">Lost Reasons</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={gpDistribution}>
+          <ResponsiveContainer width="100%" height={Math.max(280, reasonBar.length * 28)}>
+            <BarChart data={reasonBar} layout="vertical" margin={{ left: 140 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="count" fill={COLORS.revenue} radius={[4, 4, 0, 0]}>
-                {gpDistribution.map((entry) => (
-                  <Cell
-                    key={entry.bucket}
-                    fill={
-                      entry.bucket === "< 0%"
-                        ? COLORS.excess
-                        : entry.bucket.startsWith("4") ||
-                          entry.bucket.startsWith("5") ||
-                          entry.bucket.startsWith("6") ||
-                          entry.bucket.startsWith(">")
-                        ? COLORS.freight
-                        : COLORS.revenue
-                    }
-                  />
-                ))}
-              </Bar>
+              <XAxis type="number" allowDecimals={false} />
+              <YAxis dataKey="reason" type="category" tick={{ fontSize: 11 }} width={140} />
+              <Tooltip formatter={(v: number, name: string) =>
+                name === "value" ? fmt(v) : v
+              } />
+              <Legend />
+              <Bar dataKey="count" fill="#3b82f6" name="Count" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {/* COGS Breakdown Pie */}
+      {/* Lost Reason Pie */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">COGS Breakdown</CardTitle>
+          <CardTitle className="text-sm">Lost Reasons (% share)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={320}>
             <PieChart>
               <Pie
-                data={costBreakdown}
+                data={reasonPie}
                 cx="50%"
                 cy="50%"
-                outerRadius={100}
-                label={({ name, value }) => `${name}: ${fmt(value)}`}
+                outerRadius={110}
+                label={({ name, percent }) =>
+                  `${name.length > 18 ? name.slice(0, 15) + "…" : name} ${(percent * 100).toFixed(0)}%`
+                }
+                labelLine={false}
                 dataKey="value"
               >
-                {costBreakdown.map((_, i) => (
-                  <Cell key={i} fill={PIE_COLORS[i]} />
+                {reasonPie.map((_, i) => (
+                  <Cell key={i} fill={REASON_COLORS[i % REASON_COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip formatter={(v: number) => fmt(v)} />
-              <Legend />
+              <Tooltip />
             </PieChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {/* Revenue vs COGS by Type */}
+      {/* Pipeline Stage */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Revenue vs COGS by Product Type</CardTitle>
+          <CardTitle className="text-sm">Pipeline Stage at Loss</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={typeData}>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={stageBar}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="type" tick={{ fontSize: 11 }} />
-              <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => fmt(v)} />
+              <XAxis dataKey="stage" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" height={80} />
+              <YAxis allowDecimals={false} />
+              <Tooltip formatter={(v: number, name: string) =>
+                name === "value" ? fmt(v) : v
+              } />
               <Legend />
-              <Bar dataKey="revenue" fill={COLORS.revenue} name="Revenue" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="cogs" fill={COLORS.cogs} name="COGS" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" fill="#6366f1" name="Count" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {/* Revenue vs COGS by State */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Revenue vs COGS by State</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={stateData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="state" tick={{ fontSize: 11 }} />
-              <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => fmt(v)} />
-              <Legend />
-              <Bar dataKey="revenue" fill={COLORS.revenue} name="Revenue" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="cogs" fill={COLORS.cogs} name="COGS" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* Scatter: Revenue vs COGS */}
+      {/* Value lost by Salesperson */}
       <Card className="lg:col-span-2">
         <CardHeader>
-          <CardTitle className="text-sm">Revenue vs COGS per Order</CardTitle>
+          <CardTitle className="text-sm">Value Lost by Salesperson</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={340}>
-            <ScatterChart>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={spBar}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                type="number"
-                dataKey="revenue"
-                name="Revenue"
-                tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                domain={[0, maxAxis]}
-              />
-              <YAxis
-                type="number"
-                dataKey="cogs"
-                name="COGS"
-                tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                domain={[0, maxAxis]}
-              />
-              <Tooltip
-                formatter={(v: number) => fmt(v)}
-                labelFormatter={(_, payload) =>
-                  payload?.[0]?.payload?.name || ""
-                }
-              />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip formatter={(v: number) => fmt(v)} />
               <Legend />
-              <ReferenceLine
-                segment={[{ x: 0, y: 0 }, { x: maxAxis, y: maxAxis }]}
-                stroke="#94a3b8"
-                strokeDasharray="5 5"
-                label="Break-even"
-              />
-              <ReferenceLine
-                segment={[{ x: 0, y: 0 }, { x: maxAxis, y: maxAxis * 0.6 }]}
-                stroke="#f59e0b"
-                strokeDasharray="3 3"
-                label="40% GP"
-              />
-              <Scatter
-                name="Normal GP"
-                data={scatterData.filter((d) => !d.over)}
-                fill={COLORS.revenue}
-                opacity={0.6}
-              />
-              <Scatter
-                name={`GP > ${(summary.gp_threshold * 100).toFixed(0)}%`}
-                data={scatterData.filter((d) => d.over)}
-                fill={COLORS.freight}
-                opacity={0.7}
-              />
-            </ScatterChart>
+              <Bar dataKey="value" fill="#f97316" name="Value Lost" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" fill="#3b82f6" name="Deals Lost" radius={[4, 4, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>

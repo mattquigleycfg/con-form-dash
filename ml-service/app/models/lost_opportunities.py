@@ -1,83 +1,61 @@
-"""Lost opportunities analysis module.
+"""Lost Opportunities analysis — CRM leads marked as lost.
 
-For each project SO matched to POs, calculates a full cost breakdown
-(labour, freight, product/materials) and gross profit.  Orders with
-GP > 40% are flagged as potential over-estimates — money left on the
-table that could have been used for more competitive quoting.
+Fetches archived crm.lead records from Odoo, enriches them with lost-reason,
+pipeline stage, salesperson, and (where a linked Sale Order exists) a quote
+breakdown by labour / freight / product with overinflation flags.
 """
 
 import logging
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from app.models.installation_analysis import (
-    OdooRPC,
-    extract_analytic_id,
-    extract_state,
-    SO_TYPE_MAP,
-    PRODUCT_TYPE_PATTERNS,
-)
+from app.models.installation_analysis import OdooRPC, extract_state
 
 logger = logging.getLogger(__name__)
 
 GP_THRESHOLD = 0.40
-
 FREIGHT_DEFAULT_CODES = frozenset({"CF000412"})
+
+STATE_VARIABLE_RATES: dict[str, float] = {
+    "NSW": 1450.0,
+    "QLD": 1365.0,
+    "WA": 1550.0,
+    "VIC": 2180.0,
+    "SA": 2180.0,
+    "TAS": 1450.0,
+}
+
+
+def _normalise_reason(raw: str) -> str:
+    """Uniform title-case formatting for lost reasons."""
+    s = raw.strip()
+    if s.isupper() or s.islower():
+        s = s.title()
+    return s
 
 
 class LostOpportunityAnalyser:
     def __init__(self) -> None:
         self.odoo = OdooRPC()
-        self._analytic_field: Optional[str] = None
+        self._install_ids: Optional[set[int]] = None
+        self._freight_ids: Optional[set[int]] = None
 
-    # ── Analytic field detection ──────────────────────────────────────────
-
-    def _detect_analytic_field(self) -> str:
-        if self._analytic_field:
-            return self._analytic_field
-        valid: list[str] = []
-        for c in ("analytic_account_id", "analytic_distribution"):
-            try:
-                self.odoo.models.execute_kw(
-                    self.odoo.db, self.odoo.uid, self.odoo.password,
-                    "sale.order.line", "search_read",
-                    [[]], {"fields": [c], "limit": 1},
-                )
-                valid.append(c)
-            except Exception:
-                pass
-        if len(valid) == 1:
-            self._analytic_field = valid[0]
-        elif len(valid) > 1:
-            for vf in valid:
-                rows = self.odoo.models.execute_kw(
-                    self.odoo.db, self.odoo.uid, self.odoo.password,
-                    "sale.order.line", "search_read",
-                    [[]], {"fields": [vf], "limit": 50},
-                )
-                if any(bool(r.get(vf)) for r in (rows or [])):
-                    self._analytic_field = vf
-                    break
-            if not self._analytic_field:
-                self._analytic_field = valid[0]
-        else:
-            self._analytic_field = "analytic_distribution"
-        logger.info("LostOpp: using analytic field: %s", self._analytic_field)
-        return self._analytic_field
-
-    # ── Product discovery ─────────────────────────────────────────────────
+    # ── Product discovery (for categorising SO lines) ─────────────────────
 
     def _discover_installation_product_ids(self) -> set[int]:
+        if self._install_ids is not None:
+            return self._install_ids
         ids: set[int] = set()
         ctx = {"active_test": False}
-        templates = self.odoo.models.execute_kw(
+        tmpls = self.odoo.models.execute_kw(
             self.odoo.db, self.odoo.uid, self.odoo.password,
             "product.template", "search_read",
             [[["name", "ilike", "INSTALLATION"]]],
             {"fields": ["id", "name"], "limit": 200, "context": ctx},
         )
-        tmpl_ids = [t["id"] for t in templates if t.get("name", "").strip().upper() == "INSTALLATION"]
+        tmpl_ids = [t["id"] for t in tmpls if (t.get("name") or "").strip().upper() == "INSTALLATION"]
         if tmpl_ids:
             variants = self.odoo.models.execute_kw(
                 self.odoo.db, self.odoo.uid, self.odoo.password,
@@ -86,19 +64,22 @@ class LostOpportunityAnalyser:
                 {"fields": ["id"], "limit": 500, "context": ctx},
             )
             ids.update(v["id"] for v in variants)
-        products = self.odoo.models.execute_kw(
+        prods = self.odoo.models.execute_kw(
             self.odoo.db, self.odoo.uid, self.odoo.password,
             "product.product", "search_read",
             [[["name", "ilike", "INSTALLATION"]]],
             {"fields": ["id", "name"], "limit": 500, "context": ctx},
         )
-        for p in products:
+        for p in prods:
             if (p.get("name") or "").strip().upper() == "INSTALLATION":
                 ids.add(p["id"])
+        self._install_ids = ids
         logger.info("LostOpp: %d installation product IDs", len(ids))
         return ids
 
     def _discover_freight_product_ids(self) -> set[int]:
+        if self._freight_ids is not None:
+            return self._freight_ids
         ids: set[int] = set()
         ctx = {"active_test": False}
         for code in FREIGHT_DEFAULT_CODES:
@@ -116,398 +97,388 @@ class LostOpportunityAnalyser:
             {"fields": ["id", "name"], "limit": 100, "context": ctx},
         )
         for p in prods:
-            if (p.get("name") or "").strip().upper() == "(INS) FREIGHT":
+            if "(INS) FREIGHT" in (p.get("name") or "").upper():
                 ids.add(p["id"])
+        self._freight_ids = ids
         logger.info("LostOpp: %d freight product IDs", len(ids))
         return ids
 
-    # ── Data fetching ─────────────────────────────────────────────────────
+    # ── CRM data fetching ─────────────────────────────────────────────────
 
-    def _fetch_so_marker_lines(self, product_ids: list[int]) -> list[dict]:
-        """Fetch SO lines for installation/freight products to identify
-        project SOs worth analysing."""
-        if not product_ids:
-            return []
-        return self.odoo.search_read(
-            "sale.order.line",
-            [["product_id", "in", product_ids],
-             ["order_id.state", "in", ["sale", "done"]]],
-            ["order_id"],
+    def _fetch_lost_reasons(self) -> dict[int, str]:
+        recs = self.odoo.models.execute_kw(
+            self.odoo.db, self.odoo.uid, self.odoo.password,
+            "crm.lost.reason", "search_read",
+            [[]], {"fields": ["id", "name"], "limit": 500},
         )
+        return {r["id"]: _normalise_reason(r.get("name") or "Unknown") for r in recs}
 
-    def _fetch_all_so_lines(self, order_ids: list[int]) -> list[dict]:
-        if not order_ids:
-            return []
-        return self.odoo.search_read(
-            "sale.order.line",
-            [["order_id", "in", order_ids]],
-            ["order_id", "product_id", "product_uom_qty",
-             "price_unit", "price_subtotal", "name"],
+    def _fetch_stages(self) -> dict[int, str]:
+        recs = self.odoo.models.execute_kw(
+            self.odoo.db, self.odoo.uid, self.odoo.password,
+            "crm.stage", "search_read",
+            [[]], {"fields": ["id", "name"], "limit": 200},
         )
+        return {r["id"]: (r.get("name") or "Unknown").strip() for r in recs}
 
-    def _fetch_so_headers(self, order_ids: list[int]) -> dict[int, dict]:
-        if not order_ids:
-            return {}
-        base = ["id", "name", "partner_id"]
-        opt = ["x_sale_order_type", "analytic_account_id", "project_name"]
-        fields = base + opt
-        for _ in range(len(opt) + 1):
+    def _fetch_lost_leads(self) -> list[dict]:
+        base_fields = [
+            "id", "name", "partner_id", "user_id", "stage_id",
+            "lost_reason_id", "expected_revenue", "date_closed",
+            "active", "probability", "create_date",
+        ]
+        optional_fields = ["planned_revenue", "x_sale_order_type"]
+
+        fields = base_fields + optional_fields
+        for _ in range(len(optional_fields) + 1):
             try:
-                recs = self.odoo.search_read("sale.order", [["id", "in", order_ids]], fields)
-                return {r["id"]: r for r in recs}
+                recs = self.odoo.models.execute_kw(
+                    self.odoo.db, self.odoo.uid, self.odoo.password,
+                    "crm.lead", "search_read",
+                    [[["active", "=", False], ["probability", "=", 0]]],
+                    {"fields": fields, "limit": 5000,
+                     "context": {"active_test": False}},
+                )
+                logger.info("LostOpp: fetched %d lost leads", len(recs))
+                return recs
             except Exception as exc:
-                removed = None
-                for o in list(opt):
-                    if o in str(exc):
-                        opt.remove(o)
-                        removed = o
+                removed = False
+                for of in list(optional_fields):
+                    if of in str(exc):
+                        optional_fields.remove(of)
+                        fields = base_fields + optional_fields
+                        removed = True
                         break
-                if removed:
-                    fields = base + opt
-                else:
+                if not removed:
                     raise
-        recs = self.odoo.search_read("sale.order", [["id", "in", order_ids]], base)
-        return {r["id"]: r for r in recs}
-
-    def _fetch_po_headers(self, po_ids: list[int]) -> dict[int, dict]:
-        if not po_ids:
-            return {}
-        try:
-            recs = self.odoo.search_read(
-                "purchase.order", [["id", "in", po_ids]], ["id", "name", "project_id"],
-            )
-        except Exception:
-            return {}
-        return {r["id"]: r for r in recs}
-
-    def _resolve_project_analytics(self, pids: list[int]) -> dict[int, int]:
-        if not pids:
-            return {}
-        try:
-            recs = self.odoo.search_read(
-                "project.project", [["id", "in", pids]], ["id", "analytic_account_id"],
-            )
-            out = {}
-            for r in recs:
-                aa = r.get("analytic_account_id")
-                if isinstance(aa, (list, tuple)):
-                    out[r["id"]] = int(aa[0])
-                elif isinstance(aa, (int, float)) and aa:
-                    out[r["id"]] = int(aa)
-            return out
-        except Exception:
-            return {}
-
-    def _fetch_all_po_lines(self, po_order_ids: list[int]) -> list[dict]:
-        """Fetch ALL lines on given PO orders (every cost category)."""
-        if not po_order_ids:
-            return []
-        return self.odoo.search_read(
-            "purchase.order.line",
-            [["order_id", "in", po_order_ids]],
-            ["order_id", "product_id", "product_qty",
-             "price_unit", "price_subtotal", "name", "partner_id"],
+        recs = self.odoo.models.execute_kw(
+            self.odoo.db, self.odoo.uid, self.odoo.password,
+            "crm.lead", "search_read",
+            [[["active", "=", False], ["probability", "=", 0]]],
+            {"fields": base_fields, "limit": 5000,
+             "context": {"active_test": False}},
         )
+        return recs
 
-    # ── Classification ────────────────────────────────────────────────────
+    # ── Linked Sale Orders ────────────────────────────────────────────────
 
-    def _classify_order(self, hdr: dict, sibs: list[dict]) -> list[str]:
-        types: set[str] = set()
-        so_type = hdr.get("x_sale_order_type")
-        if so_type and so_type in SO_TYPE_MAP:
-            types.add(SO_TYPE_MAP[so_type])
-        elif isinstance(so_type, str):
-            for key, mapped in SO_TYPE_MAP.items():
-                if key.lower() in so_type.lower():
-                    types.add(mapped)
-        if not types:
-            for ln in sibs:
-                pn = ""
-                if isinstance(ln.get("product_id"), (list, tuple)):
-                    pn = str(ln["product_id"][1])
-                combined = f"{pn} {ln.get('name', '')}"
-                for ptype, pat in PRODUCT_TYPE_PATTERNS.items():
-                    if pat.search(combined):
-                        types.add(ptype)
-        return sorted(types) if types else ["Unclassified"]
+    def _fetch_linked_orders(self, lead_ids: list[int]) -> dict[int, list[dict]]:
+        """Find sale.order records linked to lost leads via opportunity_id."""
+        if not lead_ids:
+            return {}
+        so_fields = ["id", "name", "opportunity_id", "amount_total",
+                      "amount_untaxed", "state"]
+        optional = ["margin", "margin_percent"]
+        fields = so_fields + optional
+        for _ in range(len(optional) + 1):
+            try:
+                recs = self.odoo.search_read(
+                    "sale.order",
+                    [["opportunity_id", "in", lead_ids]],
+                    fields,
+                )
+                break
+            except Exception as exc:
+                removed = False
+                for of in list(optional):
+                    if of in str(exc):
+                        optional.remove(of)
+                        fields = so_fields + optional
+                        removed = True
+                        break
+                if not removed:
+                    recs = []
+                    break
+        else:
+            recs = []
 
-    def _extract_state(self, sibs: list[dict]) -> Optional[str]:
-        for ln in sibs:
-            s = extract_state(ln.get("name", "") or "")
+        by_lead: dict[int, list[dict]] = defaultdict(list)
+        for r in recs:
+            opp = r.get("opportunity_id")
+            lid = opp[0] if isinstance(opp, (list, tuple)) else opp
+            if lid:
+                by_lead[int(lid)].append(r)
+        logger.info("LostOpp: found %d SOs linked to %d leads",
+                     len(recs), len(by_lead))
+        return dict(by_lead)
+
+    def _fetch_so_lines(self, so_ids: list[int]) -> dict[int, list[dict]]:
+        if not so_ids:
+            return {}
+        base_fields = ["order_id", "product_id", "product_uom_qty",
+                        "price_unit", "price_subtotal", "name"]
+        optional = ["purchase_price"]
+        fields = base_fields + optional
+        for _ in range(len(optional) + 1):
+            try:
+                recs = self.odoo.search_read(
+                    "sale.order.line",
+                    [["order_id", "in", so_ids]],
+                    fields,
+                )
+                break
+            except Exception as exc:
+                removed = False
+                for of in list(optional):
+                    if of in str(exc):
+                        optional.remove(of)
+                        fields = base_fields + optional
+                        removed = True
+                        break
+                if not removed:
+                    recs = []
+                    break
+        else:
+            recs = []
+
+        by_so: dict[int, list[dict]] = defaultdict(list)
+        for ln in recs:
+            oid = ln["order_id"]
+            so_id = oid[0] if isinstance(oid, (list, tuple)) else oid
+            by_so[int(so_id)].append(ln)
+        return dict(by_so)
+
+    # ── Quote breakdown helpers ───────────────────────────────────────────
+
+    def _categorise_line(self, ln: dict) -> str:
+        pid = ln.get("product_id")
+        pid_int = pid[0] if isinstance(pid, (list, tuple)) else pid
+        if isinstance(pid_int, int):
+            if pid_int in (self._install_ids or set()):
+                return "labour"
+            if pid_int in (self._freight_ids or set()):
+                return "freight"
+        return "product"
+
+    def _extract_state_from_lines(self, lines: list[dict]) -> Optional[str]:
+        for ln in lines:
+            s = extract_state(ln.get("name") or "")
             if s:
                 return s
         return None
 
+    def _flag_overinflation(
+        self, labour: float, freight: float, margin_pct: float,
+        state: Optional[str], labour_qty: float,
+    ) -> list[str]:
+        flags: list[str] = []
+        if margin_pct > GP_THRESHOLD * 100:
+            flags.append("high_gp")
+        if state and labour_qty > 0:
+            bench = STATE_VARIABLE_RATES.get(state)
+            if bench and labour > 0:
+                quoted_rate = labour / labour_qty
+                if quoted_rate > bench * 1.25:
+                    flags.append("high_labour")
+        if freight > 2500:
+            flags.append("high_freight")
+        return flags
+
     # ── Core analysis ─────────────────────────────────────────────────────
 
     def analyze(self) -> dict[str, Any]:
-        af = self._detect_analytic_field()
-
         install_ids = self._discover_installation_product_ids()
         freight_ids = self._discover_freight_product_ids()
-        all_marker_ids = sorted(install_ids | freight_ids)
 
-        marker_lines = self._fetch_so_marker_lines(all_marker_ids)
-        so_order_ids = sorted({
-            (ln["order_id"][0] if isinstance(ln["order_id"], (list, tuple))
-             else ln["order_id"])
-            for ln in marker_lines
-        })
-        logger.info("LostOpp: %d SOs have installation/freight lines", len(so_order_ids))
+        lost_reasons = self._fetch_lost_reasons()
+        stages = self._fetch_stages()
+        leads = self._fetch_lost_leads()
 
-        if not so_order_ids:
-            return self._empty_result(af)
+        if not leads:
+            return self._empty_result()
 
-        so_headers = self._fetch_so_headers(so_order_ids)
-        all_so_lines = self._fetch_all_so_lines(so_order_ids)
-        logger.info("LostOpp: fetched %d total SO lines", len(all_so_lines))
+        lead_ids = [l["id"] for l in leads]
+        linked_sos = self._fetch_linked_orders(lead_ids)
 
-        so_lines_by_order: dict[int, list[dict]] = defaultdict(list)
-        for ln in all_so_lines:
-            oid = ln["order_id"][0] if isinstance(ln["order_id"], (list, tuple)) else ln["order_id"]
-            so_lines_by_order[oid].append(ln)
+        all_so_ids = [so["id"] for sos in linked_sos.values() for so in sos]
+        so_lines_map = self._fetch_so_lines(all_so_ids)
+        logger.info("LostOpp: fetched lines for %d SOs", len(so_lines_map))
 
-        # ── Build SO analytic index ──────────────────────────────────────
-        so_analytic_map: dict[int, int] = {}
-        so_project_name_map: dict[int, str] = {}
-        for oid in so_order_ids:
-            hdr = so_headers.get(oid, {})
-            aid = extract_analytic_id(hdr, "analytic_account_id")
-            if aid:
-                so_analytic_map[oid] = aid
-            pn = (hdr.get("project_name") or "").strip()
-            if pn:
-                so_project_name_map[oid] = pn
-
-        analytic_to_so: dict[int, int] = {v: k for k, v in so_analytic_map.items()}
-
-        # ── Get ALL POs and resolve to analytic accounts ─────────────────
-        all_po_headers_raw = self.odoo.search_read(
-            "purchase.order",
-            [["state", "in", ["purchase", "done"]]],
-            ["id", "name", "project_id"],
-        )
-        all_po_headers = {r["id"]: r for r in all_po_headers_raw}
-        logger.info("LostOpp: fetched %d PO headers", len(all_po_headers))
-
-        project_ids: list[int] = []
-        for ph in all_po_headers.values():
-            pid = ph.get("project_id")
-            if isinstance(pid, (list, tuple)):
-                project_ids.append(int(pid[0]))
-            elif isinstance(pid, (int, float)) and pid:
-                project_ids.append(int(pid))
-        proj_to_analytic = self._resolve_project_analytics(list(set(project_ids)))
-
-        # Map PO order → analytic account
-        po_analytic_map: dict[int, int] = {}
-        po_project_name_map: dict[int, str] = {}
-        for po_id, ph in all_po_headers.items():
-            pid = ph.get("project_id")
-            if isinstance(pid, (list, tuple)):
-                aa = proj_to_analytic.get(int(pid[0]))
-                if aa:
-                    po_analytic_map[po_id] = aa
-                po_project_name_map[po_id] = str(pid[1]).strip().upper() if len(pid) > 1 else ""
-            elif isinstance(pid, (int, float)) and pid:
-                aa = proj_to_analytic.get(int(pid))
-                if aa:
-                    po_analytic_map[po_id] = aa
-
-        # Match: find PO orders whose analytic links to an SO
-        target_analytics = set(so_analytic_map.values())
-        matched_po_ids_by_analytic: dict[int, list[int]] = defaultdict(list)
-        for po_id, aa in po_analytic_map.items():
-            if aa in target_analytics:
-                matched_po_ids_by_analytic[aa].append(po_id)
-
-        # Project-name fallback index
-        pn_to_po_ids: dict[str, list[int]] = defaultdict(list)
-        for po_id, pname in po_project_name_map.items():
-            if pname:
-                pn_to_po_ids[pname].append(po_id)
-
-        # Collect all PO order IDs we need lines for
-        all_matched_po_ids: set[int] = set()
-        for po_list in matched_po_ids_by_analytic.values():
-            all_matched_po_ids.update(po_list)
-        for so_oid, pn in so_project_name_map.items():
-            if so_oid not in so_analytic_map or so_analytic_map[so_oid] not in matched_po_ids_by_analytic:
-                for pid in pn_to_po_ids.get(pn.upper(), []):
-                    all_matched_po_ids.add(pid)
-
-        logger.info("LostOpp: %d matched PO orders to fetch lines for", len(all_matched_po_ids))
-        all_po_lines = self._fetch_all_po_lines(sorted(all_matched_po_ids))
-        logger.info("LostOpp: fetched %d total PO lines", len(all_po_lines))
-
-        # Group PO lines by analytic account
-        po_lines_by_analytic: dict[int, list[dict]] = defaultdict(list)
-        po_lines_by_po_id: dict[int, list[dict]] = defaultdict(list)
-        for ln in all_po_lines:
-            po_oid = ln["order_id"][0] if isinstance(ln["order_id"], (list, tuple)) else ln["order_id"]
-            po_lines_by_po_id[po_oid].append(ln)
-            aa = po_analytic_map.get(po_oid)
-            if aa:
-                po_lines_by_analytic[aa].append(ln)
-
-        # Project name → PO lines
-        pn_to_po_lines: dict[str, list[dict]] = defaultdict(list)
-        for po_id, pname in po_project_name_map.items():
-            if pname and po_id in po_lines_by_po_id:
-                pn_to_po_lines[pname].extend(po_lines_by_po_id[po_id])
-
-        # ── Build order-level summaries ──────────────────────────────────
         rows: list[dict] = []
-        by_type: dict[str, dict] = defaultdict(lambda: {
-            "count": 0, "revenue": 0.0, "cogs": 0.0,
-            "labour": 0.0, "freight": 0.0, "product": 0.0,
-        })
-        by_state: dict[str, dict] = defaultdict(lambda: {
-            "count": 0, "revenue": 0.0, "cogs": 0.0,
-        })
+        reason_counts: dict[str, int] = defaultdict(int)
+        reason_values: dict[str, float] = defaultdict(float)
+        stage_counts: dict[str, int] = defaultdict(int)
+        stage_values: dict[str, float] = defaultdict(float)
+        sp_counts: dict[str, int] = defaultdict(int)
+        sp_values: dict[str, float] = defaultdict(float)
+        total_value = 0.0
+        total_with_quote = 0
+        total_flagged = 0
 
-        for so_oid in so_order_ids:
-            hdr = so_headers.get(so_oid, {})
-            sibs = so_lines_by_order.get(so_oid, [])
-            customer = ""
-            if isinstance(hdr.get("partner_id"), (list, tuple)):
-                customer = str(hdr["partner_id"][1])
-            types = self._classify_order(hdr, sibs)
-            state = self._extract_state(sibs)
+        for lead in leads:
+            lid = lead["id"]
+            name = (lead.get("name") or "").strip()
 
-            revenue = sum((ln.get("price_subtotal", 0) or 0) for ln in sibs)
-            if revenue <= 0:
-                continue
+            partner = lead.get("partner_id")
+            customer = str(partner[1]) if isinstance(partner, (list, tuple)) else ""
 
-            # Find matched PO lines
-            aid = so_analytic_map.get(so_oid)
-            matched_po_lns = po_lines_by_analytic.get(aid, []) if aid else []
-            match_method = "analytic" if matched_po_lns else None
+            user = lead.get("user_id")
+            salesperson = str(user[1]) if isinstance(user, (list, tuple)) else "Unassigned"
 
-            if not matched_po_lns:
-                pn = so_project_name_map.get(so_oid, "").upper()
-                if pn:
-                    matched_po_lns = pn_to_po_lines.get(pn, [])
-                    if matched_po_lns:
-                        match_method = "project_name"
+            stg = lead.get("stage_id")
+            stage_name = ""
+            if isinstance(stg, (list, tuple)):
+                stage_name = stages.get(int(stg[0]), str(stg[1]))
+            elif isinstance(stg, int):
+                stage_name = stages.get(stg, "Unknown")
 
-            if not matched_po_lns:
-                continue
+            lr = lead.get("lost_reason_id")
+            reason = ""
+            if isinstance(lr, (list, tuple)) and lr:
+                reason = lost_reasons.get(int(lr[0]), _normalise_reason(str(lr[1])))
+            elif isinstance(lr, int) and lr:
+                reason = lost_reasons.get(lr, "Unknown")
+            if not reason:
+                reason = "Not Specified"
 
-            # Categorise PO costs
-            labour_cost = 0.0
-            freight_cost = 0.0
-            product_cost = 0.0
-            for pl in matched_po_lns:
-                cost = pl.get("price_subtotal", 0) or 0
-                pid = pl.get("product_id")
-                pid_int = pid[0] if isinstance(pid, (list, tuple)) else pid
-                if isinstance(pid_int, int):
-                    if pid_int in install_ids:
-                        labour_cost += cost
-                    elif pid_int in freight_ids:
-                        freight_cost += cost
-                    else:
-                        product_cost += cost
-                else:
-                    product_cost += cost
+            revenue = lead.get("planned_revenue") or lead.get("expected_revenue") or 0
+            if not isinstance(revenue, (int, float)):
+                revenue = 0
+            revenue = float(revenue)
 
-            total_cogs = labour_cost + freight_cost + product_cost
-            gp = (revenue - total_cogs) / revenue if revenue > 0 else 0
-            excess_above_threshold = max(0, (gp - GP_THRESHOLD) * revenue) if gp > GP_THRESHOLD else 0
+            date_lost = lead.get("date_closed") or lead.get("create_date") or ""
+            if isinstance(date_lost, str) and len(date_lost) > 10:
+                date_lost = date_lost[:10]
 
-            row = {
-                "so_ref": hdr.get("name", ""),
+            # Quote breakdown
+            sos = linked_sos.get(lid, [])
+            has_quote = len(sos) > 0
+            quote_total = 0.0
+            quote_labour = 0.0
+            quote_freight = 0.0
+            quote_product = 0.0
+            labour_qty = 0.0
+            margin_pct = 0.0
+            quote_state: Optional[str] = None
+            flags: list[str] = []
+
+            if has_quote:
+                total_with_quote += 1
+                for so in sos:
+                    qt = so.get("amount_untaxed") or so.get("amount_total") or 0
+                    quote_total += float(qt)
+                    mp = so.get("margin_percent")
+                    if isinstance(mp, (int, float)):
+                        margin_pct = float(mp)
+
+                    so_id = so["id"]
+                    lines = so_lines_map.get(so_id, [])
+                    for ln in lines:
+                        cat = self._categorise_line(ln)
+                        sub = float(ln.get("price_subtotal") or 0)
+                        if cat == "labour":
+                            quote_labour += sub
+                            labour_qty += float(ln.get("product_uom_qty") or 0)
+                        elif cat == "freight":
+                            quote_freight += sub
+                        else:
+                            quote_product += sub
+
+                    if not quote_state:
+                        quote_state = self._extract_state_from_lines(lines)
+
+                if quote_total > 0 and margin_pct == 0:
+                    cost_est = quote_total * 0.65
+                    margin_pct = ((quote_total - cost_est) / quote_total) * 100
+
+                flags = self._flag_overinflation(
+                    quote_labour, quote_freight, margin_pct,
+                    quote_state, labour_qty,
+                )
+                if flags:
+                    total_flagged += 1
+
+            if revenue == 0 and quote_total > 0:
+                revenue = quote_total
+
+            total_value += revenue
+
+            reason_counts[reason] += 1
+            reason_values[reason] += revenue
+            stage_counts[stage_name] += 1
+            stage_values[stage_name] += revenue
+            sp_counts[salesperson] += 1
+            sp_values[salesperson] += revenue
+
+            rows.append({
+                "id": lid,
+                "name": name,
                 "customer": customer,
-                "product_types": types,
-                "state": state,
+                "salesperson": salesperson,
+                "stage": stage_name,
+                "lost_reason": reason,
                 "revenue": round(revenue, 2),
-                "cogs_labour": round(labour_cost, 2),
-                "cogs_freight": round(freight_cost, 2),
-                "cogs_product": round(product_cost, 2),
-                "total_cogs": round(total_cogs, 2),
-                "gp": round(gp, 3),
-                "gp_pct": round(gp * 100, 1),
-                "is_over_estimate": gp > GP_THRESHOLD,
-                "excess_value": round(excess_above_threshold, 2),
-                "match_method": match_method,
-            }
-            rows.append(row)
+                "date_lost": date_lost,
+                "has_quote": has_quote,
+                "quote_total": round(quote_total, 2),
+                "quote_labour": round(quote_labour, 2),
+                "quote_freight": round(quote_freight, 2),
+                "quote_product": round(quote_product, 2),
+                "labour_qty": round(labour_qty, 1),
+                "margin_pct": round(margin_pct, 1),
+                "quote_state": quote_state,
+                "flags": flags,
+            })
 
-            for t in types:
-                bt = by_type[t]
-                bt["count"] += 1
-                bt["revenue"] += revenue
-                bt["cogs"] += total_cogs
-                bt["labour"] += labour_cost
-                bt["freight"] += freight_cost
-                bt["product"] += product_cost
-            if state:
-                bs = by_state[state]
-                bs["count"] += 1
-                bs["revenue"] += revenue
-                bs["cogs"] += total_cogs
+        by_reason = [
+            {"reason": r, "count": reason_counts[r],
+             "value": round(reason_values[r], 2)}
+            for r in sorted(reason_counts, key=lambda x: -reason_counts[x])
+        ]
+        by_stage = [
+            {"stage": s, "count": stage_counts[s],
+             "value": round(stage_values[s], 2)}
+            for s in sorted(stage_counts, key=lambda x: -stage_counts[x])
+        ]
+        by_salesperson = [
+            {"salesperson": sp, "count": sp_counts[sp],
+             "value": round(sp_values[sp], 2)}
+            for sp in sorted(sp_counts, key=lambda x: -sp_values[x])
+        ]
 
-        # ── Summary ──────────────────────────────────────────────────────
-        total_rev = sum(r["revenue"] for r in rows)
-        total_cogs_all = sum(r["total_cogs"] for r in rows)
-        over_est_rows = [r for r in rows if r["is_over_estimate"]]
+        salespersons = sorted(sp_counts.keys())
+        all_reasons = sorted(reason_counts.keys())
+        all_stages = sorted(stage_counts.keys())
 
         summary = {
-            "total_orders_analysed": len(rows),
-            "total_revenue": round(total_rev, 2),
-            "total_cogs": round(total_cogs_all, 2),
-            "overall_gp": round((total_rev - total_cogs_all) / total_rev, 3) if total_rev else 0,
-            "orders_above_threshold": len(over_est_rows),
-            "pct_above_threshold": round(len(over_est_rows) / len(rows), 3) if rows else 0,
-            "total_excess_value": round(sum(r["excess_value"] for r in over_est_rows), 2),
-            "total_labour_cost": round(sum(r["cogs_labour"] for r in rows), 2),
-            "total_freight_cost": round(sum(r["cogs_freight"] for r in rows), 2),
-            "total_product_cost": round(sum(r["cogs_product"] for r in rows), 2),
+            "total_lost": len(rows),
+            "total_value": round(total_value, 2),
+            "avg_deal_size": round(total_value / len(rows), 2) if rows else 0,
+            "with_quotes": total_with_quote,
+            "flagged_overinflated": total_flagged,
+            "top_reason": by_reason[0]["reason"] if by_reason else "",
+            "top_reason_count": by_reason[0]["count"] if by_reason else 0,
             "gp_threshold": GP_THRESHOLD,
-            "by_product_type": {
-                t: {
-                    "count": d["count"],
-                    "revenue": round(d["revenue"], 2),
-                    "cogs": round(d["cogs"], 2),
-                    "gp": round((d["revenue"] - d["cogs"]) / d["revenue"], 3) if d["revenue"] else 0,
-                    "labour": round(d["labour"], 2),
-                    "freight": round(d["freight"], 2),
-                    "product": round(d["product"], 2),
-                }
-                for t, d in sorted(by_type.items())
-            },
-            "by_state": {
-                s: {
-                    "count": d["count"],
-                    "revenue": round(d["revenue"], 2),
-                    "cogs": round(d["cogs"], 2),
-                    "gp": round((d["revenue"] - d["cogs"]) / d["revenue"], 3) if d["revenue"] else 0,
-                }
-                for s, d in sorted(by_state.items())
-            },
         }
 
         return {
-            "orders": sorted(rows, key=lambda r: -r["gp"]),
+            "leads": sorted(rows, key=lambda r: -r["revenue"]),
             "summary": summary,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "analytic_field_used": af,
-        }
-
-    def _empty_result(self, af: str) -> dict[str, Any]:
-        return {
-            "orders": [],
-            "summary": {
-                "total_orders_analysed": 0, "total_revenue": 0, "total_cogs": 0,
-                "overall_gp": 0, "orders_above_threshold": 0,
-                "pct_above_threshold": 0, "total_excess_value": 0,
-                "total_labour_cost": 0, "total_freight_cost": 0,
-                "total_product_cost": 0, "gp_threshold": GP_THRESHOLD,
-                "by_product_type": {}, "by_state": {},
+            "by_reason": by_reason,
+            "by_stage": by_stage,
+            "by_salesperson": by_salesperson,
+            "filter_options": {
+                "salespersons": salespersons,
+                "reasons": all_reasons,
+                "stages": all_stages,
             },
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "analytic_field_used": af,
+        }
+
+    def _empty_result(self) -> dict[str, Any]:
+        return {
+            "leads": [],
+            "summary": {
+                "total_lost": 0, "total_value": 0, "avg_deal_size": 0,
+                "with_quotes": 0, "flagged_overinflated": 0,
+                "top_reason": "", "top_reason_count": 0,
+                "gp_threshold": GP_THRESHOLD,
+            },
+            "by_reason": [],
+            "by_stage": [],
+            "by_salesperson": [],
+            "filter_options": {"salespersons": [], "reasons": [], "stages": []},
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
 
@@ -523,7 +494,7 @@ def analyze(force_refresh: bool = False) -> dict[str, Any]:
                 logger.info("Returning cached lost-opp analysis (%.1f min old)", age)
                 return _cache["result"]
 
-    logger.info("Running fresh lost-opportunities analysis...")
+    logger.info("Running fresh lost-opportunities analysis…")
     result = LostOpportunityAnalyser().analyze()
     _cache["result"] = result
     _cache["cached_at"] = datetime.now(timezone.utc).isoformat()
