@@ -15,13 +15,29 @@ const FLAG_DISPLAY: Record<string, string> = {
   high_freight: "High Freight",
 };
 
+interface ConversionOverride {
+  conversionRate: number;
+  conversionRateExclTender: number;
+  wonCount: number;
+  totalLost: number;
+  byStageSuccess: { stage: string; won_count: number; lost_count: number; success_rate: number }[];
+}
+
 interface Props {
   summary: LostOppSummary;
   leads?: LostLead[];
   byStage?: { stage: string; count: number; value: number }[];
+  conversionOverride?: ConversionOverride;
 }
 
-export default function SummaryCards({ summary, leads = [], byStage = [] }: Props) {
+export default function SummaryCards({ summary, leads = [], byStage = [], conversionOverride }: Props) {
+  const conv = conversionOverride ?? {
+    conversionRate: summary.conversion_rate ?? 0,
+    conversionRateExclTender: summary.conversion_rate_excl_tender ?? summary.conversion_rate ?? 0,
+    wonCount: summary.won_count ?? 0,
+    totalLost: summary.total_lost ?? 0,
+    byStageSuccess: summary.by_stage_success ?? [],
+  };
   const [overinflatedModalOpen, setOverinflatedModalOpen] = useState(false);
   const [conversionModalOpen, setConversionModalOpen] = useState(false);
   const flagsBreakdown = (() => {
@@ -112,7 +128,7 @@ export default function SummaryCards({ summary, leads = [], byStage = [] }: Prop
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {(summary.conversion_rate_excl_tender ?? summary.conversion_rate ?? 0).toFixed(1)}%
+            {conv.conversionRateExclTender.toFixed(1)}%
           </div>
           <p className="text-xs text-muted-foreground">
             excl. tender · click for per-stage
@@ -135,13 +151,13 @@ export default function SummaryCards({ summary, leads = [], byStage = [] }: Prop
     </div>
 
     <ConversionRateModal
-      conversionRate={summary.conversion_rate ?? 0}
-      conversionRateExclTender={summary.conversion_rate_excl_tender ?? 0}
-      wonCount={summary.won_count ?? 0}
-      totalLost={summary.total_lost}
+      conversionRate={conv.conversionRate}
+      conversionRateExclTender={conv.conversionRateExclTender}
+      wonCount={conv.wonCount}
+      totalLost={conv.totalLost}
       byStageSuccess={
-        (summary.by_stage_success?.length ?? 0) > 0
-          ? (summary.by_stage_success ?? [])
+        conv.byStageSuccess.length > 0
+          ? conv.byStageSuccess
           : byStage.map((s) => ({ stage: s.stage, won_count: 0, lost_count: s.count, success_rate: 0 }))
       }
       open={conversionModalOpen}

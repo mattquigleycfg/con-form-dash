@@ -4,12 +4,14 @@ import { RefreshCw, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useLostOpportunities } from "@/hooks/useLostOpportunities";
+import { useFilteredMetrics } from "@/hooks/useFilteredMetrics";
 import SummaryCards from "@/components/lost-opportunities/SummaryCards";
 import OrderTable from "@/components/lost-opportunities/OrderTable";
 import ProfitCharts from "@/components/lost-opportunities/ProfitCharts";
 
 export default function LostOpportunities() {
   const { data, isLoading, error, refresh, isRefreshing } = useLostOpportunities();
+  const { metrics } = useFilteredMetrics();
 
   return (
     <DashboardLayout>
@@ -70,7 +72,22 @@ export default function LostOpportunities() {
                 </div>
               </div>
             )}
-            <SummaryCards summary={data.summary} leads={data.leads} byStage={data.by_stage} />
+            <SummaryCards
+              summary={data.summary}
+              leads={data.leads}
+              byStage={data.by_stage}
+              conversionOverride={
+                (data.summary.won_count ?? 0) === 0 && (metrics.wonCount ?? 0) > 0
+                  ? {
+                      conversionRate: metrics.conversionRate,
+                      conversionRateExclTender: metrics.conversionRateExclTender,
+                      wonCount: metrics.wonCount,
+                      totalLost: metrics.byStageSuccess.reduce((s, x) => s + x.lost_count, 0),
+                      byStageSuccess: metrics.byStageSuccess,
+                    }
+                  : undefined
+              }
+            />
 
             <Tabs defaultValue="table" className="space-y-4">
               <TabsList>

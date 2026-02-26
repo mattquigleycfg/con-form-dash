@@ -66,15 +66,41 @@ export const useFilters = () => {
   return context;
 };
 
+function reviveDates(obj: any): any {
+  if (!obj) return obj;
+  if (obj.dateRange) {
+    const dr = obj.dateRange;
+    return {
+      ...obj,
+      dateRange: {
+        ...dr,
+        startDate: dr.startDate ? new Date(dr.startDate) : null,
+        endDate: dr.endDate ? new Date(dr.endDate) : null,
+      },
+    };
+  }
+  return obj;
+}
+
 export const FilterProvider = ({ children }: { children: ReactNode }) => {
   const [filters, setFiltersState] = useState<FilterState>(() => {
     const saved = localStorage.getItem('salesDashboardFilters');
-    return saved ? JSON.parse(saved) : defaultFilters;
+    if (!saved) return defaultFilters;
+    try {
+      const parsed = JSON.parse(saved);
+      return reviveDates(parsed);
+    } catch {
+      return defaultFilters;
+    }
   });
 
   const [templates, setTemplates] = useState<FilterTemplate[]>(() => {
     const saved = localStorage.getItem('salesDashboardTemplates');
-    return saved ? JSON.parse(saved) : [
+    const parsed = saved ? JSON.parse(saved) : null;
+    if (parsed?.length) {
+      return parsed.map((t: FilterTemplate) => ({ ...t, filters: reviveDates(t.filters) ?? t.filters }));
+    }
+    return [
       {
         id: 'high-value',
         name: 'High Value Deals',
@@ -122,7 +148,7 @@ export const FilterProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const applyTemplate = (template: FilterTemplate) => {
-    setFiltersState((prev) => ({ ...prev, ...template.filters }));
+    setFiltersState((prev) => reviveDates({ ...prev, ...template.filters }));
     toast({
       title: 'Template Applied',
       description: `"${template.name}" filter template has been applied`,

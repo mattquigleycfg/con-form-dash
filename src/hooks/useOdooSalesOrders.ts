@@ -30,12 +30,16 @@ export const useOdooSalesOrders = () => {
         ['state', 'in', ['sale', 'done']] // Only confirmed orders
       ];
 
-      // Apply date filters
-      if (filters.dateRange?.startDate) {
-        odooFilters.push(['date_order', '>=', filters.dateRange.startDate.toISOString()]);
+      // Apply date filters (ensure Date - may be string when restored from localStorage)
+      const startDate = filters.dateRange?.startDate;
+      const endDate = filters.dateRange?.endDate;
+      if (startDate) {
+        const d = startDate instanceof Date ? startDate : new Date(startDate);
+        if (!isNaN(d.getTime())) odooFilters.push(['date_order', '>=', d.toISOString()]);
       }
-      if (filters.dateRange?.endDate) {
-        odooFilters.push(['date_order', '<=', filters.dateRange.endDate.toISOString()]);
+      if (endDate) {
+        const d = endDate instanceof Date ? endDate : new Date(endDate);
+        if (!isNaN(d.getTime())) odooFilters.push(['date_order', '<=', d.toISOString()]);
       }
 
       // Fetch sales orders including analytic_account_id and opportunity_id
