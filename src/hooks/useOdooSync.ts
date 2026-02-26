@@ -62,7 +62,7 @@ export const useOdooSync = () => {
 
       if (threeMonthError) throw threeMonthError;
 
-      // Fetch opportunities from last 3 months
+      // Fetch opportunities from last 3 months (include archived won/lost for correct conversion rate)
       const { data: threeMonthOpps, error: oppError } = await supabase.functions.invoke('odoo-query', {
         body: {
           model: 'crm.lead',
@@ -74,7 +74,8 @@ export const useOdooSync = () => {
               ['create_date', '<=', now.toISOString()]
             ],
             ['id', 'probability']
-          ]
+          ],
+          kwargs: { context: { active_test: false } }
         }
       });
 
