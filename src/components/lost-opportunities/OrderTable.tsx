@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -10,8 +11,13 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
 import type { LostLead, FilterOptions } from "@/hooks/useLostOpportunities";
 import LeadDetailCard from "./LeadDetailCard";
+
+const PAGE_SIZES = [25, 50, 100, 200] as const;
 
 interface Props {
   leads: LostLead[];
@@ -86,6 +92,8 @@ export default function OrderTable({ leads, filterOptions }: Props) {
   const [dateFilter, setDateFilter] = useState("all");
   const [sortBy, setSortBy] = useState<SortKey>("newest");
   const [selectedLead, setSelectedLead] = useState<LostLead | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(50);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -119,6 +127,14 @@ export default function OrderTable({ leads, filterOptions }: Props) {
 
     return out;
   }, [leads, search, spFilter, reasonFilter, stageFilter, valueFilter, dateFilter, sortBy]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, spFilter, reasonFilter, stageFilter, valueFilter, dateFilter, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const startIdx = (page - 1) * pageSize;
+  const paginatedRows = filtered.slice(startIdx, startIdx + pageSize);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -193,8 +209,22 @@ export default function OrderTable({ leads, filterOptions }: Props) {
               <SelectItem value="reason">Sort: Lost Reason</SelectItem>
             </SelectContent>
           </Select>
+          <Select
+            value={String(pageSize)}
+            onValueChange={(v) => {
+              setPageSize(Number(v));
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[100px]"><SelectValue placeholder="Per page" /></SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZES.map((n) => (
+                <SelectItem key={n} value={String(n)}>{n} per page</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <span className="self-center text-sm text-muted-foreground">
-            {filtered.length} / {leads.length}
+            Showing {filtered.length === 0 ? 0 : startIdx + 1}–{Math.min(startIdx + pageSize, filtered.length)} of {filtered.length}
           </span>
         </div>
 
@@ -222,7 +252,7 @@ export default function OrderTable({ leads, filterOptions }: Props) {
                   </TableCell>
                 </TableRow>
               )}
-              {filtered.map((l) => {
+              {paginatedRows.map((l) => {
                 const hoverParts = buildHoverContent(l);
                 const hasHover = hoverParts.length > 0;
 
@@ -278,6 +308,60 @@ export default function OrderTable({ leads, filterOptions }: Props) {
             </TableBody>
           </Table>
         </div>
+
+        {filtered.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Page {page} of {totalPages}
+            </p>
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPage((p) => Math.max(1, p - 1));
+                    }}
+                    className={page <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 5) pageNum = i + 1;
+                  else if (page <= 3) pageNum = i + 1;
+                  else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
+                  else pageNum = page - 2 + i;
+                  return (
+                    <PaginationItem key={pageNum}>
+                      <PaginationLink
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setPage(pageNum);
+                        }}
+                        isActive={page === pageNum}
+                        className="cursor-pointer"
+                      >
+                        {pageNum}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPage((p) => Math.min(totalPages, p + 1));
+                    }}
+                    className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
 
         {/* Detail card */}
         <LeadDetailCard

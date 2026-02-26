@@ -34,8 +34,8 @@ export default function LostOpportunities() {
 
         {isLoading && (
           <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {Array.from({ length: 5 }).map((_, i) => (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
                 <Skeleton key={i} className="h-28 rounded-lg" />
               ))}
             </div>
@@ -57,8 +57,20 @@ export default function LostOpportunities() {
         )}
 
         {data && (
-          <>
-            <SummaryCards summary={data.summary} />
+          <div className="relative">
+            {isRefreshing && (
+              <div
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/60 backdrop-blur-[1px]"
+                aria-busy="true"
+                aria-label="Refreshing data"
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Refreshing…</span>
+                </div>
+              </div>
+            )}
+            <SummaryCards summary={data.summary} leads={data.leads} />
 
             <Tabs defaultValue="table" className="space-y-4">
               <TabsList>
@@ -85,7 +97,7 @@ export default function LostOpportunities() {
             <p className="text-xs text-muted-foreground text-right">
               Generated {new Date(data.generated_at).toLocaleString()}
             </p>
-          </>
+          </div>
         )}
       </div>
     </DashboardLayout>

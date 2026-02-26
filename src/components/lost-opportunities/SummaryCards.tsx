@@ -1,65 +1,120 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { XCircle, DollarSign, AlertTriangle, FileText, TrendingDown } from "lucide-react";
-import type { LostOppSummary } from "@/hooks/useLostOpportunities";
-
-interface Props {
-  summary: LostOppSummary;
-}
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { XCircle, AlertTriangle, TrendingDown, Percent } from "lucide-react";
+import type { LostOppSummary, LostLead } from "@/hooks/useLostOpportunities";
+import OverinflatedJobsModal from "./OverinflatedJobsModal";
+import ConversionRateModal from "./ConversionRateModal";
 
 const fmt = (v: number) =>
   "$" + v.toLocaleString("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
-export default function SummaryCards({ summary }: Props) {
+const FLAG_DISPLAY: Record<string, string> = {
+  high_gp: "High GP",
+  high_labour: "High Labour",
+  high_freight: "High Freight",
+};
+
+interface Props {
+  summary: LostOppSummary;
+  leads?: LostLead[];
+}
+
+export default function SummaryCards({ summary, leads = [] }: Props) {
+  const [overinflatedModalOpen, setOverinflatedModalOpen] = useState(false);
+  const [conversionModalOpen, setConversionModalOpen] = useState(false);
+  const flagsBreakdown = (() => {
+    if (summary.flags_breakdown && Object.keys(summary.flags_breakdown).length > 0) {
+      return summary.flags_breakdown;
+    }
+    const counts: Record<string, number> = {};
+    for (const l of leads) {
+      for (const f of l.flags) {
+        counts[f] = (counts[f] ?? 0) + 1;
+      }
+    }
+    return counts;
+  })();
+  const breakdownLines = Object.entries(flagsBreakdown)
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `${FLAG_DISPLAY[k] || k}: ${n}`)
+    .join(" | ");
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Lost Opportunities</CardTitle>
-          <XCircle className="h-4 w-4 text-red-500" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{summary.total_lost}</div>
-          <p className="text-xs text-muted-foreground">
-            total archived leads
-          </p>
-        </CardContent>
-      </Card>
+    <>
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <HoverCard openDelay={200} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <Card className="cursor-default">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Lost Opportunities</CardTitle>
+              <XCircle className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{summary.total_lost}</div>
+              <p className="text-xs text-muted-foreground">
+                total archived leads
+              </p>
+            </CardContent>
+          </Card>
+        </HoverCardTrigger>
+        <HoverCardContent side="bottom" className="w-64">
+          <div className="space-y-2 text-sm">
+            <p className="font-medium">Total Value Lost</p>
+            <p className="text-muted-foreground">
+              {fmt(summary.total_value)} (avg {fmt(summary.avg_deal_size)} per deal)
+            </p>
+            <p className="font-medium pt-2">With Quotes</p>
+            <p className="text-muted-foreground">
+              {summary.with_quotes} had linked sale orders
+            </p>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Total Value Lost</CardTitle>
-          <DollarSign className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{fmt(summary.total_value)}</div>
-          <p className="text-xs text-muted-foreground">
-            avg {fmt(summary.avg_deal_size)} per deal
-          </p>
-        </CardContent>
-      </Card>
+      <HoverCard openDelay={200} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <Card
+            className="cursor-pointer hover:bg-muted/50 transition-colors"
+            onClick={() => summary.flagged_overinflated > 0 && setOverinflatedModalOpen(true)}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Overinflated Flags</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600">{summary.flagged_overinflated}</div>
+              <p className="text-xs text-muted-foreground">
+                high GP, labour, or freight
+              </p>
+            </CardContent>
+          </Card>
+        </HoverCardTrigger>
+        <HoverCardContent side="bottom" className="w-72">
+          <div className="space-y-1 text-sm">
+            <p className="font-medium">Breakdown by area</p>
+            <p className="text-muted-foreground">
+              {breakdownLines || "No breakdown available"}
+            </p>
+            <p className="text-xs text-muted-foreground pt-1">Click to view jobs</p>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
 
-      <Card>
+      <Card
+        className="cursor-pointer hover:bg-muted/50 transition-colors"
+        onClick={() => setConversionModalOpen(true)}
+      >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">With Quotes</CardTitle>
-          <FileText className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
+          <Percent className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{summary.with_quotes}</div>
+          <div className="text-2xl font-bold">
+            {(summary.conversion_rate_excl_tender ?? summary.conversion_rate ?? 0).toFixed(1)}%
+          </div>
           <p className="text-xs text-muted-foreground">
-            had linked sale orders
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Overinflated Flags</CardTitle>
-          <AlertTriangle className="h-4 w-4 text-amber-500" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold text-amber-600">{summary.flagged_overinflated}</div>
-          <p className="text-xs text-muted-foreground">
-            high GP, labour, or freight
+            excl. tender · click for per-stage
           </p>
         </CardContent>
       </Card>
@@ -77,5 +132,22 @@ export default function SummaryCards({ summary }: Props) {
         </CardContent>
       </Card>
     </div>
+
+    <ConversionRateModal
+      conversionRate={summary.conversion_rate ?? 0}
+      conversionRateExclTender={summary.conversion_rate_excl_tender ?? 0}
+      wonCount={summary.won_count ?? 0}
+      totalLost={summary.total_lost}
+      byStageSuccess={summary.by_stage_success ?? []}
+      open={conversionModalOpen}
+      onClose={() => setConversionModalOpen(false)}
+    />
+
+    <OverinflatedJobsModal
+      leads={leads}
+      open={overinflatedModalOpen}
+      onClose={() => setOverinflatedModalOpen(false)}
+    />
+    </>
   );
 }

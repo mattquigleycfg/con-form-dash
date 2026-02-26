@@ -39,15 +39,27 @@ export interface SalespersonBreakdown {
   value: number;
 }
 
+export interface StageSuccess {
+  stage: string;
+  won_count: number;
+  lost_count: number;
+  success_rate: number;
+}
+
 export interface LostOppSummary {
   total_lost: number;
   total_value: number;
   avg_deal_size: number;
   with_quotes: number;
   flagged_overinflated: number;
+  flags_breakdown?: Record<string, number>;
   top_reason: string;
   top_reason_count: number;
   gp_threshold: number;
+  won_count?: number;
+  conversion_rate?: number;
+  conversion_rate_excl_tender?: number;
+  by_stage_success?: StageSuccess[];
 }
 
 export interface FilterOptions {

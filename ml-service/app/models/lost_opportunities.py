@@ -160,6 +160,26 @@ class LostOpportunityAnalyser:
         )
         return recs
 
+    def _fetch_won_leads(self) -> list[dict]:
+        """Fetch won opportunities (probability >= 90) for conversion rate calculation."""
+        try:
+            recs = self.odoo.models.execute_kw(
+                self.odoo.db, self.odoo.uid, self.odoo.password,
+                "crm.lead", "search_read",
+                [
+                    [
+                        ["type", "=", "opportunity"],
+                        ["probability", ">=", 90],
+                    ]
+                ],
+                {"fields": ["id", "stage_id"], "limit": 10000, "context": {"active_test": False}},
+            )
+            logger.info("LostOpp: fetched %d won leads for conversion", len(recs))
+            return recs
+        except Exception as exc:
+            logger.warning("LostOpp: failed to fetch won leads: %s", exc)
+            return []
+
     # ── Linked Sale Orders ────────────────────────────────────────────────
 
     def _fetch_linked_orders(self, lead_ids: list[int]) -> dict[int, list[dict]]:
@@ -283,9 +303,25 @@ class LostOpportunityAnalyser:
         lost_reasons = self._fetch_lost_reasons()
         stages = self._fetch_stages()
         leads = self._fetch_lost_leads()
+        won_leads = self._fetch_won_leads()
 
         if not leads:
             return self._empty_result()
+
+        # Build won counts by stage
+        won_by_stage: dict[str, int] = defaultdict(int)
+        for w in won_leads:
+            stg = w.get("stage_id")
+            stage_name = ""
+            if isinstance(stg, (list, tuple)) and stg:
+                stage_name = stages.get(int(stg[0]), str(stg[1]) if len(stg) > 1 else "Unknown")
+            elif isinstance(stg, int):
+                stage_name = stages.get(stg, "Unknown")
+            if stage_name:
+                won_by_stage[stage_name] += 1
+
+        def is_tender_stage(name: str) -> bool:
+            return "tender" in (name or "").lower()
 
         lead_ids = [l["id"] for l in leads]
         linked_sos = self._fetch_linked_orders(lead_ids)
@@ -301,6 +337,7 @@ class LostOpportunityAnalyser:
         stage_values: dict[str, float] = defaultdict(float)
         sp_counts: dict[str, int] = defaultdict(int)
         sp_values: dict[str, float] = defaultdict(float)
+        flags_breakdown: dict[str, int] = defaultdict(int)
         total_value = 0.0
         total_with_quote = 0
         total_flagged = 0
@@ -360,6 +397,9 @@ class LostOpportunityAnalyser:
                     mp = so.get("margin_percent")
                     if isinstance(mp, (int, float)):
                         margin_pct = float(mp)
+                        # Odoo may return 0-1 (e.g. 0.35 for 35%) vs 0-100; normalize to 0-100
+                        if 0 < margin_pct <= 1.5:
+                            margin_pct *= 100
 
                     so_id = so["id"]
                     lines = so_lines_map.get(so_id, [])
@@ -378,6 +418,7 @@ class LostOpportunityAnalyser:
                         quote_state = self._extract_state_from_lines(lines)
 
                 if quote_total > 0 and margin_pct == 0:
+                    # Fallback when Odoo does not provide margin_percent: assume 65% cost ratio
                     cost_est = quote_total * 0.65
                     margin_pct = ((quote_total - cost_est) / quote_total) * 100
 
@@ -387,6 +428,8 @@ class LostOpportunityAnalyser:
                 )
                 if flags:
                     total_flagged += 1
+                    for f in flags:
+                        flags_breakdown[f] += 1
 
             if revenue == 0 and quote_total > 0:
                 revenue = quote_total
@@ -440,15 +483,46 @@ class LostOpportunityAnalyser:
         all_reasons = sorted(reason_counts.keys())
         all_stages = sorted(stage_counts.keys())
 
+        total_won = sum(won_by_stage.values())
+        total_resolved = total_won + len(rows)
+        conversion_rate = (total_won / total_resolved * 100) if total_resolved else 0.0
+
+        won_excl = sum(n for s, n in won_by_stage.items() if not is_tender_stage(s))
+        lost_excl = len([r for r in rows if not is_tender_stage(r.get("stage", ""))])
+        total_excl = won_excl + lost_excl
+        conversion_rate_excl_tender = (won_excl / total_excl * 100) if total_excl else conversion_rate
+
+        all_stage_names = sorted(set(stage_counts.keys()) | set(won_by_stage.keys()))
+        by_stage_success = [
+            {
+                "stage": s,
+                "won_count": won_by_stage.get(s, 0),
+                "lost_count": stage_counts.get(s, 0),
+                "success_rate": round(
+                    (won_by_stage.get(s, 0) / (won_by_stage.get(s, 0) + stage_counts.get(s, 0)) * 100)
+                    if (won_by_stage.get(s, 0) + stage_counts.get(s, 0)) else 0.0,
+                    1,
+                ),
+            }
+            for s in all_stage_names
+            if won_by_stage.get(s, 0) + stage_counts.get(s, 0) > 0
+        ]
+        by_stage_success.sort(key=lambda x: -(x["won_count"] + x["lost_count"]))
+
         summary = {
             "total_lost": len(rows),
             "total_value": round(total_value, 2),
             "avg_deal_size": round(total_value / len(rows), 2) if rows else 0,
             "with_quotes": total_with_quote,
             "flagged_overinflated": total_flagged,
+            "flags_breakdown": dict(flags_breakdown),
             "top_reason": by_reason[0]["reason"] if by_reason else "",
             "top_reason_count": by_reason[0]["count"] if by_reason else 0,
             "gp_threshold": GP_THRESHOLD,
+            "won_count": total_won,
+            "conversion_rate": round(conversion_rate, 1),
+            "conversion_rate_excl_tender": round(conversion_rate_excl_tender, 1),
+            "by_stage_success": by_stage_success,
         }
 
         return {
@@ -471,8 +545,13 @@ class LostOpportunityAnalyser:
             "summary": {
                 "total_lost": 0, "total_value": 0, "avg_deal_size": 0,
                 "with_quotes": 0, "flagged_overinflated": 0,
+                "flags_breakdown": {},
                 "top_reason": "", "top_reason_count": 0,
                 "gp_threshold": GP_THRESHOLD,
+                "won_count": 0,
+                "conversion_rate": 0.0,
+                "conversion_rate_excl_tender": 0.0,
+                "by_stage_success": [],
             },
             "by_reason": [],
             "by_stage": [],
