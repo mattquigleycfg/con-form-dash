@@ -8,6 +8,7 @@ import { useFilteredMetrics } from "@/hooks/useFilteredMetrics";
 import SummaryCards from "@/components/lost-opportunities/SummaryCards";
 import OrderTable from "@/components/lost-opportunities/OrderTable";
 import ProfitCharts from "@/components/lost-opportunities/ProfitCharts";
+import { LostOpportunitiesAIInsights } from "@/components/lost-opportunities/LostOpportunitiesAIInsights";
 
 export default function LostOpportunities() {
   const { data, isLoading, error, refresh, isRefreshing } = useLostOpportunities();
@@ -88,6 +89,8 @@ export default function LostOpportunities() {
                   : undefined
               }
             />
+
+            <LostOpportunitiesAIInsights leads={data.leads} />
 
             <Tabs defaultValue="table" className="space-y-4">
               <TabsList>
