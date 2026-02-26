@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -41,9 +41,9 @@ export default function OverinflatedJobsModal({ leads, open, onClose }: Props) {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Overinflated Jobs</DialogTitle>
-            <p className="text-sm text-muted-foreground">
+            <DialogDescription>
               {flaggedLeads.length} lost opportunities with high GP, labour, or freight flags
-            </p>
+            </DialogDescription>
           </DialogHeader>
           <div className="overflow-auto flex-1 -mx-6 px-6">
             <Table>

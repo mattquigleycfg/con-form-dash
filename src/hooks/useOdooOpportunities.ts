@@ -32,7 +32,8 @@ export const useOdooOpportunities = () => {
           args: [
             [['type', '=', 'opportunity']],
             ['name', 'partner_id', 'user_id', 'stage_id', 'expected_revenue', 'probability', 'date_deadline', 'create_date', 'active']
-          ]
+          ],
+          kwargs: { context: { active_test: false } }
         }
       });
 

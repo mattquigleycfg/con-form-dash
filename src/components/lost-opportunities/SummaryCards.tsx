@@ -18,9 +18,10 @@ const FLAG_DISPLAY: Record<string, string> = {
 interface Props {
   summary: LostOppSummary;
   leads?: LostLead[];
+  byStage?: { stage: string; count: number; value: number }[];
 }
 
-export default function SummaryCards({ summary, leads = [] }: Props) {
+export default function SummaryCards({ summary, leads = [], byStage = [] }: Props) {
   const [overinflatedModalOpen, setOverinflatedModalOpen] = useState(false);
   const [conversionModalOpen, setConversionModalOpen] = useState(false);
   const flagsBreakdown = (() => {
@@ -138,7 +139,11 @@ export default function SummaryCards({ summary, leads = [] }: Props) {
       conversionRateExclTender={summary.conversion_rate_excl_tender ?? 0}
       wonCount={summary.won_count ?? 0}
       totalLost={summary.total_lost}
-      byStageSuccess={summary.by_stage_success ?? []}
+      byStageSuccess={
+        (summary.by_stage_success?.length ?? 0) > 0
+          ? (summary.by_stage_success ?? [])
+          : byStage.map((s) => ({ stage: s.stage, won_count: 0, lost_count: s.count, success_rate: 0 }))
+      }
       open={conversionModalOpen}
       onClose={() => setConversionModalOpen(false)}
     />

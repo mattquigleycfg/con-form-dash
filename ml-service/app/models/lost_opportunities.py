@@ -160,25 +160,59 @@ class LostOpportunityAnalyser:
         )
         return recs
 
-    def _fetch_won_leads(self) -> list[dict]:
-        """Fetch won opportunities (probability >= 90) for conversion rate calculation."""
+    def _fetch_won_leads(self, stages: dict[int, str]) -> list[dict]:
+        """Fetch won opportunities for conversion rate calculation.
+        Tries: (1) probability >= 90, (2) stage name contains 'won', (3) probability in 0-1 scale.
+        """
+        ctx = {"active_test": False}
+        fields = ["id", "stage_id"]
+
+        # 1. Primary: probability >= 90 (0-100 scale)
         try:
             recs = self.odoo.models.execute_kw(
                 self.odoo.db, self.odoo.uid, self.odoo.password,
                 "crm.lead", "search_read",
-                [
-                    [
-                        ["type", "=", "opportunity"],
-                        ["probability", ">=", 90],
-                    ]
-                ],
-                {"fields": ["id", "stage_id"], "limit": 10000, "context": {"active_test": False}},
+                [[["type", "=", "opportunity"], ["probability", ">=", 90]]],
+                {"fields": fields, "limit": 10000, "context": ctx},
             )
-            logger.info("LostOpp: fetched %d won leads for conversion", len(recs))
-            return recs
+            if recs:
+                logger.info("LostOpp: fetched %d won leads (probability >= 90)", len(recs))
+                return recs
         except Exception as exc:
-            logger.warning("LostOpp: failed to fetch won leads: %s", exc)
-            return []
+            logger.warning("LostOpp: probability-based won fetch failed: %s", exc)
+
+        # 2. Fallback: stages whose name contains "won"
+        won_stage_ids = [sid for sid, name in stages.items() if "won" in (name or "").lower()]
+        if won_stage_ids:
+            try:
+                recs = self.odoo.models.execute_kw(
+                    self.odoo.db, self.odoo.uid, self.odoo.password,
+                    "crm.lead", "search_read",
+                    [[["type", "=", "opportunity"], ["stage_id", "in", won_stage_ids]]],
+                    {"fields": fields, "limit": 10000, "context": ctx},
+                )
+                if recs:
+                    logger.info("LostOpp: fetched %d won leads (by stage name)", len(recs))
+                    return recs
+            except Exception as exc:
+                logger.warning("LostOpp: stage-based won fetch failed: %s", exc)
+
+        # 3. Fallback: probability in 0-1 scale (1.0 = 100%)
+        try:
+            recs = self.odoo.models.execute_kw(
+                self.odoo.db, self.odoo.uid, self.odoo.password,
+                "crm.lead", "search_read",
+                [[["type", "=", "opportunity"], ["probability", ">=", 0.9]]],
+                {"fields": fields, "limit": 10000, "context": ctx},
+            )
+            if recs:
+                logger.info("LostOpp: fetched %d won leads (probability 0-1 scale)", len(recs))
+                return recs
+        except Exception as exc:
+            logger.warning("LostOpp: 0-1 probability won fetch failed: %s", exc)
+
+        logger.info("LostOpp: no won leads found (0 conversion)")
+        return []
 
     # ── Linked Sale Orders ────────────────────────────────────────────────
 
@@ -303,7 +337,7 @@ class LostOpportunityAnalyser:
         lost_reasons = self._fetch_lost_reasons()
         stages = self._fetch_stages()
         leads = self._fetch_lost_leads()
-        won_leads = self._fetch_won_leads()
+        won_leads = self._fetch_won_leads(stages)
 
         if not leads:
             return self._empty_result()

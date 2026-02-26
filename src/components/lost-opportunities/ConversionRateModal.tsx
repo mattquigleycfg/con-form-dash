@@ -1,5 +1,5 @@
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -32,9 +32,9 @@ export default function ConversionRateModal({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Conversion Rate by Stage</DialogTitle>
-          <p className="text-sm text-muted-foreground">
+          <DialogDescription>
             Success rate = Won / (Won + Lost) per stage
-          </p>
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

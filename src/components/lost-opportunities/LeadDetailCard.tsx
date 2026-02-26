@@ -1,5 +1,5 @@
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -87,6 +87,9 @@ export default function LeadDetailCard({ lead, open, onClose }: Props) {
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg">{lead.name}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Lost opportunity details: customer, salesperson, stage, quote breakdown and margin analysis
+          </DialogDescription>
           <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
             <span>{lead.customer}</span>
             <span>·</span>

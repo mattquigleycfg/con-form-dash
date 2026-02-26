@@ -70,7 +70,7 @@ export default function LostOpportunities() {
                 </div>
               </div>
             )}
-            <SummaryCards summary={data.summary} leads={data.leads} />
+            <SummaryCards summary={data.summary} leads={data.leads} byStage={data.by_stage} />
 
             <Tabs defaultValue="table" className="space-y-4">
               <TabsList>
