@@ -418,8 +418,10 @@ class LostOpportunityAnalyser:
             quote_labour = 0.0
             quote_freight = 0.0
             quote_product = 0.0
+            product_cost = 0.0
             labour_qty = 0.0
             margin_pct = 0.0
+            so_margin_pct = 0.0
             quote_state: Optional[str] = None
             flags: list[str] = []
 
@@ -430,28 +432,37 @@ class LostOpportunityAnalyser:
                     quote_total += float(qt)
                     mp = so.get("margin_percent")
                     if isinstance(mp, (int, float)):
-                        margin_pct = float(mp)
+                        so_margin_pct = float(mp)
                         # Odoo may return 0-1 (e.g. 0.35 for 35%) vs 0-100; normalize to 0-100
-                        if 0 < margin_pct <= 1.5:
-                            margin_pct *= 100
+                        if 0 < so_margin_pct <= 1.5:
+                            so_margin_pct *= 100
+                        margin_pct = so_margin_pct
 
                     so_id = so["id"]
                     lines = so_lines_map.get(so_id, [])
                     for ln in lines:
                         cat = self._categorise_line(ln)
                         sub = float(ln.get("price_subtotal") or 0)
+                        qty = float(ln.get("product_uom_qty") or 0)
                         if cat == "labour":
                             quote_labour += sub
-                            labour_qty += float(ln.get("product_uom_qty") or 0)
+                            labour_qty += qty
                         elif cat == "freight":
                             quote_freight += sub
                         else:
                             quote_product += sub
+                            # Product cost for Product GP calculation
+                            pp = ln.get("purchase_price")
+                            if isinstance(pp, (int, float)) and pp > 0 and qty > 0:
+                                product_cost += float(pp) * qty
 
                     if not quote_state:
                         quote_state = self._extract_state_from_lines(lines)
 
-                if quote_total > 0 and margin_pct == 0:
+                # Product GP: use product lines when we have cost data; else SO-level margin
+                if quote_product > 0 and product_cost > 0:
+                    margin_pct = ((quote_product - product_cost) / quote_product) * 100
+                elif quote_total > 0 and margin_pct == 0:
                     # Fallback when Odoo does not provide margin_percent: assume 65% cost ratio
                     cost_est = quote_total * 0.65
                     margin_pct = ((quote_total - cost_est) / quote_total) * 100

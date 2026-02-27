@@ -125,9 +125,17 @@ export default function LeadDetailCard({ lead, open, onClose }: Props) {
               <p className="text-lg font-bold">{lead.has_quote ? fmt(lead.quote_total) : "No quote"}</p>
             </div>
             <div className="rounded-lg border p-3 text-center">
-              <p className="text-xs text-muted-foreground">Est. Margin</p>
-              <p className={`text-lg font-bold ${lead.margin_pct > 40 ? "text-amber-600" : ""}`}>
-                {lead.margin_pct > 0 ? `${lead.margin_pct.toFixed(1)}%` : "—"}
+              <p className="text-xs text-muted-foreground">Product GP</p>
+              <p
+                className={`text-lg font-bold ${
+                  (lead.margin_pct ?? 0) < 15
+                    ? "text-red-600"
+                    : (lead.margin_pct ?? 0) > 40
+                      ? "text-amber-600"
+                      : ""
+                }`}
+              >
+                {lead.quote_product > 0 ? `${(lead.margin_pct ?? 0).toFixed(1)}%` : "—"}
               </p>
             </div>
           </div>

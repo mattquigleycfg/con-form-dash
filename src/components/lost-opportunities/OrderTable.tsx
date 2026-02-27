@@ -68,11 +68,14 @@ function buildHoverContent(l: LostLead) {
     });
   }
 
-  if (l.margin_pct > 0) {
+  if (l.quote_product > 0) {
+    const gp = l.margin_pct ?? 0;
+    const gpStatus =
+      gp < 15 ? "red" : gp > 40 ? "amber" : "green";
     parts.push({
       label: "Product GP",
-      value: `${l.margin_pct.toFixed(1)}%`,
-      status: l.margin_pct > 40 ? "amber" : "green",
+      value: `${gp.toFixed(1)}%`,
+      status: gpStatus,
     });
   }
 
