@@ -3,10 +3,6 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 
-const GEO_RESTRICTION_ERROR = "Access restricted to Australian connections.";
-const GEO_VERIFICATION_RETRY_ERROR = "Unable to verify geographic access. Please try again.";
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -22,61 +18,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const geoAccessStatus = useRef<"unknown" | "allowed" | "blocked">("unknown");
   const hasInitialized = useRef(false);
   const navigate = useNavigate();
-
-  const verifyAustralianAccess = async () => {
-    if (geoAccessStatus.current === "allowed") {
-      return;
-    }
-
-    if (geoAccessStatus.current === "blocked") {
-      throw new Error(GEO_RESTRICTION_ERROR);
-    }
-
-    const maxAttempts = 3;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const response = await fetch("https://ipwho.is/", {
-          headers: {
-            "Cache-Control": "no-cache",
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`${response.status} ${response.statusText}`);
-        }
-
-        const geoData = await response.json();
-        const isAustralia = geoData?.country_code === "AU";
-
-        if (!isAustralia) {
-          console.warn("Access attempt from non-Australian location", geoData);
-          geoAccessStatus.current = "blocked";
-          throw new Error(GEO_RESTRICTION_ERROR);
-        }
-
-        geoAccessStatus.current = "allowed";
-        return;
-      } catch (error) {
-        if (error instanceof Error && error.message === GEO_RESTRICTION_ERROR) {
-          throw error;
-        }
-
-        const isLastAttempt = attempt === maxAttempts;
-        console.error(`Error verifying geographic access (attempt ${attempt}/${maxAttempts})`, error);
-
-        if (isLastAttempt) {
-          geoAccessStatus.current = "unknown";
-          throw new Error(GEO_VERIFICATION_RETRY_ERROR);
-        }
-
-        await delay(200 * attempt);
-      }
-    }
-  };
 
   useEffect(() => {
     let mounted = true;
@@ -133,11 +76,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithMicrosoft = async (email: string, password: string) => {
-    // Use environment variable for production, or current origin for local dev
-    const redirectUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
-    
-    await verifyAustralianAccess();
-
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -159,10 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw error;
     }
 
-    // Use environment variable for production, or current origin for local dev
     const redirectUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
-    
-    await verifyAustralianAccess();
 
     const { error } = await supabase.auth.signUp({
       email: normalizedEmail,
