@@ -941,6 +941,17 @@ const handleActualSave = async (
 
   // Include material analytic lines from Odoo (costs not yet imported to BOM)
   const materialAnalyticTotal = filteredMaterialAnalyticLines.reduce((sum, line) => sum + Math.abs(line.amount), 0);
+
+  // Map analytic line amounts by product ID so the Budgeted Costs table can show per-product actuals
+  const materialAnalyticActualByProductId = useMemo(() => {
+    const map = new Map<number, number>();
+    filteredMaterialAnalyticLines.forEach((line) => {
+      const productId = Array.isArray(line.product_id) ? line.product_id[0] : null;
+      if (!productId) return;
+      map.set(productId, (map.get(productId) ?? 0) + Math.abs(line.amount));
+    });
+    return map;
+  }, [filteredMaterialAnalyticLines]);
   
   // DEBUG: Log material cost components
   console.log('🔍 Material Cost Breakdown:', {
@@ -1277,7 +1288,7 @@ const handleActualSave = async (
                       exit={{ opacity: 0, y: -6 }}
                       transition={{ duration: 0.15, ease: "easeInOut" }}
                     >
-                      <AIInsights jobId={id} analysisType="all" detailed={true} />
+                      <AIInsights jobId={id} analysisType="all" detailed={true} embedded />
                     </motion.div>
                   )}
                   {intelligenceTab === "ml" && (
@@ -1634,7 +1645,10 @@ const handleActualSave = async (
                               const unitCost = line.unit_price ?? materialPurchasePriceMap.get(line.product_id) ?? 0;
                               const totalCost = line.subtotal ?? unitCost * (line.quantity || 0);
                               const productId = line.product_id || 0;
-                              const actualValue = materialActualByProductId.get(productId) ?? 0;
+                              const actualValue =
+                                materialAnalyticActualByProductId.get(productId) ??
+                                materialActualByProductId.get(productId) ??
+                                0;
                               const displayValue = actualInputs[productId] ?? actualValue.toFixed(2);
                               return (
                                 <TableRow key={line.id}>

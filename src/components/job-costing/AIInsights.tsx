@@ -356,10 +356,8 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
     </div>
   );
 
-  if (embedded) {
-    return (
-      <div className="py-2">
-        {insightsHeader}
+  // Shared body renders in both embedded and full-card modes
+  const insightsBody = (<>
           {/* ML Prediction Cards - prioritised, paginated */}
           {mlInsights && mlInsights.total_insights > 0 && (() => {
             const ML_PAGE_SIZE = 8;
@@ -582,6 +580,53 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
               );
             })}
           </div>
+  </>);
+
+  if (embedded) {
+    return (
+      <>
+        <div className="py-2 space-y-4">
+          {insightsHeader}
+          {insightsBody}
+        </div>
+        {/* ML Detail Dialog - must render outside scroll container */}
+        <Dialog open={!!showMLDetail} onOpenChange={() => setShowMLDetail(null)}>
+          {/* dialog content rendered below */}
+        </Dialog>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                AI Insights
+                <Badge variant="secondary">{visibleInsights.length}</Badge>
+              </CardTitle>
+              <CardDescription>
+                Rule-based cost analysis and ML-powered predictions
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                refetch();
+                toast({ title: "Refreshing Analysis", description: "Analyzing job costs and generating new insights..." });
+              }}
+              disabled={loadingNew}
+            >
+              {loadingNew ? 'Analyzing...' : 'Refresh'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {insightsBody}
         </CardContent>
       </Card>
 
