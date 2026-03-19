@@ -1,6 +1,8 @@
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { AnimatedTrendingUp, AnimatedTrendingDown } from '@/components/ui/animated-icon';
+import { AnimatedTrendingUp } from '@/components/ui/animated-icon';
+import { Progress } from '@/components/ui/progress';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface BudgetCircleChartProps {
   totalBudget: number;
@@ -10,6 +12,85 @@ interface BudgetCircleChartProps {
   nonMaterialBudget: number;
   nonMaterialActual: number;
 }
+
+// ── ProgressRow ───────────────────────────────────────────────────────────────
+
+interface ProgressRowProps {
+  label: string;
+  budget: number;
+  actual: number;
+  utilisation: number;
+  isNoBudget: boolean;
+  formatCurrency: (n: number) => string;
+  bold?: boolean;
+}
+
+function ProgressRow({
+  label,
+  budget,
+  actual,
+  utilisation,
+  isNoBudget,
+  formatCurrency,
+  bold,
+}: ProgressRowProps) {
+  const clamped   = Math.min(100, Math.max(0, utilisation));
+  const isOver    = utilisation > 100 || isNoBudget;
+  const isAtRisk  = !isOver && utilisation > 90;
+  const remaining = Math.max(0, budget - actual);
+
+  const barClass = isOver || isAtRisk
+    ? "bg-destructive"
+    : "bg-primary";
+
+  return (
+    <div className="space-y-2">
+      {/* Label row */}
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={cn(
+            "text-body-sm",
+            bold ? "font-semibold text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {label}
+        </span>
+        <span
+          className={cn(
+            "text-label-lg tabular-nums font-semibold",
+            isOver ? "text-destructive" : isAtRisk ? "text-warning" : "text-foreground",
+          )}
+        >
+          {isNoBudget ? "No budget set" : `${utilisation.toFixed(1)}%`}
+        </span>
+      </div>
+
+      {/* Animated progress bar */}
+      <Progress
+        value={clamped}
+        className={cn("h-2", bold && "h-3")}
+        indicatorClassName={barClass}
+      />
+
+      {/* Budget / Actual / Remaining row */}
+      <div className="flex items-center justify-between text-label-md text-muted-foreground/80 gap-2">
+        <span>Budget: <span className="font-medium text-foreground tabular-nums">{formatCurrency(budget)}</span></span>
+        <span>Actual: <span className={cn("font-medium tabular-nums", isOver ? "text-destructive" : "text-foreground")}>{formatCurrency(actual)}</span></span>
+        {!isNoBudget && (
+          <span>Remaining: <span className={cn("font-medium tabular-nums", isOver ? "text-destructive" : "text-primary")}>{formatCurrency(remaining)}</span></span>
+        )}
+        {isNoBudget && actual > 0 && (
+          <span className="flex items-center gap-1 text-destructive">
+            <AnimatedTrendingUp size={13} />
+            <span className="font-medium tabular-nums">{formatCurrency(actual)} unbudgeted</span>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── BudgetCircleChart ─────────────────────────────────────────────────────────
 
 export function BudgetCircleChart({
   totalBudget,
@@ -176,150 +257,51 @@ export function BudgetCircleChart({
           </div>
         </div>
 
-        {/* Breakdown Section */}
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Materials Breakdown */}
-          <motion.div
-            className="flex flex-col items-center p-5 rounded-xl bg-background border"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.5, ease: [0.4, 0, 0.2, 1] }}
-          >
-            <h4 className="text-label-lg uppercase tracking-wider text-muted-foreground mb-3">Materials</h4>
-            <div className="relative">
-              <ResponsiveContainer width={160} height={160}>
-                <PieChart>
-                  <Pie
-                    data={materialData}
-                    cx={80}
-                    cy={80}
-                    innerRadius={45}
-                    outerRadius={65}
-                    dataKey="value"
-                    isAnimationActive={true}
-                    animationDuration={800}
-                    animationBegin={200}
-                    animationEasing="ease-out"
-                  >
-                    <Cell fill={materialColor} />
-                    <Cell fill="#e5e7eb" />
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  {isMaterialNoBudget ? (
-                    <div className="text-label-md font-semibold text-destructive">No Budget</div>
-                  ) : (
-                    <div className="text-headline-sm font-bold tabular-nums" style={{ color: materialColor }}>
-                      {materialUtilization.toFixed(0)}%
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+        {/* Breakdown Section — animated progress bars */}
+        <motion.div
+          className="lg:col-span-2 flex flex-col justify-center gap-5 p-5 rounded-xl bg-background border"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5, ease: [0.4, 0, 0.2, 1] }}
+        >
+          <h4 className="text-label-lg uppercase tracking-wider text-muted-foreground">
+            Budget Utilisation
+          </h4>
 
-            <div className="mt-4 space-y-2 w-full">
-              <div className="flex justify-between items-center">
-                <span className="text-label-lg text-muted-foreground">Budget</span>
-                <span className={`text-body-sm font-semibold tabular-nums ${isMaterialNoBudget ? 'text-destructive' : ''}`}>
-                  {formatCurrency(materialBudget)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-label-lg text-muted-foreground">Actual</span>
-                <span className={`text-body-sm font-semibold tabular-nums ${materialUtilization > 100 || isMaterialNoBudget ? 'text-destructive' : ''}`}>
-                  {formatCurrency(materialActual)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center pt-1.5 border-t border-border/50">
-                <span className="text-label-lg text-muted-foreground">Remaining</span>
-                <span className={`text-body-sm font-semibold tabular-nums ${materialUtilization > 100 || isMaterialNoBudget ? 'text-destructive' : 'text-primary'}`}>
-                  {formatCurrency(Math.max(0, materialBudget - materialActual))}
-                </span>
-              </div>
-            </div>
+          {/* Total */}
+          <ProgressRow
+            label="Total"
+            budget={totalBudget}
+            actual={totalActual}
+            utilisation={utilizationPercent}
+            isNoBudget={isNoBudget}
+            formatCurrency={formatCurrency}
+            bold
+          />
 
-            {(materialUtilization > 100 || isMaterialNoBudget) && materialActual > 0 && (
-              <div className="mt-2 flex items-center gap-1.5 text-label-lg text-destructive">
-                <AnimatedTrendingUp size={14} />
-                <span>{isMaterialNoBudget ? `${formatCurrency(materialActual)} spent` : `${formatCurrency(materialActual - materialBudget)} over`}</span>
-              </div>
-            )}
-          </motion.div>
+          {/* Divider */}
+          <div className="border-t border-border/40" />
 
-          {/* Services Breakdown */}
-          <motion.div
-            className="flex flex-col items-center p-5 rounded-xl bg-background border"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.65, ease: [0.4, 0, 0.2, 1] }}
-          >
-            <h4 className="text-label-lg uppercase tracking-wider text-muted-foreground mb-3">Services</h4>
-            <div className="relative">
-              <ResponsiveContainer width={160} height={160}>
-                <PieChart>
-                  <Pie
-                    data={nonMaterialData}
-                    cx={80}
-                    cy={80}
-                    innerRadius={45}
-                    outerRadius={65}
-                    dataKey="value"
-                    isAnimationActive={true}
-                    animationDuration={800}
-                    animationBegin={400}
-                    animationEasing="ease-out"
-                  >
-                    <Cell fill={nonMaterialColor} />
-                    <Cell fill="#e5e7eb" />
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  {isNonMaterialNoBudget ? (
-                    <div className="text-label-md font-semibold text-destructive">No Budget</div>
-                  ) : (
-                    <div className="text-headline-sm font-bold tabular-nums" style={{ color: nonMaterialColor }}>
-                      {nonMaterialUtilization.toFixed(0)}%
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+          {/* Materials */}
+          <ProgressRow
+            label="Materials"
+            budget={materialBudget}
+            actual={materialActual}
+            utilisation={materialUtilization}
+            isNoBudget={isMaterialNoBudget}
+            formatCurrency={formatCurrency}
+          />
 
-            <div className="mt-4 space-y-2 w-full">
-              <div className="flex justify-between items-center">
-                <span className="text-label-lg text-muted-foreground">Budget</span>
-                <span className={`text-body-sm font-semibold tabular-nums ${isNonMaterialNoBudget ? 'text-destructive' : ''}`}>
-                  {formatCurrency(nonMaterialBudget)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-label-lg text-muted-foreground">Actual</span>
-                <span className={`text-body-sm font-semibold tabular-nums ${nonMaterialUtilization > 100 || isNonMaterialNoBudget ? 'text-destructive' : ''}`}>
-                  {formatCurrency(nonMaterialActual)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center pt-1.5 border-t border-border/50">
-                <span className="text-label-lg text-muted-foreground">Remaining</span>
-                <span className={`text-body-sm font-semibold tabular-nums ${nonMaterialUtilization > 100 || isNonMaterialNoBudget ? 'text-destructive' : 'text-primary'}`}>
-                  {formatCurrency(Math.max(0, nonMaterialBudget - nonMaterialActual))}
-                </span>
-              </div>
-            </div>
-
-            {(nonMaterialUtilization > 100 || isNonMaterialNoBudget) && nonMaterialActual > 0 && (
-              <div className="mt-2 flex items-center gap-1.5 text-label-lg text-destructive">
-                <AnimatedTrendingUp size={14} />
-                <span>{isNonMaterialNoBudget ? `${formatCurrency(nonMaterialActual)} spent` : `${formatCurrency(nonMaterialActual - nonMaterialBudget)} over`}</span>
-              </div>
-            )}
-          </motion.div>
-        </div>
+          {/* Services */}
+          <ProgressRow
+            label="Services"
+            budget={nonMaterialBudget}
+            actual={nonMaterialActual}
+            utilisation={nonMaterialUtilization}
+            isNoBudget={isNonMaterialNoBudget}
+            formatCurrency={formatCurrency}
+          />
+        </motion.div>
       </div>
     </div>
   );
