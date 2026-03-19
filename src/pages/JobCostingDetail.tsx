@@ -3,6 +3,7 @@ import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Upload, Plus, Trash2, RefreshCw, Sparkles, Brain } from "lucide-react";
+import { AnimatedLayers, AnimatedDollarSign, AnimatedRefreshCw } from "@/components/ui/animated-icon";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -1129,9 +1130,12 @@ const handleActualSave = async (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-medium">Cost Analysis</CardTitle>
-                <p className="text-sm text-muted-foreground mt-0.5">Budget vs. actuals with variance</p>
+              <div className="flex items-start gap-2.5">
+                <AnimatedDollarSign size={20} className="text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <CardTitle className="text-title-lg">Cost Analysis</CardTitle>
+                  <p className="text-label-lg text-muted-foreground mt-0.5">Budget vs. actuals with variance</p>
+                </div>
               </div>
               <Badge variant="outline">
                 {analysis?.rawAnalyticLines?.length || 0} entries
@@ -1312,9 +1316,12 @@ const handleActualSave = async (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl font-medium">Cost Breakdown</CardTitle>
-                <p className="text-sm text-muted-foreground mt-0.5">Material and service costs by line</p>
+              <div className="flex items-start gap-2.5">
+                <AnimatedLayers size={20} className="text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <CardTitle className="text-title-lg">Cost Breakdown</CardTitle>
+                  <p className="text-label-lg text-muted-foreground mt-0.5">Material and service costs by line</p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Button
