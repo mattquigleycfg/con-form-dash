@@ -288,6 +288,7 @@ export type Database = {
           status: string
           subcontractor_id: number | null
           subcontractor_name: string | null
+          sale_revenue: number
           total_actual: number
           total_budget: number
           updated_at: string
@@ -315,6 +316,7 @@ export type Database = {
           project_stage_id?: number | null
           project_stage_name?: string | null
           sale_order_name: string
+          sale_revenue?: number
           sales_person_name?: string | null
           status?: string
           subcontractor_id?: number | null
@@ -346,6 +348,7 @@ export type Database = {
           project_stage_id?: number | null
           project_stage_name?: string | null
           sale_order_name?: string
+          sale_revenue?: number
           sales_person_name?: string | null
           status?: string
           subcontractor_id?: number | null

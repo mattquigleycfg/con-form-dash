@@ -121,8 +121,9 @@ export const useJobCostAnalysis = (job: Job | undefined) => {
   const analysis = useMemo<CostAnalysis | null>(() => {
     if (!job) return null;
 
-    // Budget figures
-    const budgetedRevenue = job.total_budget;
+    // Budget figures — use sale_revenue (untaxed sum of SO line price_subtotals) when available,
+    // fall back to total_budget for jobs synced before this field was introduced
+    const budgetedRevenue = job.sale_revenue > 0 ? job.sale_revenue : job.total_budget;
     const materialBudget = job.material_budget;
     const nonMaterialBudget = job.non_material_budget;
     const totalBudget = materialBudget + nonMaterialBudget;

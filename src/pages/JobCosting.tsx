@@ -325,6 +325,8 @@ export default function JobCosting() {
 
         const materialBudget = materialLines.reduce((sum, line) => sum + line.cost_subtotal, 0);
         const nonMaterialBudget = nonMaterialLines.reduce((sum, line) => sum + line.cost_subtotal, 0);
+        // Sale revenue = sum of price_subtotal (untaxed sale price) from all filtered lines
+        const saleRevenue = [...materialLines, ...nonMaterialLines].reduce((sum, line) => sum + (line.price_subtotal || 0), 0);
 
         // Fetch sales person name if available
         let salesPersonName = null;
@@ -481,7 +483,8 @@ export default function JobCosting() {
             odoo_sale_order_id: order.id,
             sale_order_name: order.name,
             customer_name: order.partner_id[1],
-            total_budget: order.amount_total,
+            sale_revenue: saleRevenue,
+            total_budget: materialBudget + nonMaterialBudget,
             material_budget: materialBudget,
             non_material_budget: nonMaterialBudget,
             total_actual: 0,
@@ -654,6 +657,8 @@ export default function JobCosting() {
 
     const materialBudget = materialLines.reduce((sum, l) => sum + l.cost_subtotal, 0);
     const nonMaterialBudget = nonMaterialLines.reduce((sum, l) => sum + l.cost_subtotal, 0);
+    // Sale revenue = sum of price_subtotal (untaxed sale price) from all filtered lines
+    const saleRevenue = [...materialLines, ...nonMaterialLines].reduce((sum, l) => sum + (l.price_subtotal || 0), 0);
 
     // Delete existing budget lines for this job (clean slate)
     await supabase.from("job_budget_lines").delete().eq("job_id", jobId);
@@ -681,6 +686,7 @@ export default function JobCosting() {
 
     // Update job budget totals
     await supabase.from("jobs").update({
+      sale_revenue: saleRevenue,
       material_budget: materialBudget,
       non_material_budget: nonMaterialBudget,
       total_budget: materialBudget + nonMaterialBudget,

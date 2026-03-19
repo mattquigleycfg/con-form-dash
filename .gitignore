@@ -106,3 +106,4 @@ supabase/migrations/20260211000000_fix_jobs_unique_constraint.sql
 KPI_DASHBOARD_ANALYSIS.md
 supabase/migrations/20260218000001_create_supply_chain_tables.sql
 ml-service/response.json
+supabase/migrations/20260319000001_add_sale_revenue_to_jobs.sql
