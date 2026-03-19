@@ -17,9 +17,10 @@ interface MLCostPredictionCardProps {
   jobId: string;
   budget: number;
   actual: number;
+  embedded?: boolean;
 }
 
-export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPredictionCardProps) {
+export function MLCostPredictionCard({ jobId, budget, actual, embedded = false }: MLCostPredictionCardProps) {
   const { data: costPrediction, isLoading: loadingCost } = useCostPrediction(jobId);
   const { data: overrunWarning, isLoading: loadingOverrun } = useOverrunWarning(jobId);
 
@@ -33,6 +34,7 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
   const hasPredictions = validCostPrediction || validOverrunWarning;
 
   if (isLoading) {
+    if (embedded) return <Skeleton className="h-24 w-full" />;
     return (
       <Card>
         <CardHeader>
@@ -47,20 +49,8 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
 
   if (!hasPredictions) return null;
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-violet-500" />
-          ML Predictions
-          <Badge variant="secondary" className="text-xs">Beta</Badge>
-        </CardTitle>
-        <CardDescription>
-          Machine learning predictions based on historical job patterns
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  const content = (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Cost Prediction with Mini Chart */}
           {validCostPrediction && (() => {
             const predictedValue = safe(costPrediction.predicted_value);
@@ -181,7 +171,23 @@ export function MLCostPredictionCard({ jobId, budget, actual }: MLCostPrediction
             );
           })()}
         </div>
-      </CardContent>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Brain className="h-5 w-5 text-violet-500" />
+          ML Predictions
+          <Badge variant="secondary" className="text-xs">Beta</Badge>
+        </CardTitle>
+        <CardDescription>
+          Machine learning predictions based on historical job patterns
+        </CardDescription>
+      </CardHeader>
+      <CardContent>{content}</CardContent>
     </Card>
   );
 }

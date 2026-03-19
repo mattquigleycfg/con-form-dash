@@ -1,6 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
+import { RefreshCwIcon } from "@/components/ui/animated-icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useLostOpportunities } from "@/hooks/useLostOpportunities";
@@ -30,7 +31,7 @@ export default function LostOpportunities() {
             onClick={() => refresh()}
             disabled={isRefreshing || isLoading}
           >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshCwIcon size={16} className="p-0 mr-2 hover:bg-transparent" spinning={isRefreshing} />
             {isRefreshing ? "Refreshing…" : "Refresh"}
           </Button>
         </div>
@@ -53,7 +54,7 @@ export default function LostOpportunities() {
               {error ? String(error) : "Lost opportunities data is not available. Click Refresh to load from Odoo CRM."}
             </p>
             <Button variant="outline" size="sm" onClick={() => refresh()} disabled={isRefreshing}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              <RefreshCwIcon size={16} className="p-0 mr-2 hover:bg-transparent" spinning={isRefreshing} />
               Retry
             </Button>
           </div>
@@ -68,7 +69,7 @@ export default function LostOpportunities() {
                 aria-label="Refreshing data"
               >
                 <div className="flex flex-col items-center gap-2">
-                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <RefreshCwIcon size={32} className="p-0 hover:bg-transparent text-muted-foreground" spinning={true} />
                   <span className="text-sm text-muted-foreground">Refreshing…</span>
                 </div>
               </div>

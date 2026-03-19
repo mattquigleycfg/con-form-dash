@@ -2,7 +2,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Upload, Plus, Trash2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Upload, Plus, Trash2, RefreshCw, Sparkles, Brain } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,6 +49,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useRef, useMemo, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useOdooProducts } from "@/hooks/useOdooProducts";
 import { useOdooSaleOrderLines } from "@/hooks/useOdooSaleOrderLines";
@@ -201,6 +202,7 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
   const [isAddBOMOpen, setIsAddBOMOpen] = useState(false);
   const [isAddCostOpen, setIsAddCostOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [intelligenceTab, setIntelligenceTab] = useState<"insights" | "ml">("insights");
   
   // Consolidated sync function that combines all sync operations
   const handleSyncWithOdoo = async () => {
@@ -1060,8 +1062,8 @@ const handleActualSave = async (
 
         {/* Subcontractor Card */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Subcontractor</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Subcontractor</CardTitle>
           </CardHeader>
           <CardContent>
             <SubcontractorSelector
@@ -1112,21 +1114,22 @@ const handleActualSave = async (
           </CardContent>
         </Card>
 
-        {/* Cost Analysis Overview */}
+        {/* Cost Analysis */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle>Cost Analysis Overview</CardTitle>
-              <Badge variant="outline" className="ml-2">
+              <div>
+                <CardTitle className="text-base font-semibold">Cost Analysis</CardTitle>
+                <p className="text-sm text-muted-foreground mt-0.5">Budget vs. actuals with variance</p>
+              </div>
+              <Badge variant="outline">
                 {analysis?.rawAnalyticLines?.length || 0} entries
               </Badge>
             </div>
           </CardHeader>
           <CardContent>
             {loadingAnalysis ? (
-              <div className="text-center py-8">
-                <Skeleton className="h-40 w-full" />
-              </div>
+              <Skeleton className="h-40 w-full" />
             ) : (
               costAnalysisOverview && (
                 <CostAnalysisCard 
@@ -1143,8 +1146,9 @@ const handleActualSave = async (
         {/* BOM Breakdown - Only show if data exists */}
         {analysis?.bomBreakdowns && analysis.bomBreakdowns.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle>Bill of Materials Cost Breakdown</CardTitle>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Bill of Materials</CardTitle>
+              <p className="text-sm text-muted-foreground">Manufacturing order cost breakdown</p>
             </CardHeader>
             <CardContent>
               <BomBreakdownCard bomBreakdowns={analysis.bomBreakdowns} />
@@ -1230,17 +1234,64 @@ const handleActualSave = async (
           )}
         </div>
 
-        {/* AI Insights */}
-        {job && <AIInsights jobId={id} analysisType="all" detailed={true} />}
-
-        {/* ML Cost Prediction */}
-        {job && id && <MLCostPredictionCard jobId={id} budget={job.total_budget} actual={job.total_actual} />}
+        {/* Intelligence Panel — AI Insights + ML Predictions in one switchable frame */}
+        {job && id && (
+          <Tabs
+            value={intelligenceTab}
+            onValueChange={(v) => setIntelligenceTab(v as "insights" | "ml")}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="text-base font-semibold">Intelligence</span>
+                <span className="text-sm text-muted-foreground hidden sm:inline">· AI insights and ML predictions</span>
+              </div>
+              <TabsList>
+                <TabsTrigger value="insights" className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI Insights
+                </TabsTrigger>
+                <TabsTrigger value="ml" className="flex items-center gap-1.5">
+                  <Brain className="h-3.5 w-3.5" />
+                  ML Predictions
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            <AnimatePresence mode="wait">
+              {intelligenceTab === "insights" && (
+                <motion.div
+                  key="insights"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15, ease: "easeInOut" }}
+                >
+                  <AIInsights jobId={id} analysisType="all" detailed={true} />
+                </motion.div>
+              )}
+              {intelligenceTab === "ml" && (
+                <motion.div
+                  key="ml"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15, ease: "easeInOut" }}
+                >
+                  <MLCostPredictionCard jobId={id} budget={job.total_budget} actual={job.total_actual} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </Tabs>
+        )}
 
         {/* Cost Analysis Breakdown */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle>Cost Analysis Breakdown</CardTitle>
+              <div>
+                <CardTitle className="text-base font-semibold">Cost Breakdown</CardTitle>
+                <p className="text-sm text-muted-foreground mt-0.5">Material and service costs by line</p>
+              </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -1464,11 +1515,11 @@ const handleActualSave = async (
 
           <TabsContent value="material" className="space-y-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <div>
-                  <CardTitle>Material Costs</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Budget: {formatCurrency(materialBudget)} | Actual: {formatCurrency(job.material_actual)}
+                  <CardTitle className="text-sm font-semibold">Materials</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Budget: {formatCurrency(materialBudget)} · Actual: {formatCurrency(job.material_actual)}
                   </p>
                 </div>
                 <Dialog open={isAddBOMOpen} onOpenChange={setIsAddBOMOpen}>
@@ -1549,9 +1600,9 @@ const handleActualSave = async (
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
                     {/* Budget Lines */}
                     <Card className="rounded-lg border shadow-sm">
-                      <CardHeader>
-                        <CardTitle className="text-xl">Budgeted Costs</CardTitle>
-                        <p className="text-sm text-muted-foreground">{budgetLines?.filter(isMaterialBudgetLine).length ?? 0} lines</p>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-semibold">Budgeted Costs</CardTitle>
+                        <p className="text-xs text-muted-foreground">{budgetLines?.filter(isMaterialBudgetLine).length ?? 0} lines</p>
                       </CardHeader>
                       <CardContent>
                       {loadingBudget ? (
@@ -1660,9 +1711,9 @@ const handleActualSave = async (
 
                     {/* Analytic Lines - Actual Costs */}
                     <Card className="rounded-lg border shadow-sm">
-                      <CardHeader>
-                        <CardTitle className="text-xl">Actual Costs</CardTitle>
-                        <p className="text-sm text-muted-foreground">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-semibold">Actual Costs</CardTitle>
+                        <p className="text-xs text-muted-foreground">
                           {filteredMaterialAnalyticLines.length} {filteredMaterialAnalyticLines.length === 1 ? 'entry' : 'entries'} from analytic accounts
                         </p>
                       </CardHeader>
@@ -1737,8 +1788,8 @@ const handleActualSave = async (
 
                   {/* Remaining Section */}
                   <Card className="rounded-lg border shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="text-xl">Remaining Budget</CardTitle>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold">Remaining Budget</CardTitle>
                     </CardHeader>
                     <CardContent>
                     <Table>
@@ -1760,11 +1811,11 @@ const handleActualSave = async (
 
           <TabsContent value="non-material" className="space-y-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <div>
-                  <CardTitle>Service Costs</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Budget: {formatCurrency(nonMaterialBudget)} | Actual: {formatCurrency(job.non_material_actual)}
+                  <CardTitle className="text-sm font-semibold">Services</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Budget: {formatCurrency(nonMaterialBudget)} · Actual: {formatCurrency(job.non_material_actual)}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -1824,8 +1875,8 @@ const handleActualSave = async (
                 <div className="space-y-4">
                   {/* Budget Lines */}
                   <Card className="rounded-lg border shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="text-base">Budgeted Costs</CardTitle>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold">Budgeted Costs</CardTitle>
                     </CardHeader>
                     <CardContent>
                     {loadingBudget ? (
@@ -1873,8 +1924,8 @@ const handleActualSave = async (
 
                   {/* Actual Costs by Category */}
                   <Card className="rounded-lg border shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="text-base">Actual Costs (Actuals & POs)</CardTitle>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold">Actual Costs</CardTitle>
                       {analysis?.nonMaterialAnalyticLines && analysis.nonMaterialAnalyticLines.length > 0 && (
                         <p className="text-sm text-muted-foreground mt-1">
                           Showing {costs?.length || 0} manual entries + {analysis.nonMaterialAnalyticLines.length} from analytic accounts
@@ -1977,8 +2028,8 @@ const handleActualSave = async (
 
                   {/* Remaining Section */}
                   <Card className="rounded-lg border shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="text-base">Remaining Budget</CardTitle>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-semibold">Remaining Budget</CardTitle>
                     </CardHeader>
                     <CardContent>
                     <Table>

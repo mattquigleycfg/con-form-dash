@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { LucideIcon, RefreshCw, Calendar, Download } from "lucide-react";
+import { LucideIcon, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { RefreshCwIcon, DownloadIcon } from "@/components/ui/animated-icons";
 
 export type DatePeriod = "week" | "month" | "quarter" | "ytd" | "year";
 
@@ -83,7 +84,7 @@ export function DepartmentHeader({
 
           {showExport && onExport && (
             <Button variant="outline" size="sm" onClick={onExport}>
-              <Download className="h-4 w-4 mr-1.5" />
+              <DownloadIcon size={16} className="p-0 mr-1.5 hover:bg-transparent" />
               Export
             </Button>
           )}
@@ -95,8 +96,10 @@ export function DepartmentHeader({
               onClick={onRefresh}
               disabled={isRefreshing}
             >
-              <RefreshCw
-                className={cn("h-4 w-4 mr-1.5", isRefreshing && "animate-spin")}
+              <RefreshCwIcon
+                size={16}
+                className="p-0 mr-1.5 hover:bg-transparent"
+                spinning={isRefreshing}
               />
               {isRefreshing ? "Refreshing..." : "Refresh"}
             </Button>

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { Bot, Send, X, Loader2, ExternalLink, Sparkles } from "lucide-react";
+import { Send, X, Loader2, ExternalLink } from "lucide-react";
+import { BotIcon, SparklesIcon } from "@/components/ui/animated-icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -258,7 +259,7 @@ When users ask for help, provide actionable advice specific to their metrics and
           className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-gradient-primary shadow-hover"
           size="icon"
         >
-          <Bot className="h-6 w-6" />
+          <BotIcon size={24} className="p-0 hover:bg-transparent text-white" />
         </Button>
       )}
 
@@ -267,7 +268,7 @@ When users ask for help, provide actionable advice specific to their metrics and
         <Card className="fixed bottom-6 right-6 z-50 w-96 shadow-hover">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-gradient-primary p-4">
             <div className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-white" />
+              <BotIcon size={20} className="p-0 hover:bg-transparent text-white" />
               <CardTitle className="text-white text-base">
                 {location.pathname === "/calculator" ? "AI Estimator Assistant" :
                  location.pathname.startsWith("/job-costing") ? "AI Job Costing Assistant" :
@@ -293,7 +294,7 @@ When users ask for help, provide actionable advice specific to their metrics and
                 <div className="flex h-full items-center justify-center text-center">
                   <div className="space-y-3">
                     <div className="flex items-center justify-center gap-2">
-                      <Sparkles className="h-5 w-5 text-primary" />
+                      <SparklesIcon size={20} className="p-0 hover:bg-transparent text-primary" />
                       <p className="text-sm font-medium text-foreground">
                         {location.pathname === "/calculator" ? "Ask me about the Con-form Estimator!" :
                          location.pathname.startsWith("/job-costing") ? "Ask me about job costs and budgets!" :
@@ -357,7 +358,7 @@ When users ask for help, provide actionable advice specific to their metrics and
                           onClick={() => handleQuickPrompt(prompt)}
                           className="w-full justify-start text-xs h-auto py-2 text-left font-normal"
                         >
-                          <Sparkles className="h-3 w-3 mr-2 shrink-0 text-primary" />
+                          <SparklesIcon size={12} className="p-0 mr-2 shrink-0 hover:bg-transparent text-primary" />
                           <span className="line-clamp-2">{prompt}</span>
                         </Button>
                       ))}

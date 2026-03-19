@@ -11,7 +11,8 @@ import { AustraliaSalesMap } from "@/components/AustraliaSalesMap";
 import { HuddleMetrics } from "@/components/HuddleMetrics";
 import { YTDPerformanceChart } from "@/components/YTDPerformanceChart";
 import { SafeSection } from "@/components/SafeSection";
-import { DollarSign, TrendingUp, Users, Award, RefreshCw } from "lucide-react";
+import { DollarSign, TrendingUp, Users, Award } from "lucide-react";
+import { RefreshCwIcon } from "@/components/ui/animated-icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOdooSync } from "@/hooks/useOdooSync";
@@ -58,7 +59,7 @@ const Index = () => {
             }}
             disabled={isLoading}
           >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCwIcon size={16} className="p-0 hover:bg-transparent" spinning={isLoading} />
             {isLoading ? 'Syncing...' : 'Sync Odoo'}
           </Button>
         </div>

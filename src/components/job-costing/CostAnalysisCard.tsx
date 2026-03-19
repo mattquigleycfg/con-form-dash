@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CostAnalysis } from "@/hooks/useJobCostAnalysis";
 import { Job } from "@/hooks/useJobs";
@@ -42,20 +41,10 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
   const actualMargin = analysis.budgetedRevenue - totalActualCost;
   const actualMarginPercent = analysis.budgetedRevenue > 0 ? (actualMargin / analysis.budgetedRevenue) * 100 : 0;
 
-  // Count total analytic line entries
-  const totalEntries = analysis.analyticLines?.length || 0;
-
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle>Cost Analysis Overview</CardTitle>
-        <span className="text-sm text-muted-foreground">{totalEntries} entries</span>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Cost Analysis Section */}
-        <div>
-          <h3 className="text-lg font-semibold mb-3">Cost Analysis</h3>
-          <Table>
+    <div className="space-y-6">
+        {/* Cost Breakdown */}
+        <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Category</TableHead>
@@ -113,11 +102,12 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
               </TableRow>
             </TableBody>
           </Table>
-        </div>
 
-        {/* Performance Metrics Section */}
-        <div>
-          <h3 className="text-lg font-semibold mb-3 border-t pt-4">Performance Metrics</h3>
+        {/* Performance Metrics */}
+        <div className="border-t pt-5">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+            Performance Metrics
+          </p>
           <Table>
             <TableHeader>
               <TableRow>
@@ -171,7 +161,7 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
         </div>
 
         {analysis.bomEstimatedMaterialCost > 0 && (
-          <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+          <div className="p-4 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground">
               <strong>BoM Estimated Material Cost:</strong> {formatCurrency(analysis.bomEstimatedMaterialCost)}
             </p>
@@ -180,7 +170,6 @@ export function CostAnalysisCard({ analysis, job, materialActualTotal, nonMateri
             </p>
           </div>
         )}
-      </CardContent>
-    </Card>
+    </div>
   );
 }

@@ -4,7 +4,8 @@ import { AICopilot } from "@/components/AICopilot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, RefreshCw, AlertTriangle, TrendingUp, ChevronDown, ShieldAlert, Trash2, Brain } from "lucide-react";
+import { AlertTriangle, TrendingUp, ChevronDown, ShieldAlert, Trash2, Brain } from "lucide-react";
+import { DownloadIcon, RefreshCwIcon } from "@/components/ui/animated-icons";
 import { useJobs } from "@/hooks/useJobs";
 import { useNavigate } from "react-router-dom";
 import { useMLInsights } from "@/hooks/useMLPredictions";
@@ -907,24 +908,15 @@ export default function JobCosting() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => navigate("/job-costing/reports")}>
-              <Download className="mr-2 h-4 w-4" />
+              <DownloadIcon size={16} className="p-0 mr-2 hover:bg-transparent" />
               Reports
             </Button>
-            <Button 
-              onClick={handleFullSync} 
+            <Button
+              onClick={handleFullSync}
               disabled={isSyncing || loadingSalesOrders}
             >
-              {isSyncing ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Sync All Jobs
-                </>
-              )}
+              <RefreshCwIcon size={16} className="p-0 mr-2 hover:bg-transparent" spinning={isSyncing} />
+              {isSyncing ? "Syncing..." : "Sync All Jobs"}
             </Button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { ReactNode, useState, useEffect } from "react";
-import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, LogOut, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt, Briefcase, Gauge, Megaphone, Compass, HardHat, Factory, Palette, Wallet, UserCog, Globe, Brain, Hammer, Truck, SearchX } from "lucide-react";
+import { LayoutDashboard, Target, TrendingUp, Users, Settings, BarChart3, DollarSign, ChevronDown, FileText, ShoppingCart, FolderKanban, Headphones, Receipt, Briefcase, Gauge, Megaphone, Compass, HardHat, Factory, Palette, Wallet, UserCog, Globe, Brain, Hammer, Truck, SearchX } from "lucide-react";
+import { LogOutIcon } from "@/components/ui/animated-icons";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -234,7 +235,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={signOut} className="text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
+                  <LogOutIcon size={16} className="mr-2 p-0 hover:bg-transparent" />
                   Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
