@@ -1063,7 +1063,7 @@ const handleActualSave = async (
         {/* Subcontractor Card */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Subcontractor</CardTitle>
+            <CardTitle className="text-xl font-medium">Subcontractor</CardTitle>
           </CardHeader>
           <CardContent>
             <SubcontractorSelector
@@ -1119,7 +1119,7 @@ const handleActualSave = async (
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base font-semibold">Cost Analysis</CardTitle>
+                <CardTitle className="text-xl font-medium">Cost Analysis</CardTitle>
                 <p className="text-sm text-muted-foreground mt-0.5">Budget vs. actuals with variance</p>
               </div>
               <Badge variant="outline">
@@ -1234,54 +1234,67 @@ const handleActualSave = async (
           )}
         </div>
 
-        {/* Intelligence Panel — AI Insights + ML Predictions in one switchable frame */}
+        {/* Intelligence Panel — AI Insights + ML Predictions in one unified card */}
         {job && id && (
-          <Tabs
-            value={intelligenceTab}
-            onValueChange={(v) => setIntelligenceTab(v as "insights" | "ml")}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-base font-semibold">Intelligence</span>
-                <span className="text-sm text-muted-foreground hidden sm:inline">· AI insights and ML predictions</span>
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  <div>
+                    <CardTitle className="text-xl font-medium">Intelligence</CardTitle>
+                    <p className="text-sm text-muted-foreground mt-0.5">AI insights and ML-powered predictions</p>
+                  </div>
+                </div>
+                <Tabs
+                  value={intelligenceTab}
+                  onValueChange={(v) => setIntelligenceTab(v as "insights" | "ml")}
+                >
+                  <TabsList>
+                    <TabsTrigger value="insights" className="flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      AI Insights
+                    </TabsTrigger>
+                    <TabsTrigger value="ml" className="flex items-center gap-1.5">
+                      <Brain className="h-3.5 w-3.5" />
+                      ML Predictions
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
-              <TabsList>
-                <TabsTrigger value="insights" className="flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  AI Insights
-                </TabsTrigger>
-                <TabsTrigger value="ml" className="flex items-center gap-1.5">
-                  <Brain className="h-3.5 w-3.5" />
-                  ML Predictions
-                </TabsTrigger>
-              </TabsList>
-            </div>
-            <AnimatePresence mode="wait">
-              {intelligenceTab === "insights" && (
-                <motion.div
-                  key="insights"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.15, ease: "easeInOut" }}
-                >
-                  <AIInsights jobId={id} analysisType="all" detailed={true} />
-                </motion.div>
-              )}
-              {intelligenceTab === "ml" && (
-                <motion.div
-                  key="ml"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.15, ease: "easeInOut" }}
-                >
-                  <MLCostPredictionCard jobId={id} budget={job.total_budget} actual={job.total_actual} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </Tabs>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <Tabs
+                value={intelligenceTab}
+                onValueChange={(v) => setIntelligenceTab(v as "insights" | "ml")}
+              >
+                <AnimatePresence mode="wait">
+                  {intelligenceTab === "insights" && (
+                    <motion.div
+                      key="insights"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.15, ease: "easeInOut" }}
+                    >
+                      <AIInsights jobId={id} analysisType="all" detailed={true} />
+                    </motion.div>
+                  )}
+                  {intelligenceTab === "ml" && (
+                    <motion.div
+                      key="ml"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.15, ease: "easeInOut" }}
+                    >
+                      <MLCostPredictionCard jobId={id} budget={job.total_budget} actual={job.total_actual} embedded />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </Tabs>
+            </CardContent>
+          </Card>
         )}
 
         {/* Cost Analysis Breakdown */}
@@ -1289,7 +1302,7 @@ const handleActualSave = async (
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base font-semibold">Cost Breakdown</CardTitle>
+                <CardTitle className="text-xl font-medium">Cost Breakdown</CardTitle>
                 <p className="text-sm text-muted-foreground mt-0.5">Material and service costs by line</p>
               </div>
               <div className="flex items-center gap-2">
@@ -1516,12 +1529,9 @@ const handleActualSave = async (
           <TabsContent value="material" className="space-y-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <div>
-                  <CardTitle className="text-sm font-semibold">Materials</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Budget: {formatCurrency(materialBudget)} · Actual: {formatCurrency(job.material_actual)}
-                  </p>
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Budget: {formatCurrency(materialBudget)} · Actual: {formatCurrency(job.material_actual)}
+                </p>
                 <Dialog open={isAddBOMOpen} onOpenChange={setIsAddBOMOpen}>
                   <DialogContent>
                     <DialogHeader>
@@ -1601,7 +1611,7 @@ const handleActualSave = async (
                     {/* Budget Lines */}
                     <Card className="rounded-lg border shadow-sm">
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-semibold">Budgeted Costs</CardTitle>
+                        <CardTitle className="text-base font-medium">Budgeted Costs</CardTitle>
                         <p className="text-xs text-muted-foreground">{budgetLines?.filter(isMaterialBudgetLine).length ?? 0} lines</p>
                       </CardHeader>
                       <CardContent>
@@ -1712,7 +1722,7 @@ const handleActualSave = async (
                     {/* Analytic Lines - Actual Costs */}
                     <Card className="rounded-lg border shadow-sm">
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-semibold">Actual Costs</CardTitle>
+                        <CardTitle className="text-base font-medium">Actual Costs</CardTitle>
                         <p className="text-xs text-muted-foreground">
                           {filteredMaterialAnalyticLines.length} {filteredMaterialAnalyticLines.length === 1 ? 'entry' : 'entries'} from analytic accounts
                         </p>
@@ -1789,7 +1799,7 @@ const handleActualSave = async (
                   {/* Remaining Section */}
                   <Card className="rounded-lg border shadow-sm">
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-semibold">Remaining Budget</CardTitle>
+                      <CardTitle className="text-base font-medium">Remaining Budget</CardTitle>
                     </CardHeader>
                     <CardContent>
                     <Table>
@@ -1811,72 +1821,18 @@ const handleActualSave = async (
 
           <TabsContent value="non-material" className="space-y-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <div>
-                  <CardTitle className="text-sm font-semibold">Services</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Budget: {formatCurrency(nonMaterialBudget)} · Actual: {formatCurrency(job.non_material_actual)}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Dialog open={isAddCostOpen} onOpenChange={setIsAddCostOpen}>
-                    <DialogTrigger asChild>
-                    <Button size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Cost
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Add Non-Material Cost</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label>Cost Type *</Label>
-                        <Select
-                          value={newCost.cost_type}
-                          onValueChange={(value: typeof newCost.cost_type) => setNewCost({ ...newCost, cost_type: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="installation">Installation</SelectItem>
-                            <SelectItem value="freight">Freight</SelectItem>
-                            <SelectItem value="cranage">Cranage</SelectItem>
-                            <SelectItem value="accommodation">Accommodation</SelectItem>
-                            <SelectItem value="travel">Travel</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Description</Label>
-                        <Textarea
-                          value={newCost.description}
-                          onChange={(e) => setNewCost({ ...newCost, description: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Amount *</Label>
-                        <Input
-                          type="number"
-                          value={newCost.amount || ""}
-                          onChange={(e) => setNewCost({ ...newCost, amount: parseFloat(e.target.value) || 0 })}
-                        />
-                      </div>
-                      <Button onClick={handleAddCost} className="w-full">Add Cost</Button>
-                    </div>
-                  </DialogContent>
-                  </Dialog>
-                </div>
+              <CardHeader className="pb-3">
+                <p className="text-sm text-muted-foreground">
+                  Budget: {formatCurrency(nonMaterialBudget)} · Actual: {formatCurrency(job.non_material_actual)}
+                </p>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {/* Budget Lines */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                  {/* Budgeted Costs */}
                   <Card className="rounded-lg border shadow-sm">
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-semibold">Budgeted Costs</CardTitle>
+                      <CardTitle className="text-base font-medium">Budgeted Costs</CardTitle>
+                      <p className="text-sm text-muted-foreground">{budgetLines?.filter(isServiceBudgetLine).length ?? 0} lines</p>
                     </CardHeader>
                     <CardContent>
                     {loadingBudget ? (
@@ -1886,7 +1842,7 @@ const handleActualSave = async (
                         <TableHeader>
                           <TableRow>
                             <TableHead>Service</TableHead>
-                            <TableHead className="text-right">Quantity</TableHead>
+                            <TableHead className="text-right">Qty</TableHead>
                             <TableHead className="text-right">Unit Cost</TableHead>
                             <TableHead className="text-right">Total</TableHead>
                           </TableRow>
@@ -1894,8 +1850,8 @@ const handleActualSave = async (
                         <TableBody>
                           {budgetLines?.filter(isServiceBudgetLine).length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                                No non-material budget items
+                              <TableCell colSpan={4} className="text-center text-muted-foreground py-6 text-sm">
+                                No service budget items
                               </TableCell>
                             </TableRow>
                           ) : (
@@ -1924,13 +1880,67 @@ const handleActualSave = async (
 
                   {/* Actual Costs by Category */}
                   <Card className="rounded-lg border shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-semibold">Actual Costs</CardTitle>
-                      {analysis?.nonMaterialAnalyticLines && analysis.nonMaterialAnalyticLines.length > 0 && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Showing {costs?.length || 0} manual entries + {analysis.nonMaterialAnalyticLines.length} from analytic accounts
-                        </p>
-                      )}
+                    <CardHeader className="flex flex-row items-center justify-between pb-3">
+                      <div>
+                        <CardTitle className="text-base font-medium">Actual Costs</CardTitle>
+                        {analysis?.nonMaterialAnalyticLines && analysis.nonMaterialAnalyticLines.length > 0 ? (
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            {costs?.length || 0} manual · {analysis.nonMaterialAnalyticLines.length} from Odoo
+                          </p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground mt-0.5">{costs?.length || 0} entries</p>
+                        )}
+                      </div>
+                      <Dialog open={isAddCostOpen} onOpenChange={setIsAddCostOpen}>
+                        <DialogTrigger asChild>
+                          <Button size="sm">
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add Cost
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add Service Cost</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                              <Label>Cost Type *</Label>
+                              <Select
+                                value={newCost.cost_type}
+                                onValueChange={(value: typeof newCost.cost_type) => setNewCost({ ...newCost, cost_type: value })}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="installation">Installation</SelectItem>
+                                  <SelectItem value="freight">Freight</SelectItem>
+                                  <SelectItem value="cranage">Cranage</SelectItem>
+                                  <SelectItem value="accommodation">Accommodation</SelectItem>
+                                  <SelectItem value="travel">Travel</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Description</Label>
+                              <Textarea
+                                value={newCost.description}
+                                onChange={(e) => setNewCost({ ...newCost, description: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Amount *</Label>
+                              <Input
+                                type="number"
+                                value={newCost.amount || ""}
+                                onChange={(e) => setNewCost({ ...newCost, amount: parseFloat(e.target.value) || 0 })}
+                              />
+                            </div>
+                            <Button onClick={handleAddCost} className="w-full">Add Cost</Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                     </CardHeader>
                     <CardContent>
                     {['installation', 'freight', 'cranage', 'accommodation', 'travel', 'other'].map((type) => {
@@ -1941,7 +1951,7 @@ const handleActualSave = async (
 
                       return (
                         <div key={type}>
-                          <h4 className="font-medium mb-2 text-sm capitalize text-muted-foreground">{type}</h4>
+                          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2 capitalize">{type}</p>
                           <Table>
                             <TableHeader>
                               <TableRow>
@@ -1986,11 +1996,8 @@ const handleActualSave = async (
                                           if (confirm(confirmMessage)) {
                                             try {
                                               deleteCost(cost.id);
-                                              // Wait a moment for mutation to complete
                                               await new Promise(resolve => setTimeout(resolve, 300));
-                                              // Recalculate totals
                                               await recalculateJobTotals();
-                                              // Refresh queries
                                               queryClient.invalidateQueries({ queryKey: ["job", id] });
                                               queryClient.invalidateQueries({ queryKey: ["jobs"] });
                                               toast.success("Cost deleted successfully");
@@ -2019,19 +2026,20 @@ const handleActualSave = async (
                     })}
 
                     {Object.values(costsByCategory).every(arr => arr.length === 0) && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No non-material costs added yet. Click "Add Cost" to start tracking.
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        No service costs yet. Click "Add Cost" to start tracking.
                       </div>
                     )}
                     </CardContent>
                   </Card>
+                </div>
 
-                  {/* Remaining Section */}
-                  <Card className="rounded-lg border shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-semibold">Remaining Budget</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                {/* Remaining Budget */}
+                <Card className="rounded-lg border shadow-sm mt-4">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base font-medium">Remaining Budget</CardTitle>
+                  </CardHeader>
+                  <CardContent>
                     <Table>
                       <TableBody>
                         <TableRow className={`font-semibold ${nonMaterialOverBudget ? 'bg-destructive/10' : 'bg-primary/10'}`}>
@@ -2042,9 +2050,8 @@ const handleActualSave = async (
                         </TableRow>
                       </TableBody>
                     </Table>
-                    </CardContent>
-                  </Card>
-                </div>
+                  </CardContent>
+                </Card>
               </CardContent>
             </Card>
           </TabsContent>

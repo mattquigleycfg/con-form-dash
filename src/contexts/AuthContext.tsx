@@ -97,7 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw error;
     }
 
-    const redirectUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+    const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    const redirectUrl = import.meta.env.VITE_SITE_URL
+      || (!isLocalhost ? window.location.origin : "https://con-form-dash.netlify.app");
 
     const { error } = await supabase.auth.signUp({
       email: normalizedEmail,

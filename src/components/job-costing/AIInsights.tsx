@@ -40,6 +40,7 @@ interface AIInsightsProps {
   jobId?: string;
   analysisType?: 'all' | 'budget_variance' | 'anomalies' | 'predictions' | 'optimization' | 'waste';
   detailed?: boolean;
+  embedded?: boolean;
 }
 
 interface Insight {
@@ -55,7 +56,7 @@ interface Insight {
   created_at: string;
 }
 
-export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false }: AIInsightsProps) {
+export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false, embedded = false }: AIInsightsProps) {
   const [dismissedInsights, setDismissedInsights] = useState<Set<string>>(new Set());
   const [selectedInsight, setSelectedInsight] = useState<Insight | null>(null);
   const [showMLDetail, setShowMLDetail] = useState<string | null>(null);
@@ -232,6 +233,7 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
   };
 
   if (loadingExisting) {
+    if (embedded) return <div className="space-y-2 py-2"><Skeleton className="h-6 w-48" /><Skeleton className="h-20 w-full" /></div>;
     return (
       <Card>
         <CardHeader>
@@ -244,7 +246,47 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
     );
   }
 
+  const runAnalysisButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        refetch();
+        toast({ title: "Starting Analysis", description: "Analyzing job costs and generating insights..." });
+      }}
+      disabled={loadingNew}
+    >
+      {loadingNew ? 'Analyzing...' : 'Run Analysis'}
+    </Button>
+  );
+
   if (visibleInsights.length === 0) {
+    const emptyContent = (
+      <>
+        <div className="flex items-center justify-between mb-3">
+          <span />
+          {runAnalysisButton}
+        </div>
+        {isError ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Analysis Failed</AlertTitle>
+            <AlertDescription>
+              {error?.message || 'Failed to analyze jobs. Please check console for details.'}
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Alert>
+            <Sparkles className="h-4 w-4" />
+            <AlertTitle>No insights yet</AlertTitle>
+            <AlertDescription>
+              Click "Run Analysis" to generate cost insights for your jobs. This analyzes budget variances, anomalies, predictions, optimization opportunities, and material waste. ML models provide confidence-scored predictions when available.
+            </AlertDescription>
+          </Alert>
+        )}
+      </>
+    );
+    if (embedded) return <div className="py-2">{emptyContent}</div>;
     return (
       <Card>
         <CardHeader>
@@ -297,38 +339,27 @@ export function AIInsights({ jobs, jobId, analysisType = 'all', detailed = false
     );
   }
 
-  return (
-    <>
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                AI Insights
-                <Badge variant="secondary">{visibleInsights.length}</Badge>
-              </CardTitle>
-              <CardDescription>
-                Rule-based cost analysis and ML-powered predictions
-              </CardDescription>
-            </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => {
-                refetch();
-                toast({
-                  title: "Refreshing Analysis",
-                  description: "Analyzing job costs and generating new insights...",
-                });
-              }}
-              disabled={loadingNew}
-            >
-              {loadingNew ? 'Analyzing...' : 'Refresh'}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
+  const insightsHeader = (
+    <div className="flex items-center justify-between mb-3">
+      <Badge variant="secondary">{visibleInsights.length} insights</Badge>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          refetch();
+          toast({ title: "Refreshing Analysis", description: "Analyzing job costs and generating new insights..." });
+        }}
+        disabled={loadingNew}
+      >
+        {loadingNew ? 'Analyzing...' : 'Refresh'}
+      </Button>
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <div className="py-2">
+        {insightsHeader}
           {/* ML Prediction Cards - prioritised, paginated */}
           {mlInsights && mlInsights.total_insights > 0 && (() => {
             const ML_PAGE_SIZE = 8;
