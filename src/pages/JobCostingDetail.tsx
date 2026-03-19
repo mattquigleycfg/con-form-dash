@@ -17,7 +17,6 @@ import { useJobNonMaterialCosts } from "@/hooks/useJobNonMaterialCosts";
 import { useJobCostAnalysis } from "@/hooks/useJobCostAnalysis";
 import { CostAnalysisCard } from "@/components/job-costing/CostAnalysisCard";
 import { AnalyticLinesTable } from "@/components/job-costing/AnalyticLinesTable";
-import { AnalyticLinesMaterialTable } from "@/components/job-costing/AnalyticLinesMaterialTable";
 import { categorizeAnalyticLine, AnalyticLine } from "@/hooks/useOdooAnalyticLines";
 import { isRevenueAnalyticEntry } from "@/lib/analyticRevenue";
 
@@ -300,6 +299,7 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
 
         const materialBudget = materialLines.reduce((sum, l) => sum + l.cost_subtotal, 0);
         const nonMaterialBudget = nonMaterialLines.reduce((sum, l) => sum + l.cost_subtotal, 0);
+        const saleRevenue = [...materialLines, ...nonMaterialLines].reduce((sum, l) => sum + (l.price_subtotal || 0), 0);
 
         // Delete old budget lines and insert fresh ones
         await supabase.from("job_budget_lines").delete().eq("job_id", id);
@@ -324,8 +324,9 @@ const resolveBomLineTotal = (line: { total_cost?: number | null; unit_cost?: num
           }
         }
 
-        // Update job budget totals
+        // Update job budget totals and sale revenue
         await supabase.from("jobs").update({
+          sale_revenue: saleRevenue,
           material_budget: materialBudget,
           non_material_budget: nonMaterialBudget,
           total_budget: materialBudget + nonMaterialBudget,
@@ -1544,131 +1545,200 @@ const handleActualSave = async (
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {/* Budget Lines */}
-                  <Card className="rounded-lg border shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="text-base">Budgeted Costs</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                    {loadingBudget ? (
-                      <Skeleton className="h-32 w-full" />
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Product</TableHead>
-                            <TableHead className="text-right">Quantity</TableHead>
-                            <TableHead className="text-right">Unit Cost</TableHead>
-                            <TableHead className="text-right">Budget Total</TableHead>
-                            <TableHead className="text-right">Actual</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {budgetLines?.filter(isMaterialBudgetLine).map((line) => {
-                            const unitCost = line.unit_price ?? materialPurchasePriceMap.get(line.product_id) ?? 0;
-                            const totalCost = line.subtotal ?? unitCost * (line.quantity || 0);
-                            const productId = line.product_id || 0;
-                            const actualValue = materialActualByProductId.get(productId) ?? 0;
-                            const displayValue = actualInputs[productId] ?? actualValue.toFixed(2);
-                            return (
-                              <TableRow key={line.id}>
-                                <TableCell className="font-medium">{line.product_name}</TableCell>
-                                <TableCell className="text-right">{line.quantity}</TableCell>
-                                <TableCell className="text-right">
-                                  {formatNumber(unitCost)}
-                                </TableCell>
-                                <TableCell className="text-right">{formatNumber(totalCost)}</TableCell>
-                                <TableCell className="text-right">
-                                  <div className="flex justify-end">
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      value={displayValue}
-                                      onChange={(e) => handleActualInputChange(productId, e.target.value)}
-                                      onBlur={() => handleActualSave(line, actualInputs[productId] ?? displayValue)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          e.currentTarget.blur();
-                                        }
-                                      }}
-                                      disabled={isSavingActual}
-                                      className="h-8 w-32 text-right pr-2"
-                                    />
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-right space-x-1">
-                                  <input
-                                    type="file"
-                                    accept=".csv"
-                                    className="hidden"
-                                    ref={(el) => {
-                                      fileInputRefs.current[productId] = el;
-                                    }}
-                                    onChange={(event) => {
-                                      handleCSVUpload(event);
-                                      event.target.value = "";
-                                    }}
-                                  />
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => fileInputRefs.current[productId]?.click()}
-                                  >
-                                    <Upload className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                      setNewBOM({
-                                        odoo_product_id: line.product_id || null,
-                                        product_name: line.product_name,
-                                        quantity: 1,
-                                        unit_cost: line.unit_price ?? 0,
-                                        notes: "",
-                                      });
-                                      setProductSearch("");
-                                      setIsAddBOMOpen(true);
-                                    }}
-                                  >
-                                    <Plus className="h-4 w-4" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                          {budgetLines && budgetLines.filter(isMaterialBudgetLine).length > 0 && (
-                            <TableRow className="font-semibold bg-muted/50">
-                              <TableCell>Total</TableCell>
-                              <TableCell className="text-right">{materialBudgetQtyTotal}</TableCell>
-                              <TableCell className="text-right">-</TableCell>
-                              <TableCell className="text-right">{formatNumber(materialBudgetTotal)}</TableCell>
-                              <TableCell className="text-right">{formatNumber(materialActualTotal)}</TableCell>
-                              <TableCell></TableCell>
+                  {/* Budgeted + Actual side by side */}
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                    {/* Budget Lines */}
+                    <Card className="rounded-lg border shadow-sm">
+                      <CardHeader>
+                        <CardTitle className="text-xl">Budgeted Costs</CardTitle>
+                        <p className="text-sm text-muted-foreground">{budgetLines?.filter(isMaterialBudgetLine).length ?? 0} lines</p>
+                      </CardHeader>
+                      <CardContent>
+                      {loadingBudget ? (
+                        <Skeleton className="h-32 w-full" />
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Product</TableHead>
+                              <TableHead className="text-right">Quantity</TableHead>
+                              <TableHead className="text-right">Unit Cost</TableHead>
+                              <TableHead className="text-right">Budget Total</TableHead>
+                              <TableHead className="text-right">Actual</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    )}
-                    </CardContent>
-                  </Card>
+                          </TableHeader>
+                          <TableBody>
+                            {budgetLines?.filter(isMaterialBudgetLine).map((line) => {
+                              const unitCost = line.unit_price ?? materialPurchasePriceMap.get(line.product_id) ?? 0;
+                              const totalCost = line.subtotal ?? unitCost * (line.quantity || 0);
+                              const productId = line.product_id || 0;
+                              const actualValue = materialActualByProductId.get(productId) ?? 0;
+                              const displayValue = actualInputs[productId] ?? actualValue.toFixed(2);
+                              return (
+                                <TableRow key={line.id}>
+                                  <TableCell className="font-medium">{line.product_name}</TableCell>
+                                  <TableCell className="text-right">{line.quantity}</TableCell>
+                                  <TableCell className="text-right">
+                                    {formatNumber(unitCost)}
+                                  </TableCell>
+                                  <TableCell className="text-right">{formatNumber(totalCost)}</TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex justify-end">
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={displayValue}
+                                        onChange={(e) => handleActualInputChange(productId, e.target.value)}
+                                        onBlur={() => handleActualSave(line, actualInputs[productId] ?? displayValue)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            e.currentTarget.blur();
+                                          }
+                                        }}
+                                        disabled={isSavingActual}
+                                        className="h-8 w-32 text-right pr-2"
+                                      />
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right space-x-1">
+                                    <input
+                                      type="file"
+                                      accept=".csv"
+                                      className="hidden"
+                                      ref={(el) => {
+                                        fileInputRefs.current[productId] = el;
+                                      }}
+                                      onChange={(event) => {
+                                        handleCSVUpload(event);
+                                        event.target.value = "";
+                                      }}
+                                    />
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => fileInputRefs.current[productId]?.click()}
+                                    >
+                                      <Upload className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        setNewBOM({
+                                          odoo_product_id: line.product_id || null,
+                                          product_name: line.product_name,
+                                          quantity: 1,
+                                          unit_cost: line.unit_price ?? 0,
+                                          notes: "",
+                                        });
+                                        setProductSearch("");
+                                        setIsAddBOMOpen(true);
+                                      }}
+                                    >
+                                      <Plus className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                            {budgetLines && budgetLines.filter(isMaterialBudgetLine).length > 0 && (
+                              <TableRow className="font-semibold bg-muted/50">
+                                <TableCell>Total</TableCell>
+                                <TableCell className="text-right">{materialBudgetQtyTotal}</TableCell>
+                                <TableCell className="text-right">-</TableCell>
+                                <TableCell className="text-right">{formatNumber(materialBudgetTotal)}</TableCell>
+                                <TableCell className="text-right">{formatNumber(materialActualTotal)}</TableCell>
+                                <TableCell></TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      )}
+                      </CardContent>
+                    </Card>
 
-                  {/* Analytic Lines - Material Costs */}
-                  {filteredMaterialAnalyticLines.length > 0 && (
-                    <AnalyticLinesMaterialTable 
-                      materialLines={filteredMaterialAnalyticLines}
-                      onDeleteLine={(lineId) => {
-                        setExcludedAnalyticLineIds(prev => new Set(prev).add(lineId));
-                        toast.success("Analytic line hidden from view");
-                      }}
-                    />
-                  )}
+                    {/* Analytic Lines - Actual Costs */}
+                    <Card className="rounded-lg border shadow-sm">
+                      <CardHeader>
+                        <CardTitle className="text-xl">Actual Costs</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          {filteredMaterialAnalyticLines.length} {filteredMaterialAnalyticLines.length === 1 ? 'entry' : 'entries'} from analytic accounts
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        {filteredMaterialAnalyticLines.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No material costs from analytic lines yet. Costs will appear here once posted in Odoo.
+                          </p>
+                        ) : (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Description</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead className="text-right">Quantity</TableHead>
+                                <TableHead className="text-right">Amount</TableHead>
+                                <TableHead className="w-[50px]"></TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {filteredMaterialAnalyticLines.map((line) => {
+                                const productName = line.product_id ? line.product_id[1] : '';
+                                return (
+                                  <TableRow key={line.id}>
+                                    <TableCell>
+                                      <div>
+                                        <div className="font-medium">{line.name}</div>
+                                        {productName && (
+                                          <div className="text-xs text-muted-foreground mt-1">{productName}</div>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">
+                                      {line.date ? new Date(line.date).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {line.unit_amount ? line.unit_amount.toFixed(2) : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-right font-medium">
+                                      {formatCurrency(Math.abs(line.amount))}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          if (confirm(`Hide this analytic line?\n\n"${line.name}"\n\nNote: This will hide it from this view. The entry still exists in Odoo.`)) {
+                                            setExcludedAnalyticLineIds(prev => new Set(prev).add(line.id));
+                                            toast.success("Analytic line hidden from view");
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                              <TableRow className="font-semibold bg-muted/50">
+                                <TableCell colSpan={3}>Total Material Costs from Analytic</TableCell>
+                                <TableCell className="text-right">
+                                  {formatCurrency(filteredMaterialAnalyticLines.reduce((sum, l) => sum + Math.abs(l.amount), 0))}
+                                </TableCell>
+                                <TableCell></TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
 
                   {/* Remaining Section */}
                   <Card className="rounded-lg border shadow-sm">
                     <CardHeader>
-                      <CardTitle className="text-base">Remaining Budget</CardTitle>
+                      <CardTitle className="text-xl">Remaining Budget</CardTitle>
                     </CardHeader>
                     <CardContent>
                     <Table>
