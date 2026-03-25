@@ -109,4 +109,26 @@ describe("normalizeShopDrawingStoragePath", () => {
       "01 EASYMECH MR/CFG-MR-3000-2400-3.5.pdf",
     );
   });
+
+  it("rejects legacy standard-platform paths from the old Estimator", () => {
+    expect(() => normalizeShopDrawingStoragePath("standard-platform/3000-4200-100.pdf")).toThrow(
+      /Legacy path/,
+    );
+  });
+});
+
+describe("estimatorProductToShopDrawingLookup", () => {
+  it("maps Galaxy MR to S1 for CFG-S1-MR-* filenames", async () => {
+    const { estimatorProductToShopDrawingLookup } = await import("./estimatorMapping");
+    const { buildShopDrawingFilenameCandidates } = await import("./buildFilename");
+    const lookup = estimatorProductToShopDrawingLookup({
+      productLabel: "EasyMech MR (Galaxy)",
+      widthMm: 3000,
+      lengthMm: 4200,
+      pitchDeg: 3,
+    });
+    expect(lookup.series).toBe("S1");
+    const names = buildShopDrawingFilenameCandidates(lookup);
+    expect(names).toContain("CFG-S1-MR-3000-4200-3.pdf");
+  });
 });

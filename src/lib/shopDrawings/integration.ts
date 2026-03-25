@@ -13,6 +13,13 @@ export function normalizeShopDrawingStoragePath(path: string): string {
     throw new Error("Shop drawing storage path is empty.");
   }
   const lower = p.toLowerCase();
+  if (lower.startsWith("standard-platform/")) {
+    throw new Error(
+      `Legacy path "${path}" does not exist after the standard library upload. ` +
+        `Files live under folders like "01 EASYMECH MR/" with CFG-prefixed names. ` +
+        `Use lookupStandardShopDrawing(supabase, params) and sign result.bucketPath only.`,
+    );
+  }
   if (lower.includes(`${SHOP_DRAWINGS_BUCKET}/`) || lower.startsWith("custom/shop-drawings")) {
     throw new Error(
       `Invalid shop drawing path "${path}": use the path inside the bucket only, without "${SHOP_DRAWINGS_BUCKET}/" or "custom/shop-drawings/".`,

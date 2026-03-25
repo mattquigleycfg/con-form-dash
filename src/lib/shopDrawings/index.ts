@@ -9,6 +9,10 @@ export { PREFIX_META } from "./prefixCatalog";
 export type { PrefixMeta } from "./prefixCatalog";
 export { lookupMountedShopDrawing, lookupStandardShopDrawing } from "./lookup";
 export { normalizeShopDrawingStoragePath } from "./integration";
+export {
+  estimatorProductToShopDrawingLookup,
+  type EstimatorPlatformLineInput,
+} from "./estimatorMapping";
 export type {
   MountedMountType,
   MountedShopDrawingLookup,
