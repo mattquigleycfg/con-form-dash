@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Calculator as CalcIcon, Brain, TrendingUp } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { SHOP_DRAWINGS_BUCKET } from "@/lib/shopDrawings";
 
 function MLMarginSuggestion({ costPrice, productType }: { costPrice: number; productType: string }) {
   const { data: marginData } = useQuery({
@@ -142,7 +143,7 @@ export default function Calculator() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-8" data-estimator-shop-drawings-bucket={SHOP_DRAWINGS_BUCKET}>
         <div className="flex items-center gap-3">
           <CalcIcon className="h-8 w-8 text-primary" />
           <div>

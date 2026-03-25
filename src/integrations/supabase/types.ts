@@ -360,6 +360,54 @@ export type Database = {
         }
         Relationships: []
       }
+      shop_drawings: {
+        Row: {
+          bucket_path: string
+          filename: string
+          prefix_family: string
+          series: string | null
+          base_type: string | null
+          screen_type: string | null
+          mount_type: string | null
+          width_mm: number | null
+          length_mm: number | null
+          pitch_deg: number | null
+          version: number
+          parseable: boolean
+          created_at: string
+        }
+        Insert: {
+          bucket_path: string
+          filename: string
+          prefix_family: string
+          series?: string | null
+          base_type?: string | null
+          screen_type?: string | null
+          mount_type?: string | null
+          width_mm?: number | null
+          length_mm?: number | null
+          pitch_deg?: number | null
+          version?: number
+          parseable?: boolean
+          created_at?: string
+        }
+        Update: {
+          bucket_path?: string
+          filename?: string
+          prefix_family?: string
+          series?: string | null
+          base_type?: string | null
+          screen_type?: string | null
+          mount_type?: string | null
+          width_mm?: number | null
+          length_mm?: number | null
+          pitch_deg?: number | null
+          version?: number
+          parseable?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       monthly_targets: {
         Row: {
           cfg_invoice_actual: number | null

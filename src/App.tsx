@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { FilterProvider } from "@/contexts/FilterContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -19,6 +19,12 @@ import Calculator from "./pages/Calculator";
 import Settings from "./pages/Settings";
 import JobCosting from "./pages/JobCosting";
 import JobCostingDetail from "./pages/JobCostingDetail";
+
+/** Remount when :id changes so local state (e.g. exclusions) cannot leak across jobs on Back/Forward. */
+function JobCostingDetailRoute() {
+  const { id } = useParams();
+  return <JobCostingDetail key={id ?? ""} />;
+}
 import JobCostingReports from "./pages/JobCostingReports";
 import MLDashboard from "./pages/MLDashboard";
 import InstallationAnalysis from "./pages/InstallationAnalysis";
@@ -71,7 +77,7 @@ const App = () => (
               <Route path="/helpdesk" element={<ProtectedRoute><HelpdeskDashboard /></ProtectedRoute>} />
               <Route path="/job-costing" element={<ProtectedRoute><JobCosting /></ProtectedRoute>} />
               <Route path="/job-costing/reports" element={<ProtectedRoute><JobCostingReports /></ProtectedRoute>} />
-              <Route path="/job-costing/:id" element={<ProtectedRoute><JobCostingDetail /></ProtectedRoute>} />
+              <Route path="/job-costing/:id" element={<ProtectedRoute><JobCostingDetailRoute /></ProtectedRoute>} />
               <Route path="/project/installations" element={<ProtectedRoute><InstallationAnalysis /></ProtectedRoute>} />
               <Route path="/project/freight" element={<ProtectedRoute><FreightAnalysis /></ProtectedRoute>} />
               <Route path="/sales/lost-opportunities" element={<ProtectedRoute><LostOpportunities /></ProtectedRoute>} />
