@@ -14,12 +14,13 @@ export interface EstimatorPlatformLineInput {
 
 /**
  * Maps Estimator UI labels to `ShopDrawingLookup`.
- * Heuristic: "Galaxy" / "Series 1" → S1 (confirm with product team if drawings live under CFG-MR vs CFG-S1-MR).
+ * Standard "01 EASYMECH MR" APP files use `CFG-MR-{W}-{L}-{pitch}.pdf`; "Galaxy" is that line — no series prefix.
+ * Use `series` only when the product name explicitly indicates Series 1/2/3 (e.g. SS folder `CFG-S1-MR-*`).
  */
 export function estimatorProductToShopDrawingLookup(input: EstimatorPlatformLineInput): ShopDrawingLookup {
   const label = input.productLabel.toLowerCase();
   let series: ShopDrawingSeries | undefined;
-  if (label.includes("galaxy") || label.includes("series 1") || /\bs1\b/.test(label)) {
+  if (label.includes("series 1") || /\bs1\b/.test(label)) {
     series = "S1";
   } else if (label.includes("series 2") || /\bs2\b/.test(label)) {
     series = "S2";

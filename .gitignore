@@ -108,3 +108,4 @@ supabase/migrations/20260218000001_create_supply_chain_tables.sql
 ml-service/response.json
 supabase/migrations/20260319000001_add_sale_revenue_to_jobs.sql
 supabase/migrations/20260325000001_shop_drawings_index.sql
+scripts/mirror_estimator_shop_drawing_paths.py

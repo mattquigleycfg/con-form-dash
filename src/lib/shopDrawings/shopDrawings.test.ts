@@ -118,17 +118,30 @@ describe("normalizeShopDrawingStoragePath", () => {
 });
 
 describe("estimatorProductToShopDrawingLookup", () => {
-  it("maps Galaxy MR to S1 for CFG-S1-MR-* filenames", async () => {
+  it("maps Galaxy MR to CFG-MR-* (standard APP folder, not CFG-S1-MR)", async () => {
     const { estimatorProductToShopDrawingLookup } = await import("./estimatorMapping");
     const { buildShopDrawingFilenameCandidates } = await import("./buildFilename");
     const lookup = estimatorProductToShopDrawingLookup({
       productLabel: "EasyMech MR (Galaxy)",
+      widthMm: 4800,
+      lengthMm: 6000,
+      pitchDeg: 3,
+    });
+    expect(lookup.series).toBeUndefined();
+    const names = buildShopDrawingFilenameCandidates(lookup);
+    expect(names).toContain("CFG-MR-4800-6000-3.pdf");
+  });
+
+  it("maps explicit Series 1 to CFG-S1-MR-*", async () => {
+    const { estimatorProductToShopDrawingLookup } = await import("./estimatorMapping");
+    const { buildShopDrawingFilenameCandidates } = await import("./buildFilename");
+    const lookup = estimatorProductToShopDrawingLookup({
+      productLabel: "EasyMech MR Series 1",
       widthMm: 3000,
       lengthMm: 4200,
       pitchDeg: 3,
     });
     expect(lookup.series).toBe("S1");
-    const names = buildShopDrawingFilenameCandidates(lookup);
-    expect(names).toContain("CFG-S1-MR-3000-4200-3.pdf");
+    expect(buildShopDrawingFilenameCandidates(lookup)).toContain("CFG-S1-MR-3000-4200-3.pdf");
   });
 });
