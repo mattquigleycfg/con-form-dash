@@ -14,65 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      installation_day_tracking: {
-        Row: {
-          id: string
-          sale_order_ref: string
-          sale_order_id: number | null
-          customer_name: string | null
-          product_type: string
-          state: string | null
-          platform_area_m2: number | null
-          quoted_days: number
-          actual_days: number
-          po_days: number | null
-          variance: number | null
-          overquote_ratio: number | null
-          vendor: string | null
-          notes: string | null
-          tracked_by: string | null
-          user_id: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          sale_order_ref: string
-          sale_order_id?: number | null
-          customer_name?: string | null
-          product_type: string
-          state?: string | null
-          platform_area_m2?: number | null
-          quoted_days?: number
-          actual_days?: number
-          po_days?: number | null
-          vendor?: string | null
-          notes?: string | null
-          tracked_by?: string | null
-          user_id?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          sale_order_ref?: string
-          sale_order_id?: number | null
-          customer_name?: string | null
-          product_type?: string
-          state?: string | null
-          platform_area_m2?: number | null
-          quoted_days?: number
-          actual_days?: number
-          po_days?: number | null
-          vendor?: string | null
-          notes?: string | null
-          tracked_by?: string | null
-          user_id?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       job_bom_lines: {
         Row: {
           created_at: string
@@ -266,29 +207,21 @@ export type Database = {
           analytic_account_id: number | null
           analytic_account_name: string | null
           created_at: string
-          created_by_user_id: string | null
           customer_name: string
           date_order: string | null
           id: string
-          last_synced_at: string | null
-          last_synced_by_user_id: string | null
           material_actual: number
           material_budget: number
           non_material_actual: number
           non_material_budget: number
           odoo_sale_order_id: number
           opportunity_name: string | null
-          project_analytic_account_id: number | null
-          project_analytic_account_name: string | null
           project_manager_name: string | null
           project_stage_id: number | null
           project_stage_name: string | null
           sale_order_name: string
           sales_person_name: string | null
           status: string
-          subcontractor_id: number | null
-          subcontractor_name: string | null
-          sale_revenue: number
           total_actual: number
           total_budget: number
           updated_at: string
@@ -298,29 +231,21 @@ export type Database = {
           analytic_account_id?: number | null
           analytic_account_name?: string | null
           created_at?: string
-          created_by_user_id?: string | null
           customer_name: string
           date_order?: string | null
           id?: string
-          last_synced_at?: string | null
-          last_synced_by_user_id?: string | null
           material_actual?: number
           material_budget?: number
           non_material_actual?: number
           non_material_budget?: number
           odoo_sale_order_id: number
           opportunity_name?: string | null
-          project_analytic_account_id?: number | null
-          project_analytic_account_name?: string | null
           project_manager_name?: string | null
           project_stage_id?: number | null
           project_stage_name?: string | null
           sale_order_name: string
-          sale_revenue?: number
           sales_person_name?: string | null
           status?: string
-          subcontractor_id?: number | null
-          subcontractor_name?: string | null
           total_actual?: number
           total_budget?: number
           updated_at?: string
@@ -330,81 +255,25 @@ export type Database = {
           analytic_account_id?: number | null
           analytic_account_name?: string | null
           created_at?: string
-          created_by_user_id?: string | null
           customer_name?: string
           date_order?: string | null
           id?: string
-          last_synced_at?: string | null
-          last_synced_by_user_id?: string | null
           material_actual?: number
           material_budget?: number
           non_material_actual?: number
           non_material_budget?: number
           odoo_sale_order_id?: number
           opportunity_name?: string | null
-          project_analytic_account_id?: number | null
-          project_analytic_account_name?: string | null
           project_manager_name?: string | null
           project_stage_id?: number | null
           project_stage_name?: string | null
           sale_order_name?: string
-          sale_revenue?: number
           sales_person_name?: string | null
           status?: string
-          subcontractor_id?: number | null
-          subcontractor_name?: string | null
           total_actual?: number
           total_budget?: number
           updated_at?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      shop_drawings: {
-        Row: {
-          bucket_path: string
-          filename: string
-          prefix_family: string
-          series: string | null
-          base_type: string | null
-          screen_type: string | null
-          mount_type: string | null
-          width_mm: number | null
-          length_mm: number | null
-          pitch_deg: number | null
-          version: number
-          parseable: boolean
-          created_at: string
-        }
-        Insert: {
-          bucket_path: string
-          filename: string
-          prefix_family: string
-          series?: string | null
-          base_type?: string | null
-          screen_type?: string | null
-          mount_type?: string | null
-          width_mm?: number | null
-          length_mm?: number | null
-          pitch_deg?: number | null
-          version?: number
-          parseable?: boolean
-          created_at?: string
-        }
-        Update: {
-          bucket_path?: string
-          filename?: string
-          prefix_family?: string
-          series?: string | null
-          base_type?: string | null
-          screen_type?: string | null
-          mount_type?: string | null
-          width_mm?: number | null
-          length_mm?: number | null
-          pitch_deg?: number | null
-          version?: number
-          parseable?: boolean
-          created_at?: string
         }
         Relationships: []
       }
